@@ -379,7 +379,12 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
                 return api_error_with_operand_id(TDX_CPUID_MAX_SUBLEAVES_UNRECOGNIZED, CPUID_EXT_FEATURES_LEAF);
             }
 
-            global_data_ptr->waitpkg_supported = (cpuid_config.values.ecx & BIT(CPUID_WAITPKG_BIT)) != 0;
+            //Sample the TSX support bits. 
+            cpuid_07_00_ebx_t cpuid_07_00_ebx = {.raw = cpuid_config.values.ebx};
+            global_data_ptr->hle_supported = cpuid_07_00_ebx.hle;
+            global_data_ptr->rtm_supported = cpuid_07_00_ebx.rtm;
+
+            global_data_ptr->waitpkg_supported = (cpuid_config.values.ecx & (uint32_t)BIT(CPUID_WAITPKG_BIT)) != 0;
         }
 
         /* Get the supported extended features.  Allow only features that are recognized
@@ -593,6 +598,40 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
     return TDX_SUCCESS;
 }
 
+_STATIC_INLINE_ api_error_type check_capabilities_msrs(tdx_module_global_t* global_data_ptr)
+{
+    platform_common_config_t* msr_values_ptr = &global_data_ptr->plt_common_config;
+
+    // Sample and Check Capabilities MSRs
+    global_data_ptr->plt_common_config.ia32_core_capabilities.raw = ia32_rdmsr(IA32_CORE_CAPABILITIES);
+
+    msr_values_ptr->ia32_arch_capabilities.raw = ia32_rdmsr(IA32_ARCH_CAPABILITIES_MSR_ADDR);
+    if ((msr_values_ptr->ia32_arch_capabilities.rdcl_no == 0) ||
+        (msr_values_ptr->ia32_arch_capabilities.irbs_all == 0) ||
+        (msr_values_ptr->ia32_arch_capabilities.mds_no == 0) ||
+        (msr_values_ptr->ia32_arch_capabilities.if_pschange_mc_no == 0) ||
+        (msr_values_ptr->ia32_arch_capabilities.taa_no == 0) ||
+        (msr_values_ptr->ia32_arch_capabilities.misc_package_ctls == 0) ||
+        (msr_values_ptr->ia32_arch_capabilities.skip_l1dfl_vmentry == 0) ||
+        (msr_values_ptr->ia32_arch_capabilities.energy_filtering_ctl == 0))
+    {
+        return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_ARCH_CAPABILITIES_MSR_ADDR);
+    }
+
+    if (msr_values_ptr->ia32_arch_capabilities.tsx_ctrl)
+    {
+        msr_values_ptr->ia32_tsx_ctrl.raw = ia32_rdmsr(IA32_TSX_CTRL_MSR_ADDR);
+        if ((msr_values_ptr->ia32_tsx_ctrl.rtm_disable == 1) ||
+            (msr_values_ptr->ia32_tsx_ctrl.tsx_cpuid_clear == 1))
+        {
+            return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_TSX_CTRL_MSR_ADDR);
+        }
+    }
+
+    return TDX_SUCCESS;
+}
+
+
 _STATIC_INLINE_ bool_t check_cmrs()
 {
     /*----------------------------------------------------------------
@@ -649,55 +688,6 @@ _STATIC_INLINE_ bool_t check_cmrs()
     return true;
 }
 
-_STATIC_INLINE_ api_error_type check_msrs(tdx_module_global_t* tdx_global_data_ptr)
-{
-    platform_common_config_t* msr_values_ptr = &tdx_global_data_ptr->plt_common_config;
-
-
-    // Sample IA32_TSC_ADJUST
-    // This MSR should read the same value on all LP on TDSYSINITLP and during
-    // TDX-SEAM operation on TDHVPENTER and other flows that rely on rdtsc.
-    msr_values_ptr->ia32_tsc_adjust = ia32_rdmsr(IA32_TSC_ADJ_MSR_ADDR);
-
-    api_error_type err = TDX_INCORRECT_MSR_VALUE;
-
-    // Sample and Check Capabilities MSRs
-    tdx_global_data_ptr->plt_common_config.ia32_core_capabilities.raw = ia32_rdmsr(IA32_CORE_CAPABILITIES);
-
-    msr_values_ptr->ia32_arch_capabilities.raw = ia32_rdmsr(IA32_ARCH_CAPABILITIES_MSR_ADDR);
-    if ((msr_values_ptr->ia32_arch_capabilities.rdcl_no == 0) ||
-        (msr_values_ptr->ia32_arch_capabilities.irbs_all == 0) ||
-        (msr_values_ptr->ia32_arch_capabilities.mds_no == 0) ||
-        (msr_values_ptr->ia32_arch_capabilities.if_pschange_mc_no == 0) ||
-        (msr_values_ptr->ia32_arch_capabilities.taa_no == 0) ||
-        (msr_values_ptr->ia32_arch_capabilities.misc_package_ctls == 0) ||
-        (msr_values_ptr->ia32_arch_capabilities.skip_l1dfl_vmentry == 0) ||
-        (msr_values_ptr->ia32_arch_capabilities.energy_filtering_ctl == 0))
-    {
-        return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_ARCH_CAPABILITIES_MSR_ADDR);
-    }
-
-    if (msr_values_ptr->ia32_arch_capabilities.tsx_ctrl)
-    {
-        msr_values_ptr->ia32_tsx_ctrl.raw = ia32_rdmsr(IA32_TSX_CTRL_MSR_ADDR);
-        if ((msr_values_ptr->ia32_tsx_ctrl.rtm_enable == 1) ||
-            (msr_values_ptr->ia32_tsx_ctrl.tsx_cpuid_clear == 1))
-        {
-            return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_TSX_CTRL_MSR_ADDR);
-        }
-    }
-
-    // Check Performance Monitoring - Support of IA32_A_PMC MSRs
-
-    if ((err = check_perf_msrs()) != TDX_SUCCESS)
-    {
-        TDX_ERROR("Check of IA32 PERF MSRs failed\n");
-        return err;
-    }
-
-    return TDX_SUCCESS;
-}
-
 _STATIC_INLINE_ api_error_type check_vmx_msrs(tdx_module_global_t* tdx_global_data_ptr)
 {
     platform_common_config_t* msr_values_ptr = &tdx_global_data_ptr->plt_common_config;
@@ -730,11 +720,22 @@ _STATIC_INLINE_ api_error_type check_vmx_msrs(tdx_module_global_t* tdx_global_da
         return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_VMX_TRUE_PROCBASED_CTLS_MSR_ADDR);
     }
 
-    // procbased_ctls2 is a special case since it depends on WAITPKG support.
+    /*
+     * procbased_ctls2 is a special case since: 
+     * it depends on WAITPKG support.
+     * It depends on the CPU support of ENCLV exiting.
+     */
     vmcs_procbased_ctls2_t procbased_ctls2_init = {.raw = PROCBASED_CTLS2_INIT};
     procbased_ctls2_init.en_guest_wait_pause = tdx_global_data_ptr->waitpkg_supported;
 
     msr_values_ptr->ia32_vmx_procbased_ctls2.raw = ia32_rdmsr(IA32_VMX_PROCBASED_CTLS2_MSR_ADDR);
+    
+    vmcs_procbased_ctls2_t procbased_ctls2_allowed1 = {.raw = tdx_global_data_ptr->plt_common_config.ia32_vmx_procbased_ctls2.allowed1};
+    if (!procbased_ctls2_allowed1.en_enclv_exiting)
+    {
+        procbased_ctls2_init.en_enclv_exiting = 0;
+    }
+             
     if (!check_allowed_vmx_ctls(&td_vmcs_values_ptr->procbased_ctls2, msr_values_ptr->ia32_vmx_procbased_ctls2,
             procbased_ctls2_init.raw,
             PROCBASED_CTLS2_VARIABLE,
@@ -818,6 +819,15 @@ _STATIC_INLINE_ api_error_type check_platform_config_and_cpu_enumeration(
     api_error_type err;
 
     /*------------------------------------------
+      Sample and Check capabilities MSRs
+      ------------------------------------------*/
+    if ((err = check_capabilities_msrs(tdx_global_data_ptr)) != TDX_SUCCESS)
+    {
+        TDX_ERROR("Check capabilities MSRs failure\n");
+        return err;
+    }
+
+    /*------------------------------------------
       Sample and Check Native CPUID Values
       ------------------------------------------*/
     if ((err = check_cpuid_configurations(tdx_global_data_ptr)) != TDX_SUCCESS)
@@ -844,14 +854,13 @@ _STATIC_INLINE_ api_error_type check_platform_config_and_cpu_enumeration(
         return err;
     }
 
-    /*---------------------------------------------------
-        Sample and Check MSR's
-    ---------------------------------------------------*/
-    if ((err = check_msrs(tdx_global_data_ptr)) != TDX_SUCCESS)
-    {
-        TDX_ERROR("Check of MSR's failed\n");
-        return err;
-    }
+    /*--------------------------------------------
+                  Time Stamp Counter
+    --------------------------------------------*/
+    // Sample IA32_TSC_ADJUST
+    // This MSR should read the same value on all LP on TDSYSINITLP and during
+    // TDX-SEAM operation on TDHVPENTER and other flows that rely on rdtsc.
+    tdx_global_data_ptr->plt_common_config.ia32_tsc_adjust = ia32_rdmsr(IA32_TSC_ADJ_MSR_ADDR);
 
     /*---------------------------------------------------
         Sanity check on CMR info provided by MCHECK
@@ -866,6 +875,13 @@ _STATIC_INLINE_ api_error_type check_platform_config_and_cpu_enumeration(
     if ((err = check_and_store_smrr_smrr2(tdx_global_data_ptr)) != TDX_SUCCESS)
     {
         TDX_ERROR("check_and_store_smrr_smrr2 failure\n");
+        return err;
+    }
+
+    // Check Performance Monitoring - Support of IA32_A_PMC MSRs
+    if ((err = check_perf_msrs()) != TDX_SUCCESS)
+    {
+        TDX_ERROR("Check of IA32 PERF MSRs failed\n");
         return err;
     }
 

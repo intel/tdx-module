@@ -172,47 +172,67 @@ void init_guest_td_address_fields(tdr_t* tdr_ptr, tdvps_t* tdvps_ptr, uint16_t c
 
 static void init_td_vmcs_exec_control_field(tdcs_t * tdcs_ptr)
 {
-    platform_common_config_t* msr_values_ptr = &get_global_data()->plt_common_config;
+    tdx_module_global_t* tdx_global_data_ptr = get_global_data();
+    platform_common_config_t* msr_values_ptr = &tdx_global_data_ptr->plt_common_config;
 
-    uint32_t vmexit_controls_vector = VM_EXIT_CONTROL_FIXED_VALUES;
-    uint32_t vmentry_controls_vector = VM_ENTRY_CONTROL_ENCODE_FIXED_VALUES;
-    uint32_t pin_based_execution_controls = VM_EXECUTION_CONTROL_PIN_BASED_VALUE;
-    uint32_t processor_based_execution_controls = VM_EXECUTION_CONTROL_PROC_BASED_FIXED_VALUES;
-    uint32_t sec_proc_based_execution_controls = VM_EXECUTION_CONTROL_SECONDARY_PROC_BASED_FIXED_VALUES;
-    uint64_t ter_proc_based_execution_controls = VM_EXECUTION_CONTROL_TERTIARY_PROC_BASED_FIXED_VALUES;
+    uint32_t vmexit_controls_vector = tdx_global_data_ptr->td_vmcs_values.exit_ctls;
+    uint32_t vmentry_controls_vector = tdx_global_data_ptr->td_vmcs_values.entry_ctls;
+    uint32_t pin_based_execution_controls = tdx_global_data_ptr->td_vmcs_values.pinbased_ctls;
+    vmcs_procbased_ctls_t processor_based_execution_controls = { .raw = tdx_global_data_ptr->td_vmcs_values.procbased_ctls };
+    vmcs_procbased_ctls2_t sec_proc_based_execution_controls = { .raw = tdx_global_data_ptr->td_vmcs_values.procbased_ctls2 };
+    vmcs_procbased_ctls3_t ter_proc_based_execution_controls = { .raw = tdx_global_data_ptr->td_vmcs_values.procbased_ctls3 };
 
     // Fixed bits:
 
-    vmexit_controls_vector             |= msr_values_ptr->ia32_vmx_true_exit_ctls.not_allowed0;
-    vmentry_controls_vector            |= msr_values_ptr->ia32_vmx_true_entry_ctls.not_allowed0;
-    pin_based_execution_controls       |= msr_values_ptr->ia32_vmx_true_pinbased_ctls.not_allowed0;
-    processor_based_execution_controls |= msr_values_ptr->ia32_vmx_true_procbased_ctls.not_allowed0;
-    sec_proc_based_execution_controls  |= msr_values_ptr->ia32_vmx_procbased_ctls2.not_allowed0;
+    vmexit_controls_vector                 |= msr_values_ptr->ia32_vmx_true_exit_ctls.not_allowed0;
+    vmentry_controls_vector                |= msr_values_ptr->ia32_vmx_true_entry_ctls.not_allowed0;
+    pin_based_execution_controls           |= msr_values_ptr->ia32_vmx_true_pinbased_ctls.not_allowed0;
+    processor_based_execution_controls.raw |= msr_values_ptr->ia32_vmx_true_procbased_ctls.not_allowed0;
+    sec_proc_based_execution_controls.raw  |= msr_values_ptr->ia32_vmx_procbased_ctls2.not_allowed0;
 
     // Conditional bits:
 
-    vmexit_controls_vector  |= (uint32_t)((tdcs_ptr->executions_ctl_fields.attributes.perfmon || tdcs_ptr->executions_ctl_fields.attributes.debug) ? 1 : 0) << VMCS_EXIT_LOAD_PERF_GLBL_CTRL_BIT_LOCATION;
-    vmexit_controls_vector  |= (uint32_t)((tdcs_ptr->executions_ctl_fields.attributes.perfmon || tdcs_ptr->executions_ctl_fields.attributes.debug) ? 1 : 0) << VMCS_EXIT_SAVE_PERF_GLBL_CTRL_BIT_LOCATION;
-
-    vmentry_controls_vector |= (uint32_t)((tdcs_ptr->executions_ctl_fields.attributes.perfmon || tdcs_ptr->executions_ctl_fields.attributes.debug) ? 1 : 0) << VMCS_ENTRY_LOAD_PERF_GLBL_CTRL_BIT_LOCATION;
-    vmentry_controls_vector |= (uint32_t)((tdcs_ptr->executions_ctl_fields.attributes.pks || tdcs_ptr->executions_ctl_fields.attributes.debug) ? 1 : 0) << VMCS_ENTRY_LOAD_PKRS_BIT_LOCATION;
-
-    sec_proc_based_execution_controls |= (uint32_t)(tdcs_ptr->executions_ctl_fields.cpuid_flags.waitpkg_supported ? 1 : 0) << VMCS_ENABLE_USER_LEVEL_OFFSET_BIT_LOCATION;
-    sec_proc_based_execution_controls |= (uint32_t)(tdcs_ptr->executions_ctl_fields.cpuid_flags.mktme_supported ? 1 : 0) << VMCS_ENABLE_PCONFIG_OFFSET_BIT_LOCATION;
-
-    processor_based_execution_controls |= (uint32_t)(tdcs_ptr->executions_ctl_fields.attributes.perfmon ? 0 : 1) << VMCS_RDPMC_BIT_LOCAITON;
-
-    if (tdcs_ptr->executions_ctl_fields.gpaw)
+    if (tdcs_ptr->executions_ctl_fields.attributes.perfmon || tdcs_ptr->executions_ctl_fields.attributes.debug)
     {
-        ter_proc_based_execution_controls |= BIT(VMCS_GPAW_BIT_LOCATION);
+        // Set to one 
+        vmexit_controls_vector  |= (uint32_t)1 << VMCS_EXIT_LOAD_PERF_GLBL_CTRL_BIT_LOCATION;
+        vmexit_controls_vector  |= (uint32_t)1 << VMCS_EXIT_SAVE_PERF_GLBL_CTRL_BIT_LOCATION;
+
+        vmentry_controls_vector |= (uint32_t)1 << VMCS_ENTRY_LOAD_PERF_GLBL_CTRL_BIT_LOCATION;
     }
+    else
+    {
+        // Set to zero 
+        vmexit_controls_vector  &= ~((uint32_t)1 << VMCS_EXIT_LOAD_PERF_GLBL_CTRL_BIT_LOCATION);
+        vmexit_controls_vector  &= ~((uint32_t)1 << VMCS_EXIT_SAVE_PERF_GLBL_CTRL_BIT_LOCATION);
+
+        vmentry_controls_vector &= ~((uint32_t)1 << VMCS_ENTRY_LOAD_PERF_GLBL_CTRL_BIT_LOCATION);
+    }
+
+    if (tdcs_ptr->executions_ctl_fields.attributes.pks || tdcs_ptr->executions_ctl_fields.attributes.debug)
+    {
+        // Set to one 
+        vmentry_controls_vector |= (uint32_t) 1 << VMCS_ENTRY_LOAD_PKRS_BIT_LOCATION;
+    }
+    else
+    {
+        // Set to zero 
+        vmentry_controls_vector &= ~((uint32_t) 1 << VMCS_ENTRY_LOAD_PKRS_BIT_LOCATION);
+    }
+
+    processor_based_execution_controls.rdpmc_exiting = ~tdcs_ptr->executions_ctl_fields.attributes.perfmon;
+    
+    sec_proc_based_execution_controls.en_guest_wait_pause = tdcs_ptr->executions_ctl_fields.cpuid_flags.waitpkg_supported; 
+    sec_proc_based_execution_controls.en_pconfig = tdcs_ptr->executions_ctl_fields.cpuid_flags.mktme_supported;    
+
+    ter_proc_based_execution_controls.gpaw = tdcs_ptr->executions_ctl_fields.gpaw;
 
     ia32_vmwrite(VMX_VM_EXIT_CONTROL_ENCODE, vmexit_controls_vector);
     ia32_vmwrite(VMX_VM_ENTRY_CONTROL_ENCODE, vmentry_controls_vector);
     ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_PIN_BASED_ENCODE, pin_based_execution_controls);
-    ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_PROC_BASED_ENCODE, processor_based_execution_controls);
-    ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_SECONDARY_PROC_BASED_ENCODE, sec_proc_based_execution_controls);
-    ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_TERTIARY_PROC_BASED_FULL_ENCODE, ter_proc_based_execution_controls);
+    ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_PROC_BASED_ENCODE, processor_based_execution_controls.raw);
+    ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_SECONDARY_PROC_BASED_ENCODE, sec_proc_based_execution_controls.raw);
+    ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_TERTIARY_PROC_BASED_FULL_ENCODE, ter_proc_based_execution_controls.raw);
 }
 
 
@@ -221,10 +241,15 @@ void init_td_vmcs(tdcs_t * tdcs_ptr, tdvps_t* tdvps_ptr, vmcs_host_values_t* hos
     uint32_t index = 0;
     uint64_t bitmap = 0;
     void (*td_entry_func_ptr)(void) = tdx_tdexit_entry_point;
+    vmcs_procbased_ctls2_t procbased_ctls2 = {.raw = get_global_data()->td_vmcs_values.procbased_ctls2};
 
     while (vmcs_init_map[index].encoding != (uint64_t)(-1))
     {
-        ia32_vmwrite(vmcs_init_map[index].encoding, vmcs_init_map[index].value);
+        if (vmcs_init_map[index].encoding != VMX_ENCLV_EXIT_CONTROL_FULL_ENCODE ||
+            procbased_ctls2.en_enclv_exiting == 1)
+        {
+            ia32_vmwrite(vmcs_init_map[index].encoding, vmcs_init_map[index].value);
+        }  
         index++;
     }
 

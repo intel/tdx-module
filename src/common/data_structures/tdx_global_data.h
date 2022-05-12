@@ -261,7 +261,8 @@ typedef struct tdx_module_global_s
     bool_t waitpkg_supported;
     bool_t kl_loadiwk_no_backup;
     bool_t xfd_supported;
-
+    bool_t hle_supported;
+    bool_t rtm_supported;
 
     uint64_t native_tsc_frequency;
 

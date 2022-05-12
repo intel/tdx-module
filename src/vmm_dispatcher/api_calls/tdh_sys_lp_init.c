@@ -41,29 +41,6 @@ _STATIC_INLINE_ api_error_type check_msrs(tdx_module_global_t* tdx_global_data_p
         return api_error_with_operand_id(TDX_INCONSISTENT_MSR, IA32_TSC_ADJ_MSR_ADDR);
     }
 
-    // Check Capabilities MSRs to have the same values as sampled during TDHSYSINIT
-
-    if (ia32_rdmsr(IA32_CORE_CAPABILITIES) !=
-            tdx_global_data_ptr->plt_common_config.ia32_core_capabilities.raw)
-    {
-        return api_error_with_operand_id(TDX_INCONSISTENT_MSR, IA32_CORE_CAPABILITIES);
-    }
-
-    if (ia32_rdmsr(IA32_ARCH_CAPABILITIES_MSR_ADDR) !=
-            tdx_global_data_ptr->plt_common_config.ia32_arch_capabilities.raw)
-    {
-        return api_error_with_operand_id(TDX_INCONSISTENT_MSR, IA32_ARCH_CAPABILITIES_MSR_ADDR);
-    }
-
-    if (tdx_global_data_ptr->plt_common_config.ia32_arch_capabilities.tsx_ctrl)
-    {
-        if (ia32_rdmsr(IA32_TSX_CTRL_MSR_ADDR) !=
-                tdx_global_data_ptr->plt_common_config.ia32_tsx_ctrl.raw)
-        {
-            return api_error_with_operand_id(TDX_INCONSISTENT_MSR, IA32_TSX_CTRL_MSR_ADDR);
-        }
-    }
-
     return TDX_SUCCESS;
 }
 
@@ -448,6 +425,34 @@ api_error_type tdh_sys_lp_init(void)
         TDX_ERROR("SEAMREPORT instruction is not enabled\n");
         retval = TDX_SEAMREPORT_NOT_AVAILABLE;
         goto EXIT;
+    }
+
+    // Check Capabilities MSRs to have the same values as sampled during TDHSYSINIT
+    if (ia32_rdmsr(IA32_CORE_CAPABILITIES) !=
+            tdx_global_data_ptr->plt_common_config.ia32_core_capabilities.raw)
+    {
+        TDX_ERROR("The check of CORE_CAPABILITIES MSR's value failed\n");
+        retval =  api_error_with_operand_id(TDX_INCONSISTENT_MSR, IA32_CORE_CAPABILITIES);
+        goto EXIT;
+    }
+
+    if (ia32_rdmsr(IA32_ARCH_CAPABILITIES_MSR_ADDR) !=
+            tdx_global_data_ptr->plt_common_config.ia32_arch_capabilities.raw)
+    {
+        TDX_ERROR("The check of ARCH_CAPABILITIES MSR's value failed\n");
+        retval =  api_error_with_operand_id(TDX_INCONSISTENT_MSR, IA32_ARCH_CAPABILITIES_MSR_ADDR);
+        goto EXIT;
+    }
+
+    if (tdx_global_data_ptr->plt_common_config.ia32_arch_capabilities.tsx_ctrl)
+    {
+        if (ia32_rdmsr(IA32_TSX_CTRL_MSR_ADDR) !=
+                tdx_global_data_ptr->plt_common_config.ia32_tsx_ctrl.raw)
+        {
+            TDX_ERROR("The check of TSX_CTRL MSR's value failed\n");
+            retval =  api_error_with_operand_id(TDX_INCONSISTENT_MSR, IA32_TSX_CTRL_MSR_ADDR);
+            goto EXIT;
+        }
     }
 
     // Boot NT4 bit should not be set

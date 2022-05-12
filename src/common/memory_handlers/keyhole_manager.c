@@ -241,6 +241,10 @@ void init_keyhole_state(void)
 
     keyhole_state->lru_head = MAX_CACHEABLE_KEYHOLES - 1;
     keyhole_state->lru_tail = 0;
+
+#ifdef DEBUG
+    keyhole_state->total_ref_count = 0;
+#endif
 }
 
 static void* map_pa_with_memtype(void* pa, mapping_type_t mapping_type, bool_t is_wb_memtype)
@@ -250,6 +254,12 @@ static void* map_pa_with_memtype(void* pa, mapping_type_t mapping_type, bool_t i
 
     // Search the requested PA first, if it's mapped or cached
     uint16_t keyhole_idx = hash_table_find_entry((uint64_t)pa, is_writable, is_wb_memtype, NULL);
+
+#ifdef DEBUG
+    // Increment the total ref count and check for overflow
+    keyhole_state->total_ref_count += 1;
+    tdx_debug_assert(keyhole_state->total_ref_count != 0);
+#endif
 
     // Requested PA is already mapped/cached
     if (keyhole_idx != UNDEFINED_IDX)
@@ -341,6 +351,12 @@ void free_la(void* la)
     }
 
     tdx_sanity_check(keyhole_state->keyhole_array[keyhole_idx].ref_count > 0, SCEC_KEYHOLE_MANAGER_SOURCE, 1);
+
+#ifdef DEBUG    
+    tdx_debug_assert(keyhole_state->total_ref_count > 0);
+    keyhole_state->total_ref_count -= 1;
+#endif
+
     keyhole_state->keyhole_array[keyhole_idx].ref_count -= 1;
 
     if (keyhole_state->keyhole_array[keyhole_idx].ref_count == 0)

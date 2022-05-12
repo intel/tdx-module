@@ -48,7 +48,6 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
     ALIGN(1024) td_report_t temp_tdg_mr_report;                    // To generate the report before copying
     ALIGN(64) uint64_t    tee_info_hash[SIZE_OF_SHA384_HASH_IN_QWORDS] = { 0 };
 
-    bool_t                rtmr_locked_flag = false;         // Indicate RTMR is locked
     uint128_t             xmms[16];                  // SSE state backup for crypto
     crypto_api_error      sha_error_code;
 
@@ -61,19 +60,6 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
                   tdg_mr_report_gpa.raw,
                   SIZE_OF_TD_REPORT_STRUCT_IN_BYTES);
         return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RCX);
-        goto EXIT;
-    }
-    return_val = check_walk_and_map_guest_side_gpa(tdcs_p,
-                                                   tdvps_p,
-                                                   tdg_mr_report_gpa,
-                                                   tdr_p->key_management_fields.hkid,
-                                                   TDX_RANGE_RW,
-                                                   PRIVATE_OR_SHARED,
-                                                   (void **)&tdg_mr_report_ptr);
-    if (return_val != TDX_SUCCESS)
-    {
-        TDX_ERROR("Failed on checking GPA (=%llx) error = %llx\n", tdg_mr_report_gpa.raw, return_val);
-        return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
         goto EXIT;
     }
 
@@ -115,7 +101,6 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
         return_val = api_error_with_operand_id(TDX_OPERAND_BUSY, OPERAND_ID_RTMR);
         goto EXIT;
     }
-    rtmr_locked_flag = true;
 
     // Assemble REPORTTYPE
     tdg_mr_report_type.type = (uint8_t)TDX_REPORT_TYPE;
@@ -168,17 +153,35 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
                             &tee_info_hash[0],
                             tdg_mr_report_type.raw);
 
+    // Release all acquired locks and free keyhole mappings
+    release_sharex_lock_sh(&tdcs_p->measurement_fields.rtmr_lock);  
+    if (tdg_mr_report_data_ptr != NULL)
+    {
+        free_la(tdg_mr_report_data_ptr);
+        tdg_mr_report_data_ptr = NULL;
+    }
+
+    return_val = check_walk_and_map_guest_side_gpa(tdcs_p,
+                                                tdvps_p,
+                                                tdg_mr_report_gpa,
+                                                tdr_p->key_management_fields.hkid,
+                                                TDX_RANGE_RW,
+                                                PRIVATE_OR_SHARED,
+                                                (void **)&tdg_mr_report_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("Failed on checking GPA (=%llx) error = %llx\n", tdg_mr_report_gpa.raw, return_val);
+        return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
+        goto EXIT;
+    }
+
     // Copy report to TD memory
     tdx_memcpy(tdg_mr_report_ptr, SIZE_OF_TD_REPORT_STRUCT_IN_BYTES, &temp_tdg_mr_report, SIZE_OF_TD_REPORT_STRUCT_IN_BYTES);
 
     return_val = TDX_SUCCESS;
 
 EXIT:
-    // Release all acquired locks and free keyhole mappings
-    if (rtmr_locked_flag)
-    {
-        release_sharex_lock_sh(&tdcs_p->measurement_fields.rtmr_lock);
-    }
+    // Free keyhole mappings
     if (tdg_mr_report_data_ptr != NULL)
     {
         free_la(tdg_mr_report_data_ptr);

@@ -64,8 +64,6 @@ typedef enum
 } td_vmcs_ctl_values_e;
 
 // additional td_vmcs_ctl_values - 64bit
-static const uint64_t CR0_GUEST_HOST_MASK      = 0xFFFFFFFF3FFAFFD1;
-static const uint64_t CR0_GUEST_HOST_MASK_INIT = 0xFFFFFFFFFC006040;
 static const uint64_t IA32_VMX_EPT_VPID_CAP_MASK = 0x061340C0;
 
 typedef union vmcs_revision_u
@@ -120,6 +118,46 @@ tdx_static_assert(sizeof(ept_descriptor_t) == 16, ept_descriptor_t);
 #define INVEPT_TYPE_1 1
 #define INVEPT_TYPE_2 2
 
+typedef union
+{
+    struct
+    {
+        uint32_t reserved_0                      : 1;  // bit 0
+        uint32_t reserved_1                      : 1;  // bit 1
+        uint32_t interrupt_window_exiting        : 1;  // bit 2
+        uint32_t use_tsc_offsetting              : 1;  // bit 3
+        uint32_t reserved_2                      : 1;  // bit 4
+        uint32_t reserved_3                      : 1;  // bit 5
+        uint32_t reserved_4                      : 1;  // bit 6
+        uint32_t hlt_exiting                     : 1;  // bit 7
+        uint32_t reserved_5                      : 1;  // bit 8
+        uint32_t invlpg_exiting                  : 1;  // bit 9
+        uint32_t mwait_exiting                   : 1;  // bit 10
+        uint32_t rdpmc_exiting                   : 1;  // bit 11
+        uint32_t rdtsc_exiting                   : 1;  // bit 12
+        uint32_t reserved_6                      : 1;  // bit 13
+        uint32_t reserved_7                      : 1;  // bit 14
+        uint32_t cr3_load_exiting                : 1;  // bit 15
+        uint32_t cr3_store_exiting               : 1;  // bit 16
+        uint32_t activate_tertiary_controls      : 1;  // bit 17
+        uint32_t reserved_8                      : 1;  // bit 18
+        uint32_t cr8_load_exiting                : 1;  // bit 19
+        uint32_t cr8_store_exiting               : 1;  // bit 20
+        uint32_t use_tpr_shadow                  : 1;  // bit 21
+        uint32_t nmi_window_exiting              : 1;  // bit 22
+        uint32_t mov_dr_exiting                  : 1;  // bit 23
+        uint32_t uncondditional_io_exiting       : 1;  // bit 24
+        uint32_t use_io_bitmaps                  : 1;  // bit 25
+        uint32_t reserved_9                      : 1;  // bit 26
+        uint32_t monitor_trap_flag               : 1;  // bit 27
+        uint32_t use_msr_bitmaps                 : 1;  // bit 28
+        uint32_t monitor_exiting                 : 1;  // bit 29
+        uint32_t pause_exiting                   : 1;  // bit 30
+        uint32_t activate_secondary_controls     : 1;  // bit 31
+    };
+    uint64_t raw;
+} vmcs_procbased_ctls_t;
+tdx_static_assert(sizeof(vmcs_procbased_ctls_t) == 8, vmcs_procbased_ctls_t);
 
 typedef union
 {
@@ -464,47 +502,6 @@ typedef union
     uint32_t raw;
 } vmx_pinbased_ctls_t;
 tdx_static_assert(sizeof(vmx_pinbased_ctls_t) == 4, vmx_pinbased_ctls_t);
-
-typedef union
-{
-    struct
-    {
-        uint32_t reserved_0                      : 1;  // bit 0
-        uint32_t reserved_1                      : 1;  // bit 1
-        uint32_t interrupt_window_exiting        : 1;  // bit 2
-        uint32_t use_tsc_offsetting              : 1;  // bit 3
-        uint32_t reserved_2                      : 1;  // bit 4
-        uint32_t reserved_3                      : 1;  // bit 5
-        uint32_t reserved_4                      : 1;  // bit 6
-        uint32_t hlt_exiting                     : 1;  // bit 7
-        uint32_t reserved_5                      : 1;  // bit 8
-        uint32_t invlpg_exiting                  : 1;  // bit 9
-        uint32_t mwait_exiting                   : 1;  // bit 10
-        uint32_t rdpmc_exiting                   : 1;  // bit 11
-        uint32_t rdtsc_exiting                   : 1;  // bit 12
-        uint32_t reserved_6                      : 1;  // bit 13
-        uint32_t reserved_7                      : 1;  // bit 14
-        uint32_t cr3_load_exiting                : 1;  // bit 15
-        uint32_t cr3_store_exiting               : 1;  // bit 16
-        uint32_t activate_tertiary_controls      : 1;  // bit 17
-        uint32_t reserved_8                      : 1;  // bit 18
-        uint32_t cr8_load_exiting                : 1;  // bit 19
-        uint32_t cr8_store_exiting               : 1;  // bit 20
-        uint32_t use_tpr_shadow                  : 1;  // bit 21
-        uint32_t nmi_window_exiting              : 1;  // bit 22
-        uint32_t mov_dr_exiting                  : 1;  // bit 23
-        uint32_t uncondditional_io_exiting       : 1;  // bit 24
-        uint32_t use_io_bitmaps                  : 1;  // bit 25
-        uint32_t reserved_9                      : 1;  // bit 26
-        uint32_t monitor_trap_flag               : 1;  // bit 27
-        uint32_t use_msr_bitmaps                 : 1;  // bit 28
-        uint32_t monitor_exiting                 : 1;  // bit 29
-        uint32_t pause_exiting                   : 1;  // bit 30
-        uint32_t activate_secondary_controls     : 1;  // bit 31
-    };
-    uint64_t raw;
-} vmx_procbased_ctls_t;
-tdx_static_assert(sizeof(vmx_procbased_ctls_t) == 8, vmx_pinbased_ctls_t);
 
 typedef union
 {

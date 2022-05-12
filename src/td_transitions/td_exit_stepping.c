@@ -106,7 +106,7 @@ static bool_t is_smi_not_msmi_exiting(vm_vmexit_exit_reason_t vm_exit_reason,
 
 static void set_mtf(uint32_t enable)
 {
-    vmx_procbased_ctls_t vm_procbased_ctls;
+    vmcs_procbased_ctls_t vm_procbased_ctls;
     ia32_vmread(VMX_VM_EXECUTION_CONTROL_PROC_BASED_ENCODE, &vm_procbased_ctls.raw);
     vm_procbased_ctls.monitor_trap_flag = enable;
     ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_PROC_BASED_ENCODE, vm_procbased_ctls.raw);
@@ -163,8 +163,6 @@ static bool_t can_inject_epf_ve(vmx_exit_qualification_t last_exit_qualification
     ia32_vmread(VMX_VM_EXIT_IDT_VECTOR_FIELD_ENCODE, &last_idt_vec_info.raw);
 
     return ((last_guest_inter_state.blocking_by_nmi == 0)
-        && (last_guest_inter_state.blocking_by_sti == 0)
-        && (last_guest_inter_state.blocking_by_mov_ss == 0)
         && (last_exit_qualification.ept_violation.nmi_unblocking_due_to_iret == 0)
         && (last_idt_vec_info.valid == 0)
         && (tdvps_p->ve_info.valid == 0));

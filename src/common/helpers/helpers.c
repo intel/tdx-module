@@ -1437,3 +1437,4 @@ uint32_t check_mem_enc_alg (ia32_tme_capability_t tme_capability,  // In:  IA32_
 
     return 0;
 }
+

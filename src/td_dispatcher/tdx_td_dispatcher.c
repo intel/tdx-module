@@ -359,18 +359,51 @@ void tdx_td_dispatcher(void)
 {
     // Must be first thing to do before accessing local/global data or sysinfo table
     tdx_module_local_t* tdx_local_data_ptr = init_data_fast_ref_ptrs();
+    tdx_module_global_t* tdx_global_data_ptr = get_global_data();
 
     vm_vmexit_exit_reason_t vm_exit_reason;
     vmx_exit_qualification_t vm_exit_qualification;
     vmx_exit_inter_info_t vm_exit_inter_info;
     vmx_idt_vectoring_info_t idt_vectoring_info;
 
-    vmx_procbased_ctls_t vm_procbased_ctls;
+    vmcs_procbased_ctls_t vm_procbased_ctls;
     vmx_guest_inter_state_t guest_inter_state;
 
     bool_t interrupt_occurred = false;
 
     TDX_LOG("TD Dispatcher Entry\n");
+    
+    // Execute the BHB defense sequence
+    if (tdx_global_data_ptr->rtm_supported)
+    {
+        tsx_abort_sequence();             
+    }
+    else
+    {
+        // BHB draining sequence
+        // There are 6 taken branches in each iteration (one CALL, four JMPs, and one JNZ), 
+        // so for GLC (194 branch stews in BHB), NUM_ITERS = round-up(194 / 6) = 32.
+        uint64_t num_iters = NUM_OF_BHB_CLEARING_ITERATIONS;
+        uint64_t num_iters_multi_8 = 8*num_iters;
+
+        _ASM_VOLATILE_ (
+            "movq %0, %%rcx\n"
+            "1:  call 2f\n"
+            "lfence\n" 
+            "2:  jmp 3f\n"
+            "nop\n"
+            "3:  jmp 4f\n"
+            "nop\n"
+            "4:  jmp 5f\n"
+            "nop\n"
+            "5:  jmp 6f\n"
+            "nop\n"
+            "6:  dec %%rcx\n"
+            "jnz 1b\n"
+            "add %1, %%rsp\n"
+            "lfence\n"
+            : : "a"(num_iters), "b"(num_iters_multi_8) : "memory", "rcx");
+    }
 
     // Save current time to verify on next TD entry and for TDEXIT filter checks
     tdx_local_data_ptr->vp_ctx.tdvps->management.last_exit_tsc = ia32_rdtsc();

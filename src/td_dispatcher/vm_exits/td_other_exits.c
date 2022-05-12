@@ -372,7 +372,7 @@ void tdx_inject_ve(uint32_t vm_exit_reason, uint64_t exit_qualification, tdvps_t
 void td_nmi_exit(tdx_module_local_t* tdx_local_data_ptr)
 {
     vmx_entry_inter_info_t vm_entry_inter_info;
-    vmx_procbased_ctls_t vm_procbased_ctls;
+    vmcs_procbased_ctls_t vm_procbased_ctls;
 
     if (tdx_local_data_ptr->vp_ctx.tdvps->management.pend_nmi &&
             tdx_local_data_ptr->vp_ctx.tdvps->ve_info.valid == 0)

@@ -76,6 +76,7 @@ typedef struct PACKED non_extended_state_s
 {
     uint64_t ia32_spec_ctrl;
     uint64_t ia32_lam_enable;
+    uint64_t ia32_ds_area;
 } non_extended_state_t;
 
 
@@ -136,6 +137,14 @@ typedef struct PACKED keyhole_state_s
      */
     uint16_t  lru_head;
     uint16_t  lru_tail;
+    
+#ifdef DEBUG
+    /**
+     * total_ref_count counts the total amount of non-statically mapped linear addresses.
+     * Incremented on map_pa and decremented on free_la
+     */
+    uint64_t  total_ref_count;
+#endif
 } keyhole_state_t;
 
 /**

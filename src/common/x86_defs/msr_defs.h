@@ -318,7 +318,7 @@ typedef union ia32_tsx_ctrl_u
 {
     struct
     {
-        uint64_t rtm_enable       : 1;  // Bit  0
+        uint64_t rtm_disable      : 1;  // Bit  0
         uint64_t tsx_cpuid_clear  : 1;  // Bit  1
         uint64_t rsvd             : 62; // Bits 2:63
     };

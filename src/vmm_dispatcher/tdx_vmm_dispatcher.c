@@ -31,11 +31,40 @@ void tdx_vmm_dispatcher(void)
     TDX_LOG("Module entry start\n");
 
     tdx_module_global_t * global_data = get_global_data();
-    // Get leaf code from RAX in local data (saved on entry)
-    uint64_t leaf_opcode = local_data->vmm_regs.rax;
+    uint64_t leaf_opcode;
     ia32_core_capabilities_t core_capabilities;
 
-    TDX_LOG("leaf_opcode = 0x%llx\n", leaf_opcode);
+    // Execute the BHB defense sequence.
+    if (global_data->rtm_supported)
+    {
+        tsx_abort_sequence();             
+    }
+    else
+    {
+        // BHB draining sequence
+        // There are 6 taken branches in each iteration (one CALL, four JMPs, and one JNZ), 
+        // so for GLC (194 branch stews in BHB), NUM_ITERS = round-up(194 / 6) = 32.
+        uint64_t num_iters = NUM_OF_BHB_CLEARING_ITERATIONS;
+        uint64_t num_iters_multi_8 = 8*num_iters;
+
+        _ASM_VOLATILE_ (
+            "movq %0, %%rcx\n"
+            "1:  call 2f\n"
+            "lfence\n" 
+            "2:  jmp 3f\n"
+            "nop\n"
+            "3:  jmp 4f\n"
+            "nop\n"
+            "4:  jmp 5f\n"
+            "nop\n"
+            "5:  jmp 6f\n"
+            "nop\n"
+            "6:  dec %%rcx\n"
+            "jnz 1b\n"
+            "add %1, %%rsp\n"
+            "lfence\n"
+            : : "a"(num_iters), "b"(num_iters_multi_8) : "memory", "rcx");
+    }    
 
     // Save IA32_SPEC_CTRL and set speculative execution variant 4 defense
     // using Speculative Store Bypass Disable (SSBD), which delays speculative
@@ -53,6 +82,11 @@ void tdx_vmm_dispatcher(void)
     local_data->ia32_debugctl_value.raw = 0;
     local_data->ia32_debugctl_value.en_uncore_pmi = debugctl.en_uncore_pmi;
     wrmsr_opt(IA32_DEBUGCTL_MSR_ADDR, local_data->ia32_debugctl_value.raw, debugctl.raw);
+
+    // Get leaf code from RAX in local data (saved on entry)
+    leaf_opcode = local_data->vmm_regs.rax;
+    
+    TDX_LOG("leaf_opcode = 0x%llx\n", leaf_opcode);
 
     // If simplified LAM is supported, save & disable its state
     if (local_data->lp_is_init)
@@ -423,6 +457,11 @@ void tdx_vmm_post_dispatching(void)
     {
         ia32_wrmsr(IA32_LAM_ENABLE_MSR_ADDR, local_data_ptr->vmm_non_extended_state.ia32_lam_enable);
     }
+
+#ifdef DEBUG
+    // Check that we have no mapped keyholes left
+    tdx_debug_assert(local_data_ptr->keyhole_state.total_ref_count == 0);
+#endif
 
     TDX_LOG("tdx_vmm_post_dispatching - preparing to do SEAMRET\n");
 

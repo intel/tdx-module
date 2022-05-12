@@ -173,8 +173,8 @@ static api_error_type handle_stepping_filter(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, t
         tdx_debug_assert(tdvps_ptr->management.state == VCPU_READY_ASYNC);
 
         // decrement the TLB tracker that was incremented at the beginning of TDENTER
-        revert_tlb_tracking_state(tdcs_ptr);
-
+        revert_tlb_tracking_state(tdcs_ptr, tdvps_ptr);
+     
         // if the filter could not take SEPT lock, raise "busy" error
         if (td_entry_stepping_result == FILTER_FAIL_TDENTER_SEPT_BUSY)
         {
@@ -340,6 +340,9 @@ api_error_type tdh_vp_enter(uint64_t target_tdvpr_pa)
         }
     }
 
+    // Save the VMM value of IA32_DS_AREA
+    local_data_ptr->vmm_non_extended_state.ia32_ds_area = ia32_rdmsr(IA32_DS_AREA_MSR_ADDR);
+
     // Update the TLB tracking state. This is done as a critical section,
     // allowing concurrent TDHVPENTERs, but no concurrent TDHMEMTRACK
     IF_RARE (!adjust_tlb_tracking_state(tdcs_ptr, tdvps_ptr, new_associate_flag))
@@ -416,7 +419,7 @@ api_error_type tdh_vp_enter(uint64_t target_tdvpr_pa)
         tdvps_ptr->guest_state.rax = TDX_SUCCESS;
     }
 
-    vmx_procbased_ctls_t vm_procbased_ctls;
+    vmcs_procbased_ctls_t vm_procbased_ctls;
     /* If PEND_NMI was requested, and there's no pending #VE (which should be handled
        by the guest TD before NMI), set NMI Window Exiting execution control so NMI
        can be injected at the proper time. */

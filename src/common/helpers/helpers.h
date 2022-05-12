@@ -29,7 +29,7 @@
 
 #define PRIVATE_ONLY true
 #define PRIVATE_OR_SHARED false
-
+#define NUM_OF_BHB_CLEARING_ITERATIONS 32 // 194 branch stews in BHB, NUM_ITERS = round-up(194 / 6) = 32
 
 /**
  * @brief Program MKTME keys using PCONFIG
@@ -1079,13 +1079,12 @@ _STATIC_INLINE_ bool_t is_tlb_tracked(tdcs_t * tdcs_ptr, uint64_t bepoch)
  * @brief Decrement the TLB tracking state if was incremented earlier and need to be reverted
  * @param tdcs_ptr Pointer to TDCS for reading TD's epoch value and refcount
  */
-_STATIC_INLINE_ void revert_tlb_tracking_state(tdcs_t* tdcs_ptr)
+_STATIC_INLINE_ void revert_tlb_tracking_state(tdcs_t* tdcs_ptr, tdvps_t* tdvps_ptr)
 {
     tdcs_epoch_tracking_fields_t* epoch_tracking = &tdcs_ptr->epoch_tracking;
 
     // Sample the TD epoch and atomically decrement the REFCOUNT
-    uint64_t vcpu_epoch = epoch_tracking->epoch_and_refcount.td_epoch;
-    _lock_xadd_16b(&epoch_tracking->epoch_and_refcount.refcount[vcpu_epoch & 1], (uint16_t)-1);
+    _lock_xadd_16b(&epoch_tracking->epoch_and_refcount.refcount[tdvps_ptr->management.vcpu_epoch & 1], (uint16_t)-1);
 }
 
 /**
@@ -1328,7 +1327,7 @@ uint32_t lfsr_get_random (void);
                  Optimized DR and MSR Write and Init Helpers
 -------------------------------------------------------------------------------*/
 /**
- * @brief Write MSR only if value != cur_value
+ * @brief Write 'value' to MSR 'index' if value != cur_value
  *
  * @param addr - MSR address
  * @param new_value - The new value that should be written to the MSR
@@ -1377,5 +1376,18 @@ void clear_movss_sti_blocking(void);
  */
 uint32_t check_mem_enc_alg(ia32_tme_capability_t tme_capability, ia32_tme_activate_t tme_activate);
 
+/**
+ * @brief  TSX-Abort sequence.
+ *
+ */
+_STATIC_INLINE_ void tsx_abort_sequence()
+{
+    _ASM_VOLATILE_ (
+        "xbegin AbortTarget\n"
+        "xabort $0\n"
+        "lfence\n" 
+        "AbortTarget: nop\n"
+        : : : ); 
+}
 
 #endif /* SRC_COMMON_HELPERS_HELPERS_H_ */

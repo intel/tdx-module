@@ -44,6 +44,7 @@ static void load_xmms_by_mask(tdvps_t* tdvps_ptr, uint16_t xmm_select)
     basic_memset_to_zero(xmms, sizeof(xmms));
 }
 
+// Clear DR if 'cur_value' != 0
 static void init_all_dr_opt(tdvps_t* tdvps_ptr)
 {
    if (tdvps_ptr->guest_state.dr0 != DR0_RESET_STATE)
@@ -72,6 +73,7 @@ static void init_all_dr_opt(tdvps_t* tdvps_ptr)
    }
 }
 
+// Clear MSR 'index' if 'cur_value' != 0
 static void init_msr_opt(uint64_t addr, uint64_t cur_value)
 {
     if (addr == IA32_FMASK_MSR_ADDR)
@@ -108,7 +110,7 @@ static void load_vmm_state_before_td_exit(tdx_module_local_t* local_data_ptr)
     // Debug state restoration
     init_all_dr_opt(local_data_ptr->vp_ctx.tdvps);
 
-    init_msr_opt(IA32_DS_AREA_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_ds_area);
+    wrmsr_opt(IA32_DS_AREA_MSR_ADDR, local_data_ptr->vmm_non_extended_state.ia32_ds_area, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_ds_area);
 
     if (local_data_ptr->vp_ctx.xfd_supported)
     {

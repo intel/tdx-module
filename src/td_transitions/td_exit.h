@@ -28,6 +28,10 @@
 #define VMX_GUEST_LBR_CTL_INIT_VALUE                  0x0
 #define VMX_GUEST_DR7_INIT_VALUE                      0x00000400
 
+#ifdef DEBUG  
+#define NUM_OF_PRESERVED_KEYHOLES              2
+#endif
+
 /**
  * @brief Handler routine for asynchronous exit from TD to VMM
  */

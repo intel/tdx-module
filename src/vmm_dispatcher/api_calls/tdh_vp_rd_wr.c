@@ -208,7 +208,7 @@ static void get_td_vmcs_field_data(td_ctrl_struct_field_code_t field_code,
                 break;
             case VMX_CR0_GUEST_HOST_MASK_ENCODE:
                 *rd_mask = BIT_MASK_64BITS;
-                *wr_mask = 0xFFFFFFFF5FFFFFDE;
+                *wr_mask = 0xFFFFFFFF9FFFFFDE;
                 break;
             case VMX_CR0_READ_SHADOW_ENCODE:
                 *rd_mask = BIT_MASK_64BITS;

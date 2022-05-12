@@ -224,7 +224,7 @@ typedef struct tdcs_epoch_tracking_fields_s
  */
 typedef struct cpuid_flags_s
 {
-    bool_t dca_supported;       // virtual CPUID(0x1).ECX[18]
+    bool_t dca_supported;       // virtual CPUID(0x1).ECX[18]    
     bool_t waitpkg_supported;   // virtual CPUID(0x7, 0x0).ECX[5]
     bool_t tme_supported;       // virtual CPUID(0x7, 0x0).ECX[13]
     bool_t mktme_supported;     // virtual CPUID(0x7, 0x0).EDX[18]

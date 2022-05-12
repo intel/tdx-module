@@ -307,6 +307,11 @@ static void rdmsr_ia32_arch_capabilities(tdvps_t* tdvps_p)
     // Enumerate IA32_TSX_CTRL MSR as non-existent
     ia32_arch_capabilities_value.tsx_ctrl = 0;
 
+    // Virtualize as 0 all IA32_ARCH_CAPABILITIES bits that are known by the TDX module as reserved  
+    ia32_arch_capabilities_value.misc_package_ctls = 0;
+    ia32_arch_capabilities_value.energy_filtering_ctl = 0;
+    ia32_arch_capabilities_value.rsvd = 0;
+    
     // Return the value in EDX:EAX
     tdvps_p->guest_state.rdx = HIGH_32BITS(ia32_arch_capabilities_value.raw);
     tdvps_p->guest_state.rax = LOW_32BITS(ia32_arch_capabilities_value.raw);

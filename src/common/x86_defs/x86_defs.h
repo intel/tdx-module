@@ -889,6 +889,47 @@ typedef union
 } cpuid_0d_01_eax_t;
 tdx_static_assert(sizeof(cpuid_0d_01_eax_t) == 4, cpuid_0d_01_eax_t);
 
+typedef union cpuid_07_00_ebx_u
+{
+    struct
+    {
+        uint32_t fsgsbase         : 1;   // Bit 0
+        uint32_t ia32_tsc_adjust  : 1;   // Bit 1
+        uint32_t sgx              : 1;   // Bit 2
+        uint32_t bmi1             : 1;   // Bit 3
+        uint32_t hle              : 1;   // Bit 4
+        uint32_t avx2             : 1;   // Bit 5
+        uint32_t fdp_excptn_only  : 1;   // Bit 6
+        uint32_t smep             : 1;   // Bit 7
+        uint32_t bmi2             : 1;   // Bit 8
+        uint32_t enh_rep_movsb    : 1;   // Bit 9
+        uint32_t invpcid          : 1;   // Bit 10
+        uint32_t rtm              : 1;   // Bit 11
+        uint32_t rdt_m            : 1;   // Bit 12
+        uint32_t dep_fcu_cs_ds    : 1;   // Bit 13
+        uint32_t mpx              : 1;   // Bit 14
+        uint32_t rdt_a            : 1;   // Bit 15
+        uint32_t avx512f          : 1;   // Bit 16
+        uint32_t avx512dq         : 1;   // Bit 17
+        uint32_t rdseed           : 1;   // Bit 18
+        uint32_t adx              : 1;   // Bit 19
+        uint32_t smap             : 1;   // Bit 20
+        uint32_t avx512_ifma      : 1;   // Bit 21
+        uint32_t reserved         : 1;   // Bit 22
+        uint32_t clflushopt       : 1;   // Bit 23
+        uint32_t clwb             : 1;   // Bit 24
+        uint32_t pt               : 1;   // Bit 25
+        uint32_t avx512pf         : 1;   // Bit 26
+        uint32_t avx512er         : 1;   // Bit 27
+        uint32_t avx512cd         : 1;   // Bit 28
+        uint32_t sha              : 1;   // Bit 29
+        uint32_t avx512bw         : 1;   // Bit 30
+        uint32_t avx512vl         : 1;   // Bit 31
+    };
+    uint32_t raw;
+} cpuid_07_00_ebx_t;
+tdx_static_assert(sizeof(cpuid_07_00_ebx_t) == 4, cpuid_07_00_ebx_t);
+
 typedef union cpuid_07_00_ecx_u
 {
     struct

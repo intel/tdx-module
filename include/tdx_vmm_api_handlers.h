@@ -527,7 +527,7 @@ api_error_type tdh_sys_rdall(uint64_t md_list_hpa, md_field_id_t field_id);
  *
  * @return Success or Error type
  */
-api_error_type tdh_sys_init(sys_attributes_t tmp_sys_attributes);
+api_error_type tdh_sys_init(void);
 
 
 /**

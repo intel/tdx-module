@@ -148,9 +148,7 @@ static void load_vmm_state_before_td_exit(tdx_module_local_t* local_data_ptr)
 
         for (uint32_t i = 0; i < NUM_PMC; i++)
         {
-            {
-                init_msr_opt(IA32_A_PMC0_MSR_ADDR + i, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_a_pmc[i]);
-            }
+            init_msr_opt(IA32_A_PMC0_MSR_ADDR + i, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_a_pmc[i]);
         }
 
         for (uint32_t i = 0; i < 2; i++)
@@ -178,12 +176,16 @@ static void load_vmm_state_before_td_exit(tdx_module_local_t* local_data_ptr)
     init_msr_opt(IA32_FMASK_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_fmask);
     init_msr_opt(IA32_KERNEL_GS_BASE_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_kernel_gs_base);
 
+    // Scrub of restore IA32_TSX_CTRL, if supported by the CPU
     if (local_data_ptr->vp_ctx.tdcs->executions_ctl_fields.cpuid_flags.tsx_supported)
     {
+        // TSX is only enabled on the TD if IA32_TSX_CTRL is supported by the CPU
         ia32_wrmsr(IA32_TSX_CTRL_MSR_ADDR, 0);
     }
-    else
+    else if ((global_data->hle_supported || global_data->rtm_supported) &&
+             (global_data->plt_common_config.ia32_arch_capabilities.tsx_ctrl))
     {
+        // The CPU supports TSX and the IA32_TSX_CTRL MSR; restore IA32_TSX_CTRL
         wrmsr_opt(IA32_TSX_CTRL_MSR_ADDR, local_data_ptr->vmm_non_extended_state.ia32_tsx_ctrl, IA32_TSX_CTRL_DISABLE_VALUE);
     }
 
@@ -258,10 +260,8 @@ static void save_guest_td_state_before_td_exit(tdcs_t* tdcs_ptr, tdx_module_loca
 
         for (uint32_t i = 0; i < NUM_PMC; i++)
         {
-            {
-                tdvps_ptr->guest_msr_state.ia32_a_pmc[i] = ia32_rdmsr(IA32_A_PMC0_MSR_ADDR + i);
-                tdvps_ptr->guest_msr_state.ia32_perfevtsel[i] = ia32_rdmsr(IA32_PERFEVTSEL0_MSR_ADDR + i);
-            }
+            tdvps_ptr->guest_msr_state.ia32_a_pmc[i] = ia32_rdmsr(IA32_A_PMC0_MSR_ADDR + i);
+            tdvps_ptr->guest_msr_state.ia32_perfevtsel[i] = ia32_rdmsr(IA32_PERFEVTSEL0_MSR_ADDR + i);
         }
 
         for (uint32_t i = 0; i < 2; i++)
@@ -277,7 +277,11 @@ static void save_guest_td_state_before_td_exit(tdcs_t* tdcs_ptr, tdx_module_loca
         tdvps_ptr->guest_msr_state.ia32_pebs_enable = ia32_rdmsr(IA32_PEBS_ENABLE_MSR_ADDR);
         tdvps_ptr->guest_msr_state.ia32_pebs_data_cfg = ia32_rdmsr(IA32_PEBS_DATA_CFG_MSR_ADDR);
         tdvps_ptr->guest_msr_state.ia32_pebs_ld_lat = ia32_rdmsr(IA32_PEBS_LD_LAT_MSR_ADDR);
-        tdvps_ptr->guest_msr_state.ia32_pebs_frontend = ia32_rdmsr(IA32_PEBS_FRONTEND_MSR_ADDR);
+        // MSR_PEBS_FRONTEND exists only in big cores
+        if (global_data->native_model_info.core_type == CORE_TYPE_BIGCORE)
+        {
+            tdvps_ptr->guest_msr_state.ia32_pebs_frontend = ia32_rdmsr(IA32_PEBS_FRONTEND_MSR_ADDR);
+        }
     }
     if (tdcs_ptr->executions_ctl_fields.cpuid_flags.waitpkg_supported)
     {
@@ -591,9 +595,8 @@ static void td_l2_to_l1_exit_internal(api_error_code_e tdexit_case, vm_vmexit_ex
     tdvps_ptr->management.curr_vm = 0;
     set_vm_vmcs_as_active(tdvps_ptr, tdvps_ptr->management.curr_vm);
 
-    // Set VMCS.IA32_SPEC_CTRL_SHADOW to the virtual value of IA32_SPEC_CTRL as seen by L1
-    ia32_vmwrite(VMX_IA32_SPEC_CTRL_SHADOW,
-            calculate_virt_ia32_spec_ctrl(ld_p->vp_ctx.tdcs, tdvps_ptr->guest_msr_state.ia32_spec_ctrl));
+    // If IA32_SPEC_CTRL is virtualized, write the VMCS' IA32_SPEC_CTRL shadow
+    conditionally_write_vmcs_ia32_spec_ctrl_shadow(ld_p->vp_ctx.tdcs, tdvps_ptr->guest_msr_state.ia32_spec_ctrl);
 
     // Update L1's host state fields before entry
     update_host_state_in_td_vmcs(ld_p, tdvps_ptr, tdvps_ptr->management.curr_vm);

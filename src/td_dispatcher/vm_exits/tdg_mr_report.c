@@ -39,8 +39,7 @@
 #include "td_transitions/td_exit.h"
 
 
-api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_data_gpa, uint64_t sub_type,
-                             bool_t* interrupt_occurred)
+api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_data_gpa, uint64_t sub_type, bool_t* interrupt_occurred)
 {
     // Local data and TD's structures
     tdx_module_local_t  * local_data_ptr = get_local_data();
@@ -126,6 +125,8 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
         tdg_mr_report_type.version = (uint8_t)TDX_REPORT_VERSION_NO_SERVTDS;
     }
 
+    bool_t is_cached_teeinfohash_used = tdcs_p->measurement_fields.last_teeinfo_hash_valid;
+
     // Create TDREPORT in a temporary buffer and compute TEE_INFO_HASH
     ignore_tdinfo_bitmap_t ignore = { .raw = 0 };
     if ((return_val = get_tdinfo_and_teeinfohash(tdcs_p, ignore,
@@ -135,8 +136,8 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
         goto EXIT;
     }
 
-    // Interruption Point
-    if (is_interrupt_pending_guest_side())
+    // Interruption Point: only if TEEINFOHASH was not cached (so its calculation took a long time)
+    if (!is_cached_teeinfohash_used && is_interrupt_pending_guest_side())
     {
         // An interrupt is pending. Resume the guest without updating CPU state
         // TDG.MR.REPORT will be called again after the interrupt is serviced.

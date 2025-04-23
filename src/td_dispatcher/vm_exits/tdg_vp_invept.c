@@ -56,6 +56,7 @@ api_error_type tdg_vp_invept(uint64_t vm_mask)
             flush_td_asid(tdx_local_data_ptr->vp_ctx.tdr, tdx_local_data_ptr->vp_ctx.tdcs, vm_id);
 
             // Currently there is no need to invalidate soft-translated GPAs, they are all in the L1 context
+
             vm_mask &= ~BIT(vm_id);
         }
     }

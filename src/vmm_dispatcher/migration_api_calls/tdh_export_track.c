@@ -199,7 +199,7 @@ api_error_type tdh_export_track(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
     // Build the MBMD
     basic_memset_to_zero(&mbmd_tmp, sizeof(mbmd_tmp));
     mbmd_tmp.header.size = sizeof(mbmd_tmp);
-    mbmd_tmp.header.mig_version = tdcs_p->migration_fields.mig_version;
+    mbmd_tmp.header.mig_version = tdcs_p->migration_fields.mig_working_version;
     mbmd_tmp.header.migs_index = 0;
     mbmd_tmp.header.mb_type = MB_TYPE_EPOCH_TOKEN;
     mbmd_tmp.header.reserved_1 = 0;

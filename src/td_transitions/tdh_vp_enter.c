@@ -41,7 +41,7 @@
 #include "td_transitions/td_exit.h"
 #include "helpers/virt_msr_helpers.h"
 
-_STATIC_INLINE_ void guest_ext_state_load_failure(tdcs_t* tdcs_ptr)
+_STATIC_INLINE_ void guest_ext_state_load_failure()
 {
     vm_vmexit_exit_reason_t vm_exit_reason = { .raw = 0 };
     vm_exit_reason.basic_reason = VMEXIT_REASON_FAILED_VMENTER_GS;
@@ -49,13 +49,13 @@ _STATIC_INLINE_ void guest_ext_state_load_failure(tdcs_t* tdcs_ptr)
     vmx_ext_exit_qual_t eeq = { .raw = 0 };
     eeq.type = VMX_EEQ_TD_ENTRY_XSTATE_LOAD_FAILURE;
 
-    async_tdexit_to_vmm(tdcs_ptr->executions_ctl_fields.attributes.debug ? TDX_SUCCESS : TDX_NON_RECOVERABLE_TD,
+    async_tdexit_to_vmm(TDX_NON_RECOVERABLE_TD_NON_ACCESSIBLE,
             vm_exit_reason, 0, eeq.raw, 0, 0);
 }
 
 // Before using the first safe_wrmsr - save MSR(NON_FAULTING_MSR_ADDR) - 0x8b in the local data
 // and it will be restored in case of #GP.
-static __attribute__((noinline)) void safe_wrmsr(uint64_t addr, uint64_t value, tdcs_t* tdcs_ptr)
+static __attribute__((noinline)) void safe_wrmsr(uint64_t addr, uint64_t value)
 {
     IF_RARE (!ia32_safe_wrmsr(addr, value))
     {
@@ -70,28 +70,28 @@ static __attribute__((noinline)) void safe_wrmsr(uint64_t addr, uint64_t value, 
 
         ia32_wrmsr(NON_FAULTING_MSR_ADDR, get_local_data()->non_faulting_msr_value);
 
-        async_tdexit_to_vmm(tdcs_ptr->executions_ctl_fields.attributes.debug ? TDX_SUCCESS : TDX_NON_RECOVERABLE_TD,
+        async_tdexit_to_vmm(TDX_NON_RECOVERABLE_TD_NON_ACCESSIBLE,
                 vm_exit_reason, 0, eeq.raw, 0, 0);
     }
 }
 
-static __attribute__((noinline)) void safe_xrstors(const void* xsave_area, uint64_t xfam, tdcs_t* tdcs_ptr)
+static __attribute__((noinline)) void safe_xrstors(const void* xsave_area, uint64_t xfam)
 {
     IF_RARE (!ia32_safe_xrstors(xsave_area, xfam))
     {
         TDX_ERROR("XRSTORS with XFAM 0x%llx caused #GP\n", xfam);
-        guest_ext_state_load_failure(tdcs_ptr);
+        guest_ext_state_load_failure();
     }
 }
 
-_STATIC_INLINE_ void ia32_perf_global_status_write(uint64_t reset_command, uint64_t set_command, tdcs_t* tdcs_ptr)
+_STATIC_INLINE_ void ia32_perf_global_status_write(uint64_t reset_command, uint64_t set_command)
 {
     // IA32_PERF_GLOBAL_STATUS is written in a special way, using the RESET and SET command MSRs
-    safe_wrmsr(IA32_PERF_GLOBAL_STATUS_RESET_MSR_ADDR, reset_command, tdcs_ptr);
-    safe_wrmsr(IA32_PERF_GLOBAL_STATUS_SET_MSR_ADDR, set_command, tdcs_ptr);
+    safe_wrmsr(IA32_PERF_GLOBAL_STATUS_RESET_MSR_ADDR, reset_command);
+    safe_wrmsr(IA32_PERF_GLOBAL_STATUS_SET_MSR_ADDR, set_command);
 }
 
-_STATIC_INLINE_ void restore_guest_td_extended_state(tdcs_t* tdcs_ptr, tdvps_t* tdvps_ptr)
+_STATIC_INLINE_ void restore_guest_td_extended_state(tdvps_t* tdvps_ptr)
 {
     uint64_t xstate_bv = tdvps_ptr->guest_extension_state.xbuf.xsave_header.xstate_bv;
     uint64_t xcomp_bv = tdvps_ptr->guest_extension_state.xbuf.xsave_header.xcomp_bv;
@@ -113,14 +113,14 @@ _STATIC_INLINE_ void restore_guest_td_extended_state(tdcs_t* tdcs_ptr, tdvps_t* 
     {
         TDX_ERROR("Failed checks on XBUFF header. xcomp_bv = 0x%llx, xstate_bv = 0x%llx, xfam = 0x%llx\n",
                 xcomp_bv, xstate_bv, tdvps_ptr->management.xfam);
-        guest_ext_state_load_failure(tdcs_ptr);
+        guest_ext_state_load_failure();
     }
 
     // Set Guest XCR0 and XSS context for restoring the state
     ia32_xsetbv(0, tdvps_ptr->management.xfam & XCR0_USER_BIT_MASK);
     ia32_wrmsr(IA32_XSS_MSR_ADDR, tdvps_ptr->management.xfam & XCR0_SUPERVISOR_BIT_MASK);
 
-    safe_xrstors(&tdvps_ptr->guest_extension_state.xbuf, tdvps_ptr->management.xfam, tdcs_ptr);
+    safe_xrstors(&tdvps_ptr->guest_extension_state.xbuf, tdvps_ptr->management.xfam);
 }
 
 static void emulate_ept_violation_td_exit(tdx_module_local_t* local_data_ptr, pa_t faulting_gpa,
@@ -247,7 +247,7 @@ static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* td
     ia32_load_dr3(tdvps_ptr->guest_state.dr3);
     ia32_load_dr6(tdvps_ptr->guest_state.dr6);
 
-    safe_wrmsr(IA32_DS_AREA_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_ds_area, tdcs_ptr);
+    safe_wrmsr(IA32_DS_AREA_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_ds_area);
 
     //  Restore IA32_LBR_DEPTH from TDVPS.IA32_LBR_DEPTH. This MSR is not restored by XRSTORS
     //  like other LBR MSRs. On XRSTORS, if the saved value matches current value, then
@@ -255,54 +255,56 @@ static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* td
     //  MSRs, and IA32_LER_* MSRs are cleared.
     if (((ia32_xcr0_t)tdvps_ptr->management.xfam).lbr)
     {
-        safe_wrmsr(IA32_LBR_DEPTH_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_lbr_depth, tdcs_ptr);
+        safe_wrmsr(IA32_LBR_DEPTH_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_lbr_depth);
     }
 
     // Perfmon State
     if (tdcs_ptr->executions_ctl_fields.attributes.perfmon)
     {
-        safe_wrmsr(IA32_FIXED_CTR_CTRL_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_fixed_ctr_ctrl, tdcs_ptr);
+        safe_wrmsr(IA32_FIXED_CTR_CTRL_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_fixed_ctr_ctrl);
         for (uint8_t i = 0; i < global_data->num_fixed_ctrs; i++)
         {
             if ((global_data->fc_bitmap & BIT(i)) != 0)
             {
-                safe_wrmsr(IA32_FIXED_CTR0_MSR_ADDR + i, tdvps_ptr->guest_msr_state.ia32_fixed_ctr[i], tdcs_ptr);
+                safe_wrmsr(IA32_FIXED_CTR0_MSR_ADDR + i, tdvps_ptr->guest_msr_state.ia32_fixed_ctr[i]);
             }
         }
 
         for (uint32_t i = 0; i < NUM_PMC; i++)
         {
-            {
-                safe_wrmsr(IA32_A_PMC0_MSR_ADDR + i, tdvps_ptr->guest_msr_state.ia32_a_pmc[i], tdcs_ptr);
-                safe_wrmsr(IA32_PERFEVTSEL0_MSR_ADDR + i, tdvps_ptr->guest_msr_state.ia32_perfevtsel[i], tdcs_ptr);
-            }
+            safe_wrmsr(IA32_A_PMC0_MSR_ADDR + i, tdvps_ptr->guest_msr_state.ia32_a_pmc[i]);
+            safe_wrmsr(IA32_PERFEVTSEL0_MSR_ADDR + i, tdvps_ptr->guest_msr_state.ia32_perfevtsel[i]);
         }
 
         for (uint32_t i = 0; i < 2; i++)
         {
-            safe_wrmsr(IA32_OFFCORE_RSPx_MSR_ADDR + i, tdvps_ptr->guest_msr_state.ia32_offcore_rsp[i], tdcs_ptr);
+            safe_wrmsr(IA32_OFFCORE_RSPx_MSR_ADDR + i, tdvps_ptr->guest_msr_state.ia32_offcore_rsp[i]);
         }
 
         ia32_perf_global_status_write(ia32_rdmsr(IA32_PERF_GLOBAL_STATUS_MSR_ADDR),
-                tdvps_ptr->guest_msr_state.ia32_perf_global_status, tdcs_ptr);
-        safe_wrmsr(IA32_PEBS_ENABLE_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_pebs_enable, tdcs_ptr);
+                tdvps_ptr->guest_msr_state.ia32_perf_global_status);
+        safe_wrmsr(IA32_PEBS_ENABLE_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_pebs_enable);
         if (global_data->plt_common_config.ia32_perf_capabilities.perf_metrics_available)
         {
-            safe_wrmsr(IA32_PERF_METRICS_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_perf_metrics, tdcs_ptr);
+            safe_wrmsr(IA32_PERF_METRICS_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_perf_metrics);
         }
-        safe_wrmsr(IA32_PEBS_DATA_CFG_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_pebs_data_cfg, tdcs_ptr);
-        safe_wrmsr(IA32_PEBS_LD_LAT_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_pebs_ld_lat, tdcs_ptr);
-        safe_wrmsr(IA32_PEBS_FRONTEND_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_pebs_frontend, tdcs_ptr);
+        safe_wrmsr(IA32_PEBS_DATA_CFG_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_pebs_data_cfg);
+        safe_wrmsr(IA32_PEBS_LD_LAT_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_pebs_ld_lat);
+        // MSR_PEBS_FRONTEND exists only in big cores
+        if (global_data->native_model_info.core_type == CORE_TYPE_BIGCORE)
+        {
+            safe_wrmsr(IA32_PEBS_FRONTEND_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_pebs_frontend);
+        }
     }
 
     if (tdcs_ptr->executions_ctl_fields.cpuid_flags.waitpkg_supported)
     {
-        safe_wrmsr(IA32_UMWAIT_CONTROL, tdvps_ptr->guest_msr_state.ia32_umwait_control, tdcs_ptr);
+        safe_wrmsr(IA32_UMWAIT_CONTROL, tdvps_ptr->guest_msr_state.ia32_umwait_control);
     }
 
     if (tdcs_ptr->executions_ctl_fields.cpuid_flags.tsx_supported)
     {
-        safe_wrmsr(IA32_TSX_CTRL_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_tsx_ctrl, tdcs_ptr);
+        safe_wrmsr(IA32_TSX_CTRL_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_tsx_ctrl);
     }
     else if (get_global_data()->plt_common_config.ia32_arch_capabilities.tsx_ctrl)
     {
@@ -313,37 +315,37 @@ static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* td
         // Optimize by disabling TSX only if not disabled by the host VMM
         if (!tsx_ctrl.rtm_disable || tsx_ctrl.rsvd)
         {
-            safe_wrmsr(IA32_TSX_CTRL_MSR_ADDR, IA32_TSX_CTRL_DISABLE_VALUE, tdcs_ptr);
+            safe_wrmsr(IA32_TSX_CTRL_MSR_ADDR, IA32_TSX_CTRL_DISABLE_VALUE);
         }
     }
 
-    safe_wrmsr(IA32_UARCH_MISC_CTL_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_uarch_misc_ctl, tdcs_ptr);
+    safe_wrmsr(IA32_UARCH_MISC_CTL_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_uarch_misc_ctl);
 
     // Unconditionally restore the following MSRs from TDVP:
     // IA32_STAR, IA32_SPEC_CTRL, IA32_LSTAR, IA32_FMASK, IA32_KERNEL_GS_BASE, IA32_TSC_AUX
-    safe_wrmsr(IA32_TSC_AUX_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_tsc_aux, tdcs_ptr);
-    safe_wrmsr(IA32_STAR_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_star, tdcs_ptr);
-    safe_wrmsr(IA32_LSTAR_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_lstar, tdcs_ptr);
-    safe_wrmsr(IA32_FMASK_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_fmask, tdcs_ptr);
-    safe_wrmsr(IA32_KERNEL_GS_BASE_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_kernel_gs_base, tdcs_ptr);
+    safe_wrmsr(IA32_TSC_AUX_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_tsc_aux);
+    safe_wrmsr(IA32_STAR_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_star);
+    safe_wrmsr(IA32_LSTAR_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_lstar);
+    safe_wrmsr(IA32_FMASK_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_fmask);
+    safe_wrmsr(IA32_KERNEL_GS_BASE_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_kernel_gs_base);
 
     // Restore CPU extended state, based on XFAM
-    restore_guest_td_extended_state(tdcs_ptr, tdvps_ptr);
+    restore_guest_td_extended_state(tdvps_ptr);
 
     // Extended state control
     ia32_xsetbv(0, tdvps_ptr->guest_state.xcr0);
-    safe_wrmsr(IA32_XSS_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_xss, tdcs_ptr);
+    safe_wrmsr(IA32_XSS_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_xss);
 
     if (tdcs_ptr->executions_ctl_fields.cpuid_flags.xfd_supported)
     {
-        safe_wrmsr(IA32_XFD_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_xfd, tdcs_ptr);
-        safe_wrmsr(IA32_XFD_ERROR_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_xfd_err, tdcs_ptr);
+        safe_wrmsr(IA32_XFD_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_xfd);
+        safe_wrmsr(IA32_XFD_ERROR_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_xfd_err);
     }
 
     // Restore IA32_SPEC_CTRL - safely, instead of restoring it as usual in tdx_return_to_td
     if (tdvps_ptr->guest_msr_state.ia32_spec_ctrl != TDX_MODULE_IA32_SPEC_CTRL)
     {
-        safe_wrmsr(IA32_SPEC_CTRL_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_spec_ctrl, tdcs_ptr);
+        safe_wrmsr(IA32_SPEC_CTRL_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_spec_ctrl);
     }
 }
 
@@ -582,7 +584,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
     ia32_misc_enable_t misc_enable = { .raw = ia32_rdmsr(IA32_MISC_ENABLES_MSR_ADDR) };
 
     // Boot NT4 bit should not be set
-    if (misc_enable.boot_nt4)
+    if (misc_enable.limit_cpuid_maxval)
     {
         return_val = TDX_LIMIT_CPUID_MAXVAL_SET;
         goto EXIT_FAILURE;
@@ -888,8 +890,6 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
         }
     }
 
-    tdvps_ptr->management.state = VCPU_ACTIVE;
-
     // Set the guest TD's IA32_DEBUGCTL.ENABLE_UNCORE_PMI to the VMM's value.
     ia32_debugctl_t debugctl;
     ia32_vmread(VMX_GUEST_IA32_DEBUGCTLMSR_FULL_ENCODE, &debugctl.raw);
@@ -910,9 +910,8 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
         release_sharex_lock_ex(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
     }
 
-    // Set VMCS.IA32_SPEC_CTRL_SHADOW to the virtual value of IA32_SPEC_CTRL as seen by the TD
-    ia32_vmwrite(VMX_IA32_SPEC_CTRL_SHADOW,
-            calculate_virt_ia32_spec_ctrl(tdcs_ptr, tdvps_ptr->guest_msr_state.ia32_spec_ctrl));
+    // If IA32_SPEC_CTRL is virtualized, write the VMCS' IA32_SPEC_CTRL shadow
+    conditionally_write_vmcs_ia32_spec_ctrl_shadow(tdcs_ptr, tdvps_ptr->guest_msr_state.ia32_spec_ctrl);
 
     // Restore other Guest state (GPRs, DRs, MSRs) in TDVPS
     restore_guest_td_state_before_td_entry(tdcs_ptr, tdvps_ptr);
@@ -920,6 +919,8 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
     update_host_state_in_td_vmcs(local_data_ptr, tdvps_ptr, tdvps_ptr->management.curr_vm);
 
     local_data_ptr->single_step_def_state.last_entry_tsc = ia32_rdtsc();
+
+    tdvps_ptr->management.state = VCPU_ACTIVE;
 
     if (tdvps_ptr->management.vm_launched[tdvps_ptr->management.curr_vm])
     {

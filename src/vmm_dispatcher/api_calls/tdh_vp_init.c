@@ -114,6 +114,17 @@ api_error_type tdh_vp_init(uint64_t target_tdvpr_pa, uint64_t td_vcpu_rcx)
 
     api_error_type        return_val = UNINITIALIZE_ERROR;
 
+    tdx_leaf_and_version_t leaf_opcode;
+    leaf_opcode.raw = get_local_data()->vmm_regs.rax;
+
+    uint64_t x2apic_id = get_local_data()->vmm_regs.r8;
+
+    // TDH.VP.INIT supports version 1.  Other version checks are done by the SEAMCALL dispatcher.
+    if (leaf_opcode.version > 1)
+    {
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
+        goto EXIT;
+    }
 
     // Check and lock the parent TDVPR page
     return_val = check_and_lock_explicit_4k_private_hpa(tdvpr_pa,
@@ -129,11 +140,13 @@ api_error_type tdh_vp_init(uint64_t target_tdvpr_pa, uint64_t td_vcpu_rcx)
         goto EXIT;
     }
 
+    lock_type_t tdr_lock_type = (leaf_opcode.version > 0) ? TDX_LOCK_EXCLUSIVE : TDX_LOCK_SHARED;
+
     // Lock and map the TDR page
     return_val = lock_and_map_implicit_tdr(get_pamt_entry_owner(tdvpr_pamt_entry_ptr),
                                            OPERAND_ID_TDR,
                                            TDX_RANGE_RO,
-                                           TDX_LOCK_SHARED,
+                                           tdr_lock_type,
                                            &tdr_pamt_entry_ptr,
                                            &tdr_locked_flag,
                                            &tdr_ptr);
@@ -190,6 +203,32 @@ api_error_type tdh_vp_init(uint64_t target_tdvpr_pa, uint64_t td_vcpu_rcx)
     }
     tdvps_ptr->management.vcpu_index = vcpu_index;
 
+    if (leaf_opcode.version == 0)
+    {
+        // No x2APIC ID was provided
+        tdcs_ptr->executions_ctl_fields.topology_enum_configured = false;
+    }
+    else
+    {
+        // Check and save the configured x2APIC ID.  Upper 32 bits must be 0.
+        if (x2apic_id > 0xFFFFFFFF)
+        {
+            (void)_lock_xadd_32b(&tdcs_ptr->management_fields.num_vcpus, (uint32_t)-1);
+            return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
+            goto EXIT;
+        }
+
+        for (uint32_t i = 0; i < vcpu_index; i++)
+        {
+            if ((uint32_t)x2apic_id == tdcs_ptr->x2apic_ids[i])
+            {
+                return_val = api_error_with_operand_id(TDX_X2APIC_ID_NOT_UNIQUE, tdcs_ptr->x2apic_ids[i]);
+                goto EXIT;
+            }
+        }
+
+        tdcs_ptr->x2apic_ids[vcpu_index] = (uint32_t)x2apic_id;
+    }
 
     // We read TSC below.  Compare IA32_TSC_ADJUST to the value sampled on TDHSYSINIT
     // to make sure the host VMM doesn't play any trick on us. */
@@ -282,7 +321,7 @@ EXIT:
     }
     if (tdr_locked_flag)
     {
-        pamt_implicit_release_lock(tdr_pamt_entry_ptr, TDX_LOCK_SHARED);
+        pamt_implicit_release_lock(tdr_pamt_entry_ptr, tdr_lock_type);
         free_la(tdr_ptr);
     }
     if (tdvpr_locked_flag)

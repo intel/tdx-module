@@ -319,9 +319,15 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
     global_data_ptr->x2apic_core_id_shift_count = 0;  // Updated later per CPUID leaf 0x1F
 
     // Boot NT4 bit should not be set
-    if ((ia32_rdmsr(IA32_MISC_ENABLES_MSR_ADDR) & MISC_EN_BOOT_NT4_BIT ) != 0)
+    ia32_misc_enable_t misc_enable = { .raw = ia32_rdmsr(IA32_MISC_ENABLES_MSR_ADDR) };
+    if (misc_enable.limit_cpuid_maxval)
     {
     	return TDX_LIMIT_CPUID_MAXVAL_SET;
+    }
+
+    if ((!misc_enable.perfmon_available) || (misc_enable.bts_unavailable))
+    {
+        return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_MISC_ENABLES_MSR_ADDR);
     }
 
     uint32_t last_base_leaf, last_extended_leaf;
@@ -451,6 +457,10 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
                 cpuid_07_01_eax_t cpuid_7_1_eax = {.raw = cpuid_config.values.eax};
                 perfmon_ext_leaf_supported = cpuid_7_1_eax.perfmon_ext_leaf;
                 perfmon_ext_leaf_checked = true;
+
+                global_data_ptr->lam_supported = cpuid_7_1_eax.lam;
+                global_data_ptr->lass_supported = cpuid_7_1_eax.lass;
+                global_data_ptr->perfmon_ext_leaf_supported = perfmon_ext_leaf_supported;
             }
             else if (subleaf == 2)
             {
@@ -588,6 +598,11 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
                 // Fatal Error
                 FATAL_ERROR();
             }
+        }
+        else if (leaf == 0x1A)
+        {
+            // Store the native model information for later reference
+            global_data_ptr->native_model_info.raw = cpuid_config.values.eax;
         }
         else if (leaf == CPUID_LBR_CAPABILITIES_LEAF)
         {
@@ -858,7 +873,8 @@ _STATIC_INLINE_ api_error_type check_msrs(tdx_module_global_t* tdx_global_data_p
 
     // Check Performance Monitoring - Support of IA32_A_PMC MSRs
     msr_values_ptr->ia32_perf_capabilities.raw = ia32_rdmsr(IA32_PERF_CAPABILITIES_MSR_ADDR);
-    if (msr_values_ptr->ia32_perf_capabilities.full_write != 1)
+    if ((msr_values_ptr->ia32_perf_capabilities.freeze_while_smm_supported != 1) ||
+        (msr_values_ptr->ia32_perf_capabilities.full_write != 1))
     {
         TDX_ERROR("Check of IA32 PERF MSRs failed\n");
         return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_PERF_CAPABILITIES_MSR_ADDR);
@@ -910,8 +926,13 @@ _STATIC_INLINE_ api_error_type check_l2_vmx_msrs(tdx_module_global_t* tdx_global
 
     vmx_procbased_ctls3_t procbased_ctls3_init = { .raw = PROCBASED_CTLS3_L2_INIT };
 
-    if (!check_allowed1_vmx_ctls(&l2_vmcs_values_ptr->procbased_ctls3, msr_values_ptr->ia32_vmx_procbased_ctls3,
-            (uint32_t)procbased_ctls3_init.raw, PROCBASED_CTLS3_L2_VARIABLE, PROCBASED_CTLS3_L2_UNKNOWN))
+    vmx_procbased_ctls3_t procbased_ctls3_variable = { .raw = PROCBASED_CTLS3_L2_VARIABLE };
+    // The L2 VMCS spreadsheet generates the VARIABLE mask for the VIRTUALIZE_IA32_SPEC_CTRL as 1,
+    // however this bit is only set if the CPU supports it. Therefore don't check it.
+    procbased_ctls3_variable.virt_ia32_spec_ctrl = 0;
+
+    if (!check_allowed1_vmx_ctls(&l2_vmcs_values_ptr->procbased_ctls3, msr_values_ptr->ia32_vmx_procbased_ctls3.raw,
+            (uint32_t)procbased_ctls3_init.raw, procbased_ctls3_variable.raw, PROCBASED_CTLS3_L2_UNKNOWN))
     {
         return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_VMX_PROCBASED_CTLS3_MSR_ADDR);
     }
@@ -1006,9 +1027,23 @@ _STATIC_INLINE_ api_error_type check_vmx_msrs(tdx_module_global_t* tdx_global_da
 
     vmx_procbased_ctls3_t procbased_ctls3_init = {.raw = PROCBASED_CTLS3_INIT};
 
-    msr_values_ptr->ia32_vmx_procbased_ctls3 = ia32_rdmsr(IA32_VMX_PROCBASED_CTLS3_MSR_ADDR);
-    if (!check_allowed1_vmx_ctls(&td_vmcs_values_ptr->procbased_ctls3, msr_values_ptr->ia32_vmx_procbased_ctls3,
-            (uint32_t)procbased_ctls3_init.raw, PROCBASED_CTLS3_VARIABLE, PROCBASED_CTLS3_UNKNOWN))
+    msr_values_ptr->ia32_vmx_procbased_ctls3.raw = ia32_rdmsr(IA32_VMX_PROCBASED_CTLS3_MSR_ADDR);
+
+    // If the CPU supports DDPD, then it must support IA32_SPEC_CTRL virtualization
+    if (tdx_global_data_ptr->ddpd_supported &&
+        !msr_values_ptr->ia32_vmx_procbased_ctls3.virt_ia32_spec_ctrl)
+    {
+        return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_VMX_PROCBASED_CTLS3_MSR_ADDR);
+    }
+
+    vmx_procbased_ctls3_t procbased_ctls3_variable = { .raw = PROCBASED_CTLS3_VARIABLE };
+
+    // The TD VMCS spreadsheet generates the VARIABLE mask for the VIRTUALIZE_IA32_SPEC_CTRL as 1,
+    // however this bit is only set if the CPU supports it. Therefore don't check it.
+    procbased_ctls3_variable.virt_ia32_spec_ctrl = 0;
+
+    if (!check_allowed1_vmx_ctls(&td_vmcs_values_ptr->procbased_ctls3, msr_values_ptr->ia32_vmx_procbased_ctls3.raw,
+            (uint32_t)procbased_ctls3_init.raw, procbased_ctls3_variable.raw, PROCBASED_CTLS3_UNKNOWN))
     {
         return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_VMX_PROCBASED_CTLS3_MSR_ADDR);
     }
@@ -1253,7 +1288,7 @@ _STATIC_INLINE_ api_error_type check_module_build_time_defs(tdx_module_global_t*
     return TDX_SUCCESS;
 }
 
-api_error_type tdh_sys_init(sys_attributes_t tmp_sys_attributes)
+api_error_type tdh_sys_init(void)
 {
     bool_t global_lock_acquired = false;
     tdx_module_global_t* tdx_global_data_ptr = get_global_data();
@@ -1267,6 +1302,8 @@ api_error_type tdh_sys_init(sys_attributes_t tmp_sys_attributes)
 
     td_param_attributes_t attributes_fixed0;
     td_param_attributes_t attributes_fixed1;
+
+    uint64_t reserved_rcx = tdx_local_data_ptr->vmm_regs.rcx;
 
     tdx_local_data_ptr->vmm_regs.rcx = 0;
     tdx_local_data_ptr->vmm_regs.rdx = 0;
@@ -1283,13 +1320,13 @@ api_error_type tdh_sys_init(sys_attributes_t tmp_sys_attributes)
     }
     global_lock_acquired = true;
 
-    //Check module attributes
-    if (tmp_sys_attributes.reserved != 0)
+    // RCX should be reserved
+    if (reserved_rcx != 0)
     {
+        TDX_ERROR("RCX should be reserved\n");
         retval = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RCX);
         goto EXIT;
     }
-    tdx_global_data_ptr->sys_attributes.raw = tmp_sys_attributes.raw;
 
     // Check the system state
     if (tdx_global_data_ptr->global_state.sys_state != SYSINIT_PENDING)
@@ -1338,6 +1375,11 @@ api_error_type tdh_sys_init(sys_attributes_t tmp_sys_attributes)
      */
     attributes_fixed0.raw = TDX_ATTRIBUTES_FIXED0;
     attributes_fixed1.raw = TDX_ATTRIBUTES_FIXED1;
+
+    if (!tdx_global_data_ptr->lass_supported)
+    {
+        attributes_fixed0.raw &= ~TDX_ATTRIBUTES_LASS_SUPPORT;
+    }
 
     tdx_global_data_ptr->attributes_fixed0 = attributes_fixed0.raw;
     tdx_global_data_ptr->attributes_fixed1 = attributes_fixed1.raw;

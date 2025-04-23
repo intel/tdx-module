@@ -111,6 +111,11 @@ api_error_type tdh_mem_track(uint64_t target_tdr_pa)
     // This can't happen in practice (it would take thousands of years)
     tdcs_ptr->epoch_tracking.epoch_and_refcount.td_epoch++;
 
+    if (tdcs_ptr->epoch_tracking.epoch_and_refcount.td_epoch >= BITS(62, 0))
+    {
+        FATAL_ERROR();
+    }
+
 EXIT:
 
     if (epoch_locked_flag)

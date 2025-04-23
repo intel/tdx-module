@@ -154,7 +154,7 @@ _STATIC_INLINE_ api_error_type compare_cpuid_configuration(tdx_module_global_t* 
     }
 
     // Boot NT4 bit should not be set
-    if ((ia32_rdmsr(IA32_MISC_ENABLES_MSR_ADDR) & MISC_EN_BOOT_NT4_BIT ) != 0)
+    if ((ia32_rdmsr(IA32_MISC_ENABLES_MSR_ADDR) & MISC_EN_LIMIT_CPUID_MAXVAL_BIT ) != 0)
     {
         return TDX_LIMIT_CPUID_MAXVAL_SET;
     }
@@ -266,7 +266,7 @@ _STATIC_INLINE_ api_error_type compare_vmx_msrs(tdx_module_global_t* tdx_global_
     }
 
     tmp_msr = ia32_rdmsr(IA32_VMX_PROCBASED_CTLS3_MSR_ADDR);
-    if (tmp_msr != pl_msr_values_ptr->ia32_vmx_procbased_ctls3)
+    if (tmp_msr != pl_msr_values_ptr->ia32_vmx_procbased_ctls3.raw)
     {
         return api_error_with_operand_id(TDX_INCONSISTENT_MSR, IA32_VMX_PROCBASED_CTLS3_MSR_ADDR);
     }

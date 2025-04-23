@@ -578,7 +578,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
     if (acquire_sharex_lock(&tdcs_p->executions_ctl_fields.secure_ept_lock, TDX_LOCK_SHARED) != LOCK_RET_SUCCESS)
     {
         return_val = api_error_with_operand_id(TDX_OPERAND_BUSY, OPERAND_ID_SEPT_TREE);
-        TDX_ERROR("Failed to acquire SEPT tree lock");
+        TDX_ERROR("Failed to acquire SEPT tree lock\n");
         goto EXIT;
     }
     sept_tree_locked_flag = true;

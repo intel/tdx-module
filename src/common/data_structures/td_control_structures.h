@@ -182,6 +182,8 @@ typedef struct ALIGN(TDX_PAGE_SIZE_IN_BYTES) tdr_s
 tdx_static_assert(sizeof(tdr_t) == TDX_PAGE_SIZE_IN_BYTES, tdr_t);
 
 
+#define MAX_VCPUS_PER_TD        576
+
 /**
  * @struct tdcs_management_fields_t
  *
@@ -214,6 +216,8 @@ typedef struct tdcs_management_fields_s
 tdx_static_assert(sizeof(op_state_e) == 4, op_state_e);
 tdx_static_assert(sizeof(tdcs_management_fields_t) == 128, tdcs_management_fields_t);
 
+#define TDX_ATTRIBUTES_LASS_SUPPORT        BIT(27)
+
 #define TDX_ATTRIBUTES_SEPT_VE_DIS_SUPPORT BIT(28)
 
 #define TDX_ATTRIBUTES_MIGRATABLE_SUPPORT  BIT(29)
@@ -225,11 +229,12 @@ tdx_static_assert(sizeof(tdcs_management_fields_t) == 128, tdcs_management_field
 //  Supported ATTRIBUTES bits depend on the supported features - bits 0 (DEBUG), 29 (migratable), 30 (PKS),
 //  63 (PERFMON) and 28 (SEPT VE DISABLE)
 #define TDX_ATTRIBUTES_FIXED0 (0x1 | TDX_ATTRIBUTES_MIGRATABLE_SUPPORT | TDX_ATTRIBUTES_PKS_SUPPORT |\
-                               TDX_ATTRIBUTES_PERFMON_SUPPORT | TDX_ATTRIBUTES_SEPT_VE_DIS_SUPPORT)
+                               TDX_ATTRIBUTES_PERFMON_SUPPORT | TDX_ATTRIBUTES_SEPT_VE_DIS_SUPPORT |\
+                               TDX_ATTRIBUTES_LASS_SUPPORT)
 #define TDX_ATTRIBUTES_FIXED1 0x0
 
 
-#define CONFIG_FLAGS_FIXED0   (BIT(0) | BIT(1) | BIT(2))
+#define CONFIG_FLAGS_FIXED0   (BIT(0) | BIT(1) | BIT(2))    // gpaw, flexible_pending_ve, no_rbp_mode
 #define CONFIG_FLAGS_FIXED1   0x0
 
 
@@ -327,17 +332,19 @@ tdx_static_assert(sizeof(tdcs_epoch_tracking_fields_t) == 64, tdcs_epoch_trackin
  */
 typedef struct cpuid_flags_s
 {
-    bool_t monitor_mwait_supported; // virtual CPUID(0x1).ECX[3] (MONITOR)
-    bool_t dca_supported;           // virtual CPUID(0x1).ECX[18]
-    bool_t tsc_deadline_supported;  // virtual CPUID(0x1).ECX[24] (TSC Deadline)
-    bool_t tsx_supported;           // virtual CPUID(0x7, 0x0).EBX[4] && virtual CPUID(0x7, 0x0).EBX[11]
-    bool_t waitpkg_supported;       // virtual CPUID(0x7, 0x0).ECX[5]
-    bool_t tme_supported;           // virtual CPUID(0x7, 0x0).ECX[13]
-    bool_t mktme_supported;         // virtual CPUID(0x7, 0x0).EDX[18]
-    bool_t xfd_supported;           // virtual CPUID(0xD, 0x1).EAX[4]
-    bool_t ddpd_supported;          // virtual CPUID(0x7, 0x2).EDX[3]
-    bool_t la57_supported;          // virtual CPUID(0x7, 0x0).ECX[16]
-    uint8_t reserved[22];
+    bool_t monitor_mwait_supported;    // virtual CPUID(0x1).ECX[3] (MONITOR)
+    bool_t dca_supported;              // virtual CPUID(0x1).ECX[18]
+    bool_t tsc_deadline_supported;     // virtual CPUID(0x1).ECX[24] (TSC Deadline)
+    bool_t tsx_supported;              // virtual CPUID(0x7, 0x0).EBX[4] && virtual CPUID(0x7, 0x0).EBX[11]
+    bool_t waitpkg_supported;          // virtual CPUID(0x7, 0x0).ECX[5]
+    bool_t tme_supported;              // virtual CPUID(0x7, 0x0).ECX[13]
+    bool_t pconfig_supported;          // virtual CPUID(0x7, 0x0).EDX[18]
+    bool_t xfd_supported;              // virtual CPUID(0xD, 0x1).EAX[4]
+    bool_t ddpd_supported;             // virtual CPUID(0x7, 0x2).EDX[3]
+    bool_t la57_supported;             // virtual CPUID(0x7, 0x0).ECX[16]
+    bool_t fred_supported;             // virtual CPUID(0x7, 0x1).EAX[18] & [17] FRED & LKGS
+    bool_t perfmon_ext_leaf_supported; // virtual CPUID(0x7, 0x1).EAX[8]
+    uint8_t reserved[20];
 } cpuid_flags_t;
 tdx_static_assert(sizeof(cpuid_flags_t) == 32, cpuid_flags_t);
 
@@ -370,7 +377,8 @@ typedef union
     struct
     {
         uint64_t pending_ve_disable : 1; // Bit 0:  Control the way guest TD access to a PENDING page is processed
-        uint64_t reserved           : 63;
+        uint64_t enum_topology      : 1; // Bit 1:  Controls the enumeration of virtual platform topology
+        uint64_t reserved           : 62;
     };
     uint64_t raw;
 } td_ctls_t;
@@ -423,10 +431,12 @@ typedef struct tdcs_execution_control_fields_s
     ALIGN(8) uint64_t            ia32_spec_ctrl_mask;
     ALIGN(8) config_flags_t      config_flags;
     ALIGN(8) td_ctls_t           td_ctls;
-    uint8_t                      reserved_1[12];
+    uint32_t                     reserved_1;
+    bool_t                       topology_enum_configured;
+    uint8_t                      reserved_2[7];
     uint8_t                      cpuid_valid[80];
     ALIGN(16) uint32_t           xbuff_offsets[XBUFF_OFFSETS_NUM];
-    uint8_t                      reserved_2[36];
+    uint8_t                      reserved_3[36];
 } tdcs_execution_control_fields_t;
 tdx_static_assert(sizeof(tdcs_execution_control_fields_t) == 384, tdcs_execution_control_fields_t);
 // Validate that the size of gpaw (bool_t) is 1 byte
@@ -616,6 +626,8 @@ typedef struct ALIGN(TDX_PAGE_SIZE_IN_BYTES) tdcs_s
      * Service TD Fields
      */
     tdcs_service_td_fields_t               service_td_fields;
+
+    uint32_t                               x2apic_ids[MAX_VCPUS_PER_TD];
 
     uint8_t                                reserved_io[1280];
 

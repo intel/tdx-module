@@ -277,9 +277,9 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
         case TDG_MR_REPORT_LEAF:
         {
             retval = tdg_mr_report(tdx_local_data_ptr->td_regs.rcx,
-                               tdx_local_data_ptr->td_regs.rdx,
-                               tdx_local_data_ptr->td_regs.r8,
-                               interrupt_occurred);
+                                   tdx_local_data_ptr->td_regs.rdx,
+                                   tdx_local_data_ptr->td_regs.r8,
+                                   interrupt_occurred);
             break;
         }
         case TDG_VP_CPUIDVE_SET_LEAF:
@@ -440,6 +440,11 @@ EXIT:
     {
         tdx_local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.rax = retval;
     }
+    else
+    {
+        // If TDCALL was interrupt we must clear blocking state
+        clear_movss_sti_blocking();
+    }
 }
 
 /**
@@ -543,44 +548,11 @@ static void handle_idt_vectoring(tdx_module_local_t* tdx_local_data_ptr, vm_vmex
 }
 
 stepping_filter_e tdx_td_l1_l2_dispatcher_common_prologue(tdx_module_local_t* local_data, uint16_t vm_id,
-        vm_vmexit_exit_reason_t* vm_exit_reason, vmx_exit_qualification_t* vm_exit_qualification,
-        vmx_exit_inter_info_t* vm_exit_inter_info)
+                                                          vm_vmexit_exit_reason_t* vm_exit_reason,
+                                                          vmx_exit_qualification_t* vm_exit_qualification,
+                                                          vmx_exit_inter_info_t* vm_exit_inter_info)
 {
-    tdx_module_global_t* tdx_global_data_ptr = get_global_data();
-
     TDX_LOG("TD Dispatcher Entry from VM %d\n", vm_id);
-
-    // Execute the BHB defense sequence
-    if (tdx_global_data_ptr->rtm_supported)
-    {
-        tsx_abort_sequence();
-    }
-    else
-    {
-        // BHB draining sequence
-        // There are 6 taken branches in each iteration (one CALL, four JMPs, and one JNZ),
-        // so for GLC (194 branch stews in BHB), NUM_ITERS = round-up(194 / 6) = 32.
-        uint64_t num_iters = NUM_OF_BHB_CLEARING_ITERATIONS;
-        uint64_t num_iters_multi_8 = 8*num_iters;
-
-        _ASM_VOLATILE_ (
-            "movq %0, %%rcx\n"
-            "1:  call 2f\n"
-            "lfence\n"
-            "2:  jmp 3f\n"
-            "nop\n"
-            "3:  jmp 4f\n"
-            "nop\n"
-            "4:  jmp 5f\n"
-            "nop\n"
-            "5:  jmp 6f\n"
-            "nop\n"
-            "6:  dec %%rcx\n"
-            "jnz 1b\n"
-            "add %1, %%rsp\n"
-            "lfence\n"
-            : : "a"(num_iters), "b"(num_iters_multi_8) : "memory", "rcx");
-    }
 
     // Save current time to verify on next TD entry and for TDEXIT filter checks
     local_data->vp_ctx.tdvps->management.last_exit_tsc = ia32_rdtsc();
@@ -725,9 +697,11 @@ void tdx_td_dispatcher(void)
     bool_t interrupt_occurred = false;
 
     uint16_t vm_id = tdx_local_data_ptr->vp_ctx.tdvps->management.curr_vm;
-
+   
     tdx_sanity_check((vm_id == tdx_local_data_ptr->current_td_vm_id) && (vm_id == 0),
                      SCEC_TD_DISPATCHER_SOURCE, 35);
+
+    bhb_drain_sequence(get_global_data());
 
     stepping_filter_e vmexit_stepping_result;
     vmexit_stepping_result = tdx_td_l1_l2_dispatcher_common_prologue(tdx_local_data_ptr, 0, &vm_exit_reason,
@@ -749,8 +723,6 @@ void tdx_td_dispatcher(void)
         case VMEXIT_REASON_INVD_INSTRUCTION:
         case VMEXIT_REASON_VMCALL_INSTRUCTION:
         case VMEXIT_REASON_WBINVD_INSTRUCTION:
-        case VMEXIT_REASON_MWAIT_INSTRUCTION:
-        case VMEXIT_REASON_MONITOR_INSTRUCTION:
         case VMEXIT_REASON_PCONFIG:
         case VMEXIT_REASON_APIC_WRITE:
             td_generic_ve_exit(vm_exit_reason, vm_exit_qualification.raw);
@@ -774,6 +746,8 @@ void tdx_td_dispatcher(void)
         case VMEXIT_REASON_ENCLV_INSTRUCTION:
         case VMEXIT_REASON_ENQCMDS_PASID_TRANSLATION_FAILURE:
         case VMEXIT_REASON_SEAMCALL:
+        case VMEXIT_REASON_MWAIT_INSTRUCTION:
+        case VMEXIT_REASON_MONITOR_INSTRUCTION:
             inject_ud();
             break;
 

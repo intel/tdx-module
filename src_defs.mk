@@ -73,9 +73,3 @@ INCLUDE_PATH := -I$(PROJ_DIR)/include -I$(CRYPTO_LIB_BUILD_PATH)/include -I$(PRO
 # Tools
 TOOLS_DIR := $(PROJ_DIR)/tools
 PAD_BINARY_PY := $(TOOLS_DIR)/pad_binary/pad_binary.py
-
-#Python scripts
-SCRIPT := $(PROJ_DIR)/tools/tdx_auto_gen_headers/tdx_gen_headers.py
-ARCHITECTURE_FILES_PATH = $(PROJ_DIR)/tools/tdx_auto_gen_headers/architecture_files
-AUTO_GEN_PATH := $(PROJ_DIR)/include/auto_gen
-ARCHITECTURE_REPOSITORY_CLONE_PATH = $(PROJ_DIR)/tdx-flow-code

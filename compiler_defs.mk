@@ -25,9 +25,9 @@
 include proj_defs.mk
 
 # Compiler
-CC = clang
-CXX = clang++
-CCVERSION = $(shell $(CC) --version | grep ^clang | cut -f1 -d"." | sed 's/^.* //g' )
+CC = clang-12
+CXX = clang++-12
+CCVERSION = $(shell $(CC) --version | grep 'clang version' | cut -f1 -d"." | sed 's/^.* //g' )
 
 CC_WITHOUT_CODE_COVERAGE := $(CC)
 CXX_WITHOUT_CODE_COVERAGE := $(CXX)

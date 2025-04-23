@@ -231,7 +231,7 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
     new_septe_val.raw = page_sept_entry_copy.raw;
 
     block_sept_entry(&new_septe_val, sept_level_and_gpa.level);
-    
+
     // Update the SEPT entry in memory
     atomic_mem_write_64b(&page_sept_entry_ptr->raw, new_septe_val.raw);
 

@@ -147,7 +147,7 @@ _STATIC_INLINE_ uint32_t calc_l2_vmcs_procbased_ctls2_init(tdcs_t* tdcs_p)
 
     // Set TD-specific configuration
     ctls.en_guest_wait_pause = tdcs_p->executions_ctl_fields.cpuid_flags.waitpkg_supported;
-    ctls.en_pconfig = tdcs_p->executions_ctl_fields.cpuid_flags.mktme_supported;
+    ctls.en_pconfig = tdcs_p->executions_ctl_fields.cpuid_flags.pconfig_supported;
 
     return (uint32_t)ctls.raw;
 }
@@ -233,7 +233,7 @@ _STATIC_INLINE_ ia32_vmx_allowed_bits_t calc_virt_ia32_vmx_procbased_ctls2(tdcs_
 
     // clear bits that are not allowed to be 1, based on the td configuration
     wr_mask.en_guest_wait_pause =  tdcs_ptr->executions_ctl_fields.cpuid_flags.waitpkg_supported;
-    wr_mask.en_pconfig = tdcs_ptr->executions_ctl_fields.cpuid_flags.mktme_supported;
+    wr_mask.en_pconfig = tdcs_ptr->executions_ctl_fields.cpuid_flags.pconfig_supported;
 
     // calculate the msr value based on constants and cpu enumeration gathered by tdh.sys.init
     return calc_allowed32_vmx_ctls(calc_l2_vmcs_procbased_ctls2_init(tdcs_ptr), (uint32_t)wr_mask.raw);
@@ -289,8 +289,7 @@ _STATIC_INLINE_ void calc_virt_ia32_vmx_cr4_fixed(tdcs_t* tdcs_p, uint64_t* not_
     ia32_cr4_t write_mask;
 
     // The writable bits of CR4 depend on the TD configuration
-    write_mask = calc_base_l2_cr4_write_mask(tdcs_p->executions_ctl_fields.attributes,
-                                             (ia32_xcr0_t)tdcs_p->executions_ctl_fields.xfam);
+    write_mask = calc_base_l2_cr4_write_mask(tdcs_p);
 
     // Calculate based on L2 CR4 init value, as defined in the L2 VMCS spreadsheet, and the write mask.
     // Note that the init value was checked by TDH.SYS.INIT to be compatible with the platform. */
@@ -308,20 +307,22 @@ void init_virt_ia32_vmx_msrs(tdcs_t* tdcs_ptr);
 // Check the native value of IA32_ARCH_CAPABILITIES MSR
 _STATIC_INLINE_ bool_t check_native_ia32_arch_capabilities(ia32_arch_capabilities_t arch_cap)
 {
-    return (arch_cap.rdcl_no == 1)           &&   // Bit 0
-        (arch_cap.irbs_all == 1)             &&   // Bit 1
-        (arch_cap.rsba == 0)                 &&   // Bit 2
-        (arch_cap.skip_l1dfl_vmentry == 1)   &&   // Bit 3
-        (arch_cap.mds_no == 1)               &&   // Bit 5
-        (arch_cap.if_pschange_mc_no == 1)    &&   // Bit 6
-        (arch_cap.taa_no == 1)               &&   // Bit 8
-        (arch_cap.misc_package_ctls == 1)    &&   // Bit 10
-        (arch_cap.energy_filtering_ctl == 1) &&   // Bit 11
-        (arch_cap.doitm == 1)                &&   // Bit 12
-        (arch_cap.sbdr_ssdp_no == 1)         &&   // Bit 13
-        (arch_cap.fbsdp_no == 1)             &&   // Bit 14
-        (arch_cap.psdp_no == 1)              &&   // Bit 15
-        (arch_cap.xapic_disable_status == 1);     // Bit 21
+    return (arch_cap.rdcl_no == 1)              &&   // Bit 0
+           (arch_cap.irbs_all == 1)             &&   // Bit 1
+           (arch_cap.rsba == 0)                 &&   // Bit 2
+           (arch_cap.skip_l1dfl_vmentry == 1)   &&   // Bit 3
+           (arch_cap.mds_no == 1)               &&   // Bit 5
+           (arch_cap.if_pschange_mc_no == 1)    &&   // Bit 6
+           (arch_cap.taa_no == 1)               &&   // Bit 8
+           (arch_cap.misc_package_ctls == 1)    &&   // Bit 10
+           (arch_cap.energy_filtering_ctl == 1) &&   // Bit 11
+           (arch_cap.doitm == 1)                &&   // Bit 12
+           (arch_cap.sbdr_ssdp_no == 1)         &&   // Bit 13
+           (arch_cap.fbsdp_no == 1)             &&   // Bit 14
+           (arch_cap.psdp_no == 1)              &&   // Bit 15
+           (arch_cap.fb_clear_ctrl == 0)        &&   // Bit 18
+           (arch_cap.xapic_disable_status == 1)   // Bit 21
+           ;
 }
 
 /**
@@ -344,23 +345,40 @@ bool_t init_virt_ia32_arch_capabilities(tdcs_t* tdcs_p, bool_t config_flag, uint
  */
 bool_t check_virt_ia32_arch_capabilities(tdcs_t* tdcs_p, ia32_arch_capabilities_t arch_cap);
 
-// Calculate the TDCS' IA32_SPEC_CTRL mask based on DDPD_U support
-_STATIC_INLINE_ ia32_spec_ctrl_t calculate_ia32_spec_ctrl_mask(const tdcs_t* tdcs_p)
+// Conditionally write the current VMCS' IA32_SPEC_CTRL shadow field.
+// The shadow is written only if IA32_SPEC_CTRL is virtualized, i.e., when the CPU supports DDPD_U
+// but the TD is configured without DDPD_U support.
+_STATIC_INLINE_ void conditionally_write_vmcs_ia32_spec_ctrl_shadow(const tdcs_t* tdcs_p, uint64_t msr_value)
 {
-    ia32_spec_ctrl_t mask;
+    tdx_module_global_t* global_data = get_global_data();
 
-    // Set IA32_SPEC_CTRL_MASK to mask out DDPD_U if not supported
-    mask.raw = 0;
-    mask.ddpd_u = !tdcs_p->executions_ctl_fields.cpuid_flags.ddpd_supported;
+    ia32_spec_ctrl_t spec_ctrl = { .raw = msr_value };
 
-    return mask;
+    // If the CPU supports DDPD_U but the TD is configured without DDPD_U support, set the shadow so that
+    // the DDPD_U bit as seen by the guest is 0.
+    if (global_data->ddpd_supported && !tdcs_p->executions_ctl_fields.cpuid_flags.ddpd_supported)
+    {
+        // The following can only be done if the CPU supports IA32_SPEC_CTRL virtualization
+        tdx_debug_assert(global_data->plt_common_config.ia32_vmx_procbased_ctls3.virt_ia32_spec_ctrl);
+
+        spec_ctrl.ddpd_u = 0;
+
+        // Set VMCS.IA32_SPEC_CTRL_SHADOW to the virtual value of IA32_SPEC_CTRL as seen by the TD
+        ia32_vmwrite(VMX_IA32_SPEC_CTRL_SHADOW, spec_ctrl.raw);
+    }
 }
 
 // Calculate the virtual value of IA32_SPEC_CTRL MSR based on the real value
-_STATIC_INLINE_ uint64_t calculate_virt_ia32_spec_ctrl(const tdcs_t* tdcs_p, uint64_t spec_ctrl)
+_STATIC_INLINE_ uint64_t calculate_virt_ia32_spec_ctrl(const tdcs_t* tdcs_p, uint64_t msr_value)
 {
-    spec_ctrl &= ~tdcs_p->executions_ctl_fields.ia32_spec_ctrl_mask;
-    return spec_ctrl;
+    ia32_spec_ctrl_t spec_ctrl = { .raw = msr_value };
+    tdx_module_global_t* global_data = get_global_data();
+    // If the CPU supports DDPD_U but the TD is configured without DDPD_U support, clear the DDPD_U bit
+    if (global_data->ddpd_supported && !tdcs_p->executions_ctl_fields.cpuid_flags.ddpd_supported)
+    {
+        spec_ctrl.ddpd_u = 0;
+    }
+    return spec_ctrl.raw;
 }
 
 // Calculate the real value of IA32_SPEC_CTRL MSR based on the virtual value

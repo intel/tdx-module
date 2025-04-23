@@ -87,12 +87,12 @@ _STATIC_INLINE_ uint64_t ia32_mktme_key_program(mktme_key_program_t *key_program
     ia32_rflags_t ret_flags;
     uint64_t error_code;
     _ASM_VOLATILE_ (
-        ".byte 0x0F\n"
-        ".byte 0x01\n"
-        ".byte 0xC5\n"
-        "pushfq\n"
-        "popq %%rcx"
-        : "=a"(error_code), "=c"(ret_flags.raw) : "a"(0), "b"(key_program_addr) : "cc");
+            ".byte 0x0F\n"
+            ".byte 0x01\n"
+            ".byte 0xC5\n"
+            "pushfq\n"
+            "popq %%rcx"
+            : "=a"(error_code), "=c"(ret_flags.raw) : "a"(0), "b"(key_program_addr) : "cc");
     // On return: ZF=0 indicates success; ZF=1 indicates failure (error code in RAX).  ZF is bit 6 in EFLAGS
     return (ret_flags.zf) ? error_code : 0;
 }

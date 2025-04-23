@@ -99,7 +99,7 @@ static api_error_type read_and_set_td_configurations(tdr_t * tdr_ptr,
 
     // Read and verify MAX_VCPUS
     uint32_t max_vcpus = (uint32_t)td_params_ptr->max_vcpus;
-    if (max_vcpus == 0)
+    if ((max_vcpus == 0) || (max_vcpus > MAX_VCPUS_PER_TD))
     {
         return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_MAX_VCPUS);
         goto EXIT;
@@ -344,6 +344,7 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
                // Both CPUID bits that enumerate TSX must have the same virtual value
                if (cpuid_07_00_ebx.hle != cpuid_07_00_ebx.rtm)
                {
+                   local_data_ptr->vmm_regs.rcx = cpuid_leaf_subleaf.raw;
                    return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_CPUID_CONFIG);
                    goto EXIT;
                }
@@ -370,11 +371,19 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
                tdcs_ptr->executions_ctl_fields.cpuid_flags.la57_supported = cpuid_07_00_ecx.la57;
 
                cpuid_07_00_edx.raw = final_tdcs_values.edx;
-               tdcs_ptr->executions_ctl_fields.cpuid_flags.mktme_supported = cpuid_07_00_edx.pconfig_mktme;
+               tdcs_ptr->executions_ctl_fields.cpuid_flags.pconfig_supported = cpuid_07_00_edx.pconfig_mktme;
            }
            else if (cpuid_leaf_subleaf.subleaf == 1)
            {
                apply_cpuid_xfam_masks(&final_tdcs_values, xfam.raw, xfam_mask_0x7_0x1);
+
+               cpuid_07_01_eax_t cpuid_07_01_eax = { .raw = final_tdcs_values.eax };
+               tdcs_ptr->executions_ctl_fields.cpuid_flags.perfmon_ext_leaf_supported =
+                       cpuid_07_01_eax.perfmon_ext_leaf;
+
+               cpuid_07_01_eax.lass = tdcs_ptr->executions_ctl_fields.attributes.lass;
+
+               final_tdcs_values.eax = cpuid_07_01_eax.raw;
            }
            else if (cpuid_leaf_subleaf.subleaf == 2)
            {
@@ -382,8 +391,18 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
                cpuid_07_02_edx_t cpuid_07_02_edx;
                cpuid_07_02_edx.raw = final_tdcs_values.edx;
                tdcs_ptr->executions_ctl_fields.cpuid_flags.ddpd_supported = cpuid_07_02_edx.ddpd;
-               // Set IA32_SPEC_CTRL_MASK to mask out DDPD_U if not supported
-               tdcs_ptr->executions_ctl_fields.ia32_spec_ctrl_mask = calculate_ia32_spec_ctrl_mask(tdcs_ptr).raw;
+
+               // The TD will never be configured with DDPD support if the CPU doesn't support DDPD
+               tdx_debug_assert(!tdcs_ptr->executions_ctl_fields.cpuid_flags.ddpd_supported ||
+                                global_data_ptr->ddpd_supported);
+
+               // IA32_SPEC_CTRL virtualization is required in the following case:
+               //  - The TD is configured without DDPD support, and
+               //  - The CPU supports DDPD
+               // Because in this case we enable DDPD without the TD knowing about this.
+               tdx_debug_assert(tdcs_ptr->executions_ctl_fields.cpuid_flags.ddpd_supported ||
+                                !global_data_ptr->ddpd_supported ||
+                                global_data_ptr->plt_common_config.ia32_vmx_procbased_ctls3.virt_ia32_spec_ctrl);
            }
            else
            {
@@ -454,7 +473,7 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
             // Therefore CPUID(0x15).EBX (numerator) is the configured virtual TSC frequency, in units of 25MHz.
             // The virtual TSC frequency is CPUID(0x15).ECX * CPUID(0x15).EBX / CPUID(0x15).EAX,
             // i.e., the configured virtual TSC frequency, in units of 1Hz.
-            final_tdcs_values.ebx = td_params_ptr->tsc_frequency;
+            final_tdcs_values.ebx = tdcs_ptr->executions_ctl_fields.tsc_frequency;
         }
         else if (cpuid_leaf_subleaf.leaf == CPUID_KEYLOCKER_ATTRIBUTES_LEAF)
         {
@@ -474,6 +493,26 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
         {
             // Leaf 0x1D is wholly configured by AMX (XFAM[18:17])
             if (!xfam.amx_xtilecfg || !xfam.amx_xtiledata)
+            {
+                final_tdcs_values.low = 0;
+                final_tdcs_values.high = 0;
+            }
+        }
+        else if (cpuid_leaf_subleaf.leaf == 0x1A)
+        {
+            // For migratable TDs, native model information is N/A, and is set to 0.
+            // This information is used for Perfmon, which is not enabled for migratable TDs. */
+            if (tdcs_ptr->executions_ctl_fields.attributes.migratable)
+            {
+                final_tdcs_values.low = 0;
+                final_tdcs_values.high = 0;
+            }
+        }
+        else if (cpuid_leaf_subleaf.leaf == 0x23)
+        {
+            // Leaf 0x23's values are defined as "ALLOW_ATTRIBUTES(PERFMON)", i.e., if ATTRRIBUTES.PERFMON
+            // is set they return the native values, else they return 0.
+            if (!attributes.perfmon || !tdcs_ptr->executions_ctl_fields.cpuid_flags.perfmon_ext_leaf_supported)
             {
                 final_tdcs_values.low = 0;
                 final_tdcs_values.high = 0;
@@ -501,6 +540,17 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
         tdcs_ptr->cpuid_config_vals[cpuid_index].high = final_tdcs_values.high;
         tdcs_ptr->executions_ctl_fields.cpuid_valid[cpuid_index] = !cpuid_lookup[cpuid_index].faulting;
     }
+
+    // Check the virtual topology configuration of CPUID(0x1F) and derive CPUID(0xB).
+    // If configured as all-0, use the h/w values.
+    return_val = check_cpuid_1f(tdcs_ptr, true);
+    if (return_val != TDX_SUCCESS)
+    {
+        goto EXIT;
+    }
+
+    // May be cleared later if not configured for all VCPUs
+    tdcs_ptr->executions_ctl_fields.topology_enum_configured = true;
 
     // Check reserved3 bits are 0
     if (!tdx_memcmp_to_zero(td_params_ptr->reserved_3, TD_PARAMS_RESERVED3_SIZE))
@@ -545,7 +595,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
     local_data_ptr->vmm_regs.rcx = 0ULL;
 
     // Boot NT4 bit should not be set
-    if ((ia32_rdmsr(IA32_MISC_ENABLES_MSR_ADDR) & MISC_EN_BOOT_NT4_BIT ) != 0)
+    if ((ia32_rdmsr(IA32_MISC_ENABLES_MSR_ADDR) & MISC_EN_LIMIT_CPUID_MAXVAL_BIT ) != 0)
     {
         return_val = TDX_LIMIT_CPUID_MAXVAL_SET;
         goto EXIT;

@@ -79,12 +79,12 @@ Binary's generation includes the date it was compiled at, build number and modul
 
 Build date, build number and update version could be extracted from the production binary, please use TDH.SYS.RD SEAMCALL (leaf #34) with MD_SYS_TDX_MODULE_VERSION_CLASS_CODE(8) as a class_code and MD_SYS_BUILD_DATE_FIELD_CODE(1)/MD_SYS_BUILD_NUM_FIELD_CODE(2)/MD_SYS_UPDATE_VERSION_FIELD_CODE(5) as field codes. The date format should be YYYYMMDD.  
 
-Current TDX version was built with: TDX_MODULE_BUILD_DATE=20231008 TDX_MODULE_BUILD_NUM=595 TDX_MODULE_UPDATE_VER=1  
+Current TDX version was built with: TDX_MODULE_BUILD_DATE=20240129 TDX_MODULE_BUILD_NUM=698 TDX_MODULE_UPDATE_VER=5  
 
 1) In order to reproduce the exact binary, it is required to specify the original date, build number and update version:
 
 	```bash
-	make RELEASE=1 TDX_MODULE_BUILD_DATE=20231008 TDX_MODULE_BUILD_NUM=595 TDX_MODULE_UPDATE_VER=1
+	make RELEASE=1 TDX_MODULE_BUILD_DATE=20240129 TDX_MODULE_BUILD_NUM=698 TDX_MODULE_UPDATE_VER=5
 	```
 
 	In case binary reproduction is not required, "make RELEASE=1" will suffice.

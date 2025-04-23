@@ -37,6 +37,7 @@
 #define GDT_ENTRY_SIZE            8
 
 // Do not change any names, without changing them in Makefile too
+// Makefile searches these names in the readelf output to pass their offsets to gen_sigstruct tool
 
 typedef union ALIGN(_4KB) PACKED idt_and_gdt_tables_u
 {
@@ -58,7 +59,7 @@ typedef union ALIGN(_4KB) PACKED idt_and_gdt_tables_u
 tdx_static_assert(sizeof(idt_and_gdt_tables_t) == _4KB, idt_and_gdt_tables_t);
 tdx_static_assert(offsetof(idt_and_gdt_tables_t, gdt_table) == _2KB, idt_and_gdt_tables_t);
 
-extern const idt_and_gdt_tables_t tdx_idt_and_gdt_tables;
+extern const idt_and_gdt_tables_t tdx_idt_and_gdt;
 
 void tdx_fault_wrapper(void);
 

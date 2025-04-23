@@ -105,3 +105,4 @@ void copy_mbmd(mbmd_t* mbmd_dst, mbmd_t* mbmd_src)
 {
     tdx_memcpy(mbmd_dst, sizeof(mbmd_t), mbmd_src, sizeof(mbmd_t));
 }
+

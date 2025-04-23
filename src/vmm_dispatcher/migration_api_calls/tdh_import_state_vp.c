@@ -530,6 +530,14 @@ api_error_type tdh_import_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
         goto EXIT;
     }
 
+    // verify no identical vcpus imported
+    return_val = check_imported_vp_state(tdr_p, tdcs_p, tdvps_p);
+    if (TDX_SUCCESS != return_val)
+    {
+        tdcs_p->management_fields.op_state = OP_STATE_FAILED_IMPORT;
+        goto EXIT;
+    }
+
     // Update the VCPU state
     // If the VCPU state was imported as disabled, keep it disabled.
     if (tdvps_p->management.state != VCPU_DISABLED)

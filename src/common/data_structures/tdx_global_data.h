@@ -189,7 +189,7 @@ typedef struct
     ia32_vmx_allowed_bits_t         ia32_vmx_true_pinbased_ctls;
     ia32_vmx_allowed_bits_t         ia32_vmx_true_procbased_ctls;
     ia32_vmx_allowed_bits_t         ia32_vmx_procbased_ctls2;
-    uint64_t                        ia32_vmx_procbased_ctls3;
+    vmx_procbased_ctls3_t           ia32_vmx_procbased_ctls3;
     ia32_vmx_allowed_bits_t         ia32_vmx_true_exit_ctls;
     ia32_vmx_allowed_bits_t         ia32_vmx_true_entry_ctls;
     uint64_t                        ia32_vmx_ept_vpid_cap;
@@ -274,7 +274,6 @@ typedef struct tdx_module_global_s
      * shared exclusive lock to access the global data per-package
      */
     sharex_lock_t global_lock;
-    sys_attributes_t sys_attributes;
     uint64_t hkid_mask; /**< mask hkid bits from physical address */
     uint32_t hkid_start_bit;
     uint64_t max_pa; /**< Maximum PA bits supported by the platform */
@@ -323,6 +322,9 @@ typedef struct tdx_module_global_s
     bool_t rtm_supported;
     bool_t ddpd_supported;
     bool_t la57_supported;
+    bool_t lam_supported;
+    bool_t perfmon_ext_leaf_supported;
+    bool_t lass_supported;
 	
     uint64_t crystal_clock_frequency;
     uint64_t native_tsc_frequency;
@@ -374,6 +376,7 @@ typedef struct tdx_module_global_s
     hash_method_t         sha384_method;
 
     fms_info_t      platform_fms;
+    cpuid_1a_eax_t  native_model_info;
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE
     debug_control_t debug_control;

@@ -149,7 +149,7 @@ static td_msr_access_status_t rd_wr_msr_generic_case(uint32_t msr_addr, bool_t w
         }
         else if (msr_addr == IA32_MKTME_KEYID_PARTITIONING_MSR_ADDR)
         {
-            return !is_mktme_supported_in_tdcs(tdcs_p) ? TD_MSR_ACCESS_GP : TD_MSR_ACCESS_MSR_NON_ARCH_EXCEPTION;
+            return !is_pconfig_supported_in_tdcs(tdcs_p) ? TD_MSR_ACCESS_GP : TD_MSR_ACCESS_MSR_NON_ARCH_EXCEPTION;
         }
         else if (msr_addr == IA32_TSC_DEADLINE_MSR_ADDR)
         {
@@ -172,11 +172,11 @@ static td_msr_access_status_t wrmsr_ia32_xss(tdvps_t* tdvps_p)
 
     value.raw = construct_wrmsr_value(tdvps_p->guest_state.gpr_state.rdx, tdvps_p->guest_state.gpr_state.rax);
 
-    // Check that any bit that is set to 1 is supported by IA32_XSS and XFAM.
+    // Check that any bit that is set to 1 is supported by IA32_XSS and XFAM.  Note that CPU
+    // support has been enumerated on TDH_SYS_INIT and used to verify XFAM on TDH_MNG_INIT.
     // Note that CPU support has been enumerated on TDHSYSINIT and used to verify XFAM on TDHMNGINIT.
 
-    if ((value.raw & ~((uint64_t)tdx_global_data_ptr->ia32_xss_supported_mask &
-            tdvps_p->management.xfam)) != 0)
+    if (0 != (value.raw & ~(tdx_global_data_ptr->ia32_xss_supported_mask & tdvps_p->management.xfam)))
     {
         return TD_MSR_ACCESS_GP;
     }
@@ -210,6 +210,21 @@ static td_msr_access_status_t wrmsr_ia32_debugctl(tdvps_t* tdvps_p)
 
     // Bit 13 (Enable Uncore PMI) must be 0
     new_value.en_uncore_pmi = old_value.en_uncore_pmi;
+
+    /* Bit 14 (Freeze while SMM) may be set only if virtual IA32_PERF_CAPABILITIES[12] (FREEZE_WHILE_SMM_SUPPORTED)
+           is 1.  Since we check the h/w value of this bit to be 1, the virtual value actually equals ATTRIBUTES.PERFMON. */
+    tdx_module_local_t* tdx_local_data_ptr = get_local_data();
+    tdcs_t* tdcs_p = tdx_local_data_ptr->vp_ctx.tdcs;
+    if ((new_value.frz_while_smm) && (!tdcs_p->executions_ctl_fields.attributes.perfmon))
+    {
+        return TD_MSR_ACCESS_GP;
+    }
+
+    // Bit 15 (RTM) may be set only if TSX is enabled
+    if ((new_value.rtm_debug) && (!tdcs_p->executions_ctl_fields.cpuid_flags.tsx_supported))
+    {
+        return TD_MSR_ACCESS_GP;
+    }
 
     // Update TD VMCS with the input value
     ia32_vmwrite(VMX_GUEST_IA32_DEBUGCTLMSR_FULL_ENCODE, new_value.raw);
@@ -476,6 +491,22 @@ td_msr_access_status_t td_rdmsr_exit(void)
 
             rdmsr_set_value_in_tdvps(tdvps_p, ia32_xapic_disable_status.raw);
             status = TD_MSR_ACCESS_SUCCESS;
+            break;
+        }
+        case IA32_X2APIC_APICID:
+        {
+            if (tdcs_p->executions_ctl_fields.td_ctls.enum_topology)
+            {
+                // Return the current VCPU's virtual x2APIC ID
+                tdvps_p->guest_state.gpr_state.rdx = 0;
+                tdvps_p->guest_state.gpr_state.rax = tdcs_p->x2apic_ids[tdvps_p->management.vcpu_index];
+            }
+            else
+            {
+                // No topology enumeration, #VE will be injected
+                return TD_MSR_ACCESS_MSR_NON_ARCH_EXCEPTION;
+            }
+
             break;
         }
         default:

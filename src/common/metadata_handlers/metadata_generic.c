@@ -410,6 +410,8 @@ static void md_get_next_item_with_iterator(lookup_iterator_t* lookup_context, md
     const md_lookup_t* entry = &lookup_context->lookup_table[lookup_context->table_idx];
     uint16_t element_stride = (uint16_t)entry->field_id.inc_size + 1;
 
+    tdx_debug_assert(lookup_context->field_id.field_code >= entry->field_id.field_code);
+
     IF_RARE (is_element)
     {
         // In this case we return the next element within a field, or a first element of next field
@@ -617,10 +619,7 @@ void md_get_rd_wr_mask(const md_lookup_t* entry, md_access_t access_type, md_acc
             break;
         case MD_EXPORT_IMMUTABLE:
             *out_wr_mask = 0;
-            *out_rd_mask = (entry->mig_export == MIG_MB   ||
-                            entry->mig_import == MIG_IE   || entry->mig_import == MIG_IES ||
-                            entry->mig_import == MIG_IEME || entry->mig_import == MIG_IESME)
-                                    ? entry->export_mask : 0;
+            *out_rd_mask = (entry->mig_export == MIG_MB) ? entry->export_mask : 0;
             break;
         case MD_EXPORT_MUTABLE:
             *out_wr_mask = 0;
@@ -1225,7 +1224,7 @@ api_error_code_e md_write_list(md_context_code_e ctx_code, md_field_id_t expecte
     // Check the list header
     if ((list_header_ptr->num_sequences == 0) || (list_header_ptr->reserved != 0))
     {
-        return TDX_INVALID_METADATA_LIST_HEADER;
+        return api_error_with_operand_id(TDX_INVALID_METADATA_LIST_HEADER, 0xFFFF);
     }
 
     if (list_header_ptr->list_buff_size > buff_size)
@@ -1262,6 +1261,13 @@ api_error_code_e md_write_list(md_context_code_e ctx_code, md_field_id_t expecte
     for (uint32_t i = 0; i < list_header_ptr->num_sequences; i++)
     {
         sequence_ptr = (md_sequence_t*)sequence_buffer_ptr;
+
+        // Check that there's enough remaining size to actually access the sequence header,
+        // and at least one element
+        if (remaining_buff_size < (sizeof(sequence_ptr->sequence_header) + sizeof(uint64_t)))
+        {
+            return api_error_with_l2_details(TDX_METADATA_LIST_OVERFLOW, 0xFFFF, (uint16_t)i);
+        }
 
         // Check context code
         if (sequence_ptr->sequence_header.context_code != expected_field.context_code)
@@ -1316,17 +1322,17 @@ api_error_code_e md_write_list(md_context_code_e ctx_code, md_field_id_t expecte
 
     if (check_missing)
     {
-        while (!is_null_field_id(lkp_iter.field_id))
-        {
-            if (is_required_entry(&lkp_iter.lookup_table[lkp_iter.table_idx], access_type))
-            {
-                break;
-            }
-            md_get_next_item_with_iterator(&lkp_iter, md_ctx, false);
-        }
-
         if (is_last)
         {
+            while (!is_null_field_id(lkp_iter.field_id))
+            {
+                if (is_required_entry(&lkp_iter.lookup_table[lkp_iter.table_idx], access_type))
+                {
+                    break;
+                }
+                md_get_next_item_with_iterator(&lkp_iter, md_ctx, false);
+            }
+
             // This was the last metadata list, check that there are no required fields after the list
             if (!is_null_field_id(lkp_iter.field_id) &&
                  is_required_entry(&lkp_iter.lookup_table[lkp_iter.table_idx], access_type))

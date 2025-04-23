@@ -93,8 +93,7 @@ static uint64_t check_hp_lock_timeout_and_translate_to_tsc(uint64_t timeout, uin
     return true;
 }
 
-static bool_t check_cpuid_xfam_masks(cpuid_config_return_values_t* cpuid_values,
-                                     uint64_t xfam,
+static bool_t check_cpuid_xfam_masks(cpuid_config_return_values_t* cpuid_values, uint64_t xfam,
                                      const cpuid_config_return_values_t* cpuid_masks)
 {
     uint64_t xfam_mask;   // 1-bit mask
@@ -270,7 +269,7 @@ static bool_t check_cpuid_compatibility_and_set_flags(tdcs_t* tdcs_ptr, uint32_t
             tdcs_ptr->executions_ctl_fields.cpuid_flags.la57_supported = cpuid_07_00_ecx.la57;
 
             cpuid_07_00_edx.raw = cpuid_values.edx;
-            tdcs_ptr->executions_ctl_fields.cpuid_flags.mktme_supported = cpuid_07_00_edx.pconfig_mktme;
+            tdcs_ptr->executions_ctl_fields.cpuid_flags.pconfig_supported = cpuid_07_00_edx.pconfig_mktme;
        }
        else if (subleaf == 1)
        {
@@ -278,6 +277,16 @@ static bool_t check_cpuid_compatibility_and_set_flags(tdcs_t* tdcs_ptr, uint32_t
             {
                 return false;
             }
+
+            cpuid_07_01_eax_t cpuid_07_01_eax;
+            cpuid_07_01_eax.raw = cpuid_values.eax;
+
+            if (cpuid_07_01_eax.lass != attributes.lass)
+            {
+                return false;
+            }
+
+            tdcs_ptr->executions_ctl_fields.cpuid_flags.perfmon_ext_leaf_supported = cpuid_07_01_eax.perfmon_ext_leaf;
        }
        else if (subleaf == 2)
        {
@@ -286,8 +295,17 @@ static bool_t check_cpuid_compatibility_and_set_flags(tdcs_t* tdcs_ptr, uint32_t
            cpuid_07_02_edx.raw = cpuid_values.edx;
            tdcs_ptr->executions_ctl_fields.cpuid_flags.ddpd_supported = cpuid_07_02_edx.ddpd;
 
-           // Set IA32_SPEC_CTRL_MASK to mask out DDPD_U if not supported
-           tdcs_ptr->executions_ctl_fields.ia32_spec_ctrl_mask = calculate_ia32_spec_ctrl_mask(tdcs_ptr).raw;
+           // The TD will never be configured with DDPD support if the CPU doesn't support DDPD
+           tdx_debug_assert(!tdcs_ptr->executions_ctl_fields.cpuid_flags.ddpd_supported ||
+                            global_data_ptr->ddpd_supported);
+
+           // IA32_SPEC_CTRL virtualization is required in the following case:
+           //  - The TD is configured without DDPD support, and
+           //  - The CPU supports DDPD
+           // Because in this case we enable DDPD without the TD knowing about this.
+           tdx_debug_assert(tdcs_ptr->executions_ctl_fields.cpuid_flags.ddpd_supported ||
+                            !global_data_ptr->ddpd_supported ||
+                            global_data_ptr->plt_common_config.ia32_vmx_procbased_ctls3.virt_ia32_spec_ctrl);
        }
        else
        {
@@ -297,56 +315,9 @@ static bool_t check_cpuid_compatibility_and_set_flags(tdcs_t* tdcs_ptr, uint32_t
     }
     else if (leaf == CPUID_PERFMON_LEAF)
     {
-        // Leaf 0xA's values are defined as "ALLOW_ATTRIBUTES(PERFMON)", i.e., if ATTRRIBUTES.PERFMON
-        // is set they return the native values, else they return 0.
-        if (!attributes.perfmon)
+        if (cpuid_values.low || cpuid_values.high)
         {
-            if (cpuid_values.low || cpuid_values.high)
-            {
-                return false;
-            }
-        }
-        else
-        {
-            // Imported bits that are tagged as ALLOW_ATTRIBUTES(PERFMON) must have the same value as would be set
-            // locally on the target platform, which are the global value calculated by TDH.SYS.INIT.
-            if ((cpuid_values.low != global_data_ptr->cpuid_values[cpuid_index].values.low) ||
-                (cpuid_values.high != global_data_ptr->cpuid_values[cpuid_index].values.high))
-            {
-                return false;
-            }
-
-            // Calculate effective CPUID(0xA).EBX (event not available bitmap) values for the imported value and for the
-            // destination platform value:  set to 1 any bit that is beyond the range specified by CPUID(0xA).EAX[31:24]
-            // (number of flags in EBX) to 1.
-            cpuid_0a_eax_t cpuid_0a_eax_imported = { .raw = cpuid_values.eax };
-            cpuid_0a_eax_t cpuid_0a_eax_pl       = { .raw = global_data_ptr->cpuid_values[cpuid_index].values.eax };
-
-            uint32_t ebx_flags = (uint32_t)-1 << cpuid_0a_eax_imported.num_ebx_flags;
-            uint32_t cpuid_0a_ebx_imported = cpuid_values.ebx | ebx_flags;
-            uint32_t cpuid_0a_ebx_pl = global_data_ptr->cpuid_values[cpuid_index].values.ebx | ebx_flags;
-
-            // Any bit set to 0 (i.e., available) in the effective "event not available" bitmap for the imported value
-            // must also be set to 0 on the platform.
-            if ((~cpuid_0a_ebx_imported & cpuid_0a_ebx_pl) != 0)
-            {
-                return false;
-            }
-
-            // At this point we know that the imported TD can work with the events enumerated to it as available
-            // when it ran on the source platform, and we don't care about the actual values of NUM_EBX_FLAGS and
-            // the "event not available" bitmap on the destination platfrom since the effective values fit.
-
-            // All the rest of CPUID(0xA) bits must have the same value as would be set
-            // locally on the destination platform, which are the global value calculated by TDH.SYS.INIT. */
-            if ((cpuid_0a_eax_imported.version != cpuid_0a_eax_pl.version) ||
-                (cpuid_0a_eax_imported.num_gp_counters != cpuid_0a_eax_pl.num_gp_counters) ||
-                (cpuid_0a_eax_imported.gp_counters_width != cpuid_0a_eax_pl.gp_counters_width) ||
-                (cpuid_values.ecx != global_data_ptr->cpuid_values[cpuid_index].values.ecx) ||
-                (cpuid_values.edx != global_data_ptr->cpuid_values[cpuid_index].values.edx))
-            {
-                return false;
-            }
+            return false;
         }
     }
     else if (leaf == CPUID_EXT_STATE_ENUM_LEAF)
@@ -405,6 +376,15 @@ static bool_t check_cpuid_compatibility_and_set_flags(tdcs_t* tdcs_ptr, uint32_t
             return false;
         }
     }
+    else if (leaf == 0x1A)
+    {
+        // For migratable TDs, native model information is N/A, and should have been set to 0.
+        // This information is used for Perfmon, which is not enabled for migratable TDs.
+        if (cpuid_values.low != 0 || cpuid_values.high != 0)
+        {
+            return false;
+        }
+    }
     else if (leaf == 0x1C)
     {
         // Leaf 0x1C is wholly configured by LBR (XFAM[15])
@@ -419,6 +399,18 @@ static bool_t check_cpuid_compatibility_and_set_flags(tdcs_t* tdcs_ptr, uint32_t
         if ((!xfam.amx_xtilecfg || !xfam.amx_xtiledata) && (cpuid_values.low != 0 || cpuid_values.high != 0))
         {
             return false;
+        }
+    }
+    else if (leaf == 0x23)
+    {
+        // Leaf 0x23's values are defined as "ALLOW_ATTRIBUTES(PERFMON)", i.e., if ATTRRIBUTES.PERFMON
+        // is set they return the native values, else they return 0.
+        if (!attributes.perfmon || !tdcs_ptr->executions_ctl_fields.cpuid_flags.perfmon_ext_leaf_supported)
+        {
+            if (cpuid_values.low != 0 || cpuid_values.high != 0)
+            {
+                return false;
+            }
         }
     }
 
@@ -461,8 +453,6 @@ static api_error_code_e md_td_get_element(md_field_id_t field_id, const md_looku
     uint64_t read_value;
 
     uint8_t* page_ptr = NULL;
-    uint64_t structure_size;
-
     uint32_t cpuid_lookup_index = 0;
 
     md_get_rd_wr_mask(entry, access_type, access_qual, &rd_mask, &wr_mask);
@@ -474,7 +464,6 @@ static api_error_code_e md_td_get_element(md_field_id_t field_id, const md_looku
         case MD_TDR_TD_PRESERVING_CLASS_CODE:
         {
             page_ptr = (uint8_t*)md_ctx.tdr_ptr;
-            structure_size = sizeof(tdr_t);
             break;
         }
         case MD_TDCS_CPUID_CLASS_CODE:
@@ -516,9 +505,9 @@ static api_error_code_e md_td_get_element(md_field_id_t field_id, const md_looku
         case MD_TDCS_SERVICE_TD_CLASS_CODE:
         case MD_TDCS_MIGSC_LINKS_CLASS_CODE:
         case MD_TDCS_VIRT_MSR_VALUES_CLASS_CODE:
+        case MD_TDCS_X2APIC_IDS_CLASS_CODE:
         {
             page_ptr = (uint8_t*)md_ctx.tdcs_ptr;
-            structure_size = sizeof(tdcs_t);
             break;
         }
         case MD_TDCS_L2_SECURE_EPT_ROOT__1_CLASS_CODE:
@@ -531,7 +520,6 @@ static api_error_code_e md_td_get_element(md_field_id_t field_id, const md_looku
             }
 
             page_ptr = (uint8_t*)md_ctx.tdcs_ptr;
-            structure_size = sizeof(tdcs_t);
             break;
         }
         default:
@@ -781,17 +769,21 @@ api_error_code_e md_td_write_element(md_field_id_t field_id, const md_lookup_t* 
             }
             case MD_TDCS_TD_CTLS_FIELD_ID:
             {
-                if (access_type == MD_GUEST_WR)
+                if (!md_ctx.tdcs_ptr->executions_ctl_fields.config_flags.flexible_pending_ve)
                 {
-                    if (!md_ctx.tdcs_ptr->executions_ctl_fields.config_flags.flexible_pending_ve)
+                    // The guest TD is not allowed to change TD_CTLS.PENDING_VE_DISABLE
+                    td_ctls_t td_ctls_modified_bits = { .raw = wr_value ^ read_value };
+                    if (td_ctls_modified_bits.pending_ve_disable)
                     {
-                        // The guest TD is not allowed to change TD_CTLS.PENDING_VE_DISABLE
-                        td_ctls_t td_ctls_modified_bits = { .raw = wr_value ^ read_value };
-                        if (td_ctls_modified_bits.pending_ve_disable)
-                        {
-                            return TDX_METADATA_FIELD_VALUE_NOT_VALID;
-                        }
+                        return TDX_METADATA_FIELD_VALUE_NOT_VALID;
                     }
+                }
+
+                // To enable virtual topology enumeration, all VCPU must have been properly configured
+                td_ctls_t td_ctls = { .raw = wr_value };
+                if (td_ctls.enum_topology && !md_ctx.tdcs_ptr->executions_ctl_fields.topology_enum_configured)
+                {
+                    return TDX_METADATA_FIELD_VALUE_NOT_VALID;
                 }
 
                 break;
@@ -821,64 +813,6 @@ tdx_static_assert(MD_TDCS_TSC_FREQUENCY_FIELD_CODE < MD_TDCS_VIRTUAL_TSC_FIELD_C
                   wrong_field_code_order);
 tdx_static_assert(MD_TDCS_EXECUTION_CONTROLS_CLASS_CODE < MD_TDCS_CPUID_CLASS_CODE,
                   wrong_field_class_order);
-
-_STATIC_INLINE_ api_error_code_e check_and_import_servtd_binding(tdcs_t* tdcs_ptr,
-                                                                 const servtd_binding_t *servtd_binding_p,
-                                                                 uint32_t servtd_slot)
-{
-    servtd_binding_state_t servtd_binding_state;
-    uint16_t               servtd_type;
-    servtd_attributes_t    servtd_attr;
-
-    servtd_binding_state = servtd_binding_p->state;
-
-    // Ignore imported service TD binding if not bound
-    if (servtd_binding_state == SERVTD_NOT_BOUND)
-    {
-        return TDX_SUCCESS;
-    }
-
-    // Sanity checks on the imported service TD binding info
-    if ((servtd_binding_state != SERVTD_PRE_BOUND) && (servtd_binding_state != SERVTD_BOUND))
-    {
-        return TDX_METADATA_FIELD_VALUE_NOT_VALID;
-    }
-
-    if (servtd_slot >= MAX_SERVTDS)
-    {
-        return TDX_METADATA_FIELD_VALUE_NOT_VALID;
-    }
-
-    servtd_type = servtd_binding_p->type;
-    if (!is_servtd_supported(servtd_type))
-    {
-        return TDX_METADATA_FIELD_VALUE_NOT_VALID;
-    }
-
-    servtd_attr.raw = servtd_binding_p->attributes.raw;
-    if (!servtd_is_attrib_valid(&servtd_attr))
-    {
-        return TDX_METADATA_FIELD_VALUE_NOT_VALID;
-    }
-
-    tdx_debug_assert(servtd_attr.migratable_binding == false);  // Not supported, validity check above should have failed
-
-    if ((tdcs_ptr->service_td_fields.servtd_bindings_table[servtd_slot].state == SERVTD_PRE_BOUND) ||
-        (tdcs_ptr->service_td_fields.servtd_bindings_table[servtd_slot].state == SERVTD_BOUND))
-    {
-        // If there is already a PRE_BOUND or BOUND service TD at this binding slot, then the SERVTD_TYPE
-        // and SERVTD_ATTR must match.  The other imported fields for that binding slot are ignored.
-        // If SERVTD_TYPE or SERVTD_ATTR don’t match, import fails.
-        // Note:  This is the case used for Migration TD.
-        if ((tdcs_ptr->service_td_fields.servtd_bindings_table[servtd_slot].type != servtd_type) ||
-            (tdcs_ptr->service_td_fields.servtd_bindings_table[servtd_slot].attributes.raw != servtd_attr.raw))
-        {
-            return TDX_METADATA_FIELD_VALUE_NOT_VALID;
-        }
-    }
-
-    return TDX_SUCCESS;
-}
 
 api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* entry,md_access_t access_type,
         md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx, uint64_t value[MAX_ELEMENTS_IN_FIELD],
@@ -1030,6 +964,18 @@ api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* en
                 // No special handling on import
                 break;
             }
+            case MD_TDCS_TSC_FREQUENCY_FIELD_ID:
+            {
+                // Sanity checks: see the TDR/TDCS spreadsheet
+                tdx_debug_assert(entry->num_of_elem == 1);
+
+                if ((value[0] < VIRT_TSC_FREQUENCY_MIN) || (value[0] > VIRT_TSC_FREQUENCY_MAX))
+                {
+                    return TDX_METADATA_FIELD_VALUE_NOT_VALID;
+                }
+
+                break;
+            }
             case MD_TDCS_VIRTUAL_TSC_FIELD_ID:
             {
                 tdx_debug_assert(entry->num_of_elem == 1);
@@ -1080,21 +1026,17 @@ api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* en
 
                 break;
             }
-
-            case MD_TDCS_SERVTD_BINDINGS_TABLE_FIELD_ID:
+            
+            case MD_TDCS_SERVTD_NUM_FIELD_ID:
             {
-                // Current field is a service TD binding table entry
-                uint32_t binding_slot = (uint32_t)(field_id.field_code - entry->field_id.field_code) /
-                        (sizeof(servtd_binding_t) / 8);
-
-                tdx_debug_assert(binding_slot <= MAX_SERVTDS);
-
-                status = check_and_import_servtd_binding(md_ctx.tdcs_ptr, (const servtd_binding_t *)value, binding_slot);
-                if (status != TDX_SUCCESS)
+                // Sanity checks: see the TDR/TDCS spreadsheet
+                // SERVTD_NUM is checked to be exactly 1 (the Migration TD)
+                if (1 != value[0])
                 {
-                    return status;
+                    return TDX_METADATA_FIELD_VALUE_NOT_VALID;
                 }
 
+                // The value is only checked (marked in the spreadsheet as CB), but not imported
                 write_done = true;
                 break;
             }

@@ -255,3 +255,4 @@ crypto_api_error sha384_generate_hash(const uint8_t * block,
 
     return ippsHashMessage_rmf(block, (int)block_size, (Ipp8u*)hash, hash_method);
 }
+

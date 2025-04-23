@@ -31,7 +31,7 @@
 #define TDX_MODULE_CS_SELECTOR        0x8U
 
 
-const idt_and_gdt_tables_t tdx_idt_and_gdt_tables =
+const idt_and_gdt_tables_t tdx_idt_and_gdt =
 {
     .idt_table =
     {

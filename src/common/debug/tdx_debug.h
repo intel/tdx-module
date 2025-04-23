@@ -206,17 +206,7 @@ uint64_t td_debug_config(uint64_t leaf, uint64_t payload, uint64_t second_payloa
 #endif // DEBUGFEATURE_TDX_DBG_TRACE
 
 //Debug Assertion
-#ifdef DEBUG
-#define tdx_debug_assert(cond) if (!(cond)) {\
-                                    TDX_ERROR("Debug assertion at line: %d , in file %s\n", __LINE__, __FILENAME__);\
-                                    tdx_report_error_and_halt(0xDEAD, 0xDEAD);\
-                               };
-#else
 #define tdx_debug_assert(cond)
-#endif
-
-//Static Assertion
-#define tdx_static_assert(e,x) typedef char assertion_##x  [(e)?1:-1]
 
 #define UNUSED(expr) (void)(expr)
 

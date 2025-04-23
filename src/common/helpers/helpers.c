@@ -1104,10 +1104,7 @@ void init_tdvps_fields(tdcs_t * tdcs_ptr, tdvps_t * tdvps_ptr)
     tdvps_ptr->management.base_l2_cr0_read_shadow = bitmap;
 
     // BASE_L2_CR4_GUEST_HOST_MASK = ~calc_base_l2_cr4_write_mask()
-    ia32_xcr0_t tdcs_xfam = { .raw = tdcs_ptr->executions_ctl_fields.xfam };
-
-    tdvps_ptr->management.base_l2_cr4_guest_host_mask =
-            ~(calc_base_l2_cr4_write_mask(tdcs_ptr->executions_ctl_fields.attributes, tdcs_xfam).raw);
+    tdvps_ptr->management.base_l2_cr4_guest_host_mask = ~(calc_base_l2_cr4_write_mask(tdcs_ptr).raw);
 
     uint64_t ia32_vmx_cr4_fixed0 = get_global_data()->plt_common_config.ia32_vmx_cr4_fixed0.raw;
 
@@ -1156,10 +1153,7 @@ void inject_pf(uint64_t gla, pfec_t pfec)
     if (curr_vm != 0)
     {
         // Before we inject a #PF, reinject IDT vectoring events that happened during VM exit, if any.
-        if (reinject_idt_vectoring_event_if_any())
-        {
-            return;
-        }
+        reinject_idt_vectoring_event_if_any();
     }
 
     vmx_entry_inter_info_t entry_info;
@@ -1305,9 +1299,10 @@ cr_write_status_e write_guest_cr0(uint64_t value, bool_t allow_pe_disable)
     return CR_ACCESS_SUCCESS;
 }
 
-bool_t is_guest_cr4_allowed_by_td_config(ia32_cr4_t cr4, td_param_attributes_t attributes,
-                                         ia32_xcr0_t xfam)
+bool_t is_guest_cr4_allowed_by_td_config(ia32_cr4_t cr4, tdcs_t* tdcs_p, ia32_xcr0_t xfam)
 {
+    td_param_attributes_t attributes = tdcs_p->executions_ctl_fields.attributes;
+
     // Check if bits for features that are not enabled by XFAM are set
     if ((!xfam.pk && cr4.pke) ||
         ((!xfam.cet_s || !xfam.cet_u) && cr4.cet) ||
@@ -1327,6 +1322,12 @@ bool_t is_guest_cr4_allowed_by_td_config(ia32_cr4_t cr4, td_param_attributes_t a
     if ((attributes.pks == 0) && (cr4.pks == 1))
     {
         TDX_LOG("MOV to CR4 - PKS not supported (0x%lx) - #GP", cr4.raw);
+        return false;
+    }
+
+    if (!attributes.lass && cr4.lass)
+    {
+        TDX_LOG("MOV to CR4 - LASS not supported by the TD\n");
         return false;
     }
 
@@ -1357,7 +1358,7 @@ cr_write_status_e write_guest_cr4(uint64_t value, tdcs_t* tdcs_p, tdvps_t* tdvps
     ia32_xcr0_t cur_xfam;
     cur_xfam.raw = tdvps_p->management.xfam;
 
-    if (!is_guest_cr4_allowed_by_td_config(cr4, tdcs_p->executions_ctl_fields.attributes, cur_xfam))
+    if (!is_guest_cr4_allowed_by_td_config(cr4, tdcs_p, cur_xfam))
     {
         return CR_ACCESS_GP;
     }
@@ -1832,22 +1833,23 @@ bool_t td_immutable_state_cross_check(tdcs_t* tdcs_ptr)
         return false;
     }
 
-    UNUSED(tdcs_ptr);
     return true;
 }
 
-bool_t check_and_init_imported_td_state_immutable (tdcs_t* tdcs_ptr)
+api_error_type check_and_init_imported_td_state_immutable (tdcs_t* tdcs_ptr)
 {
     if (!td_immutable_state_cross_check(tdcs_ptr))
     {
-        return false;
+        return api_error_with_operand_id_fatal(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
     }
+
     
     // num_vcpus sanity check (at this point num_vcpus is already set)
     if ((tdcs_ptr->management_fields.num_vcpus == 0) || (tdcs_ptr->management_fields.num_vcpus > tdcs_ptr->executions_ctl_fields.max_vcpus))
     {
-        return false;
+        return api_error_with_operand_id_fatal(TDX_OPERAND_INVALID, OPERAND_ID_MAX_VCPUS);
     }
+
     /**
      * Initialize the TD Management Fields
      */
@@ -1872,6 +1874,16 @@ bool_t check_and_init_imported_td_state_immutable (tdcs_t* tdcs_ptr)
      */
     tdcs_ptr->executions_ctl_fields.td_ctls.pending_ve_disable = tdcs_ptr->executions_ctl_fields.attributes.sept_ve_disable;
 
+    // Check the imported CPUID(0x1F) values and set CPUID(0xB) values
+
+    api_error_type return_val = check_cpuid_1f(tdcs_ptr, false);
+    if (return_val != TDX_SUCCESS)
+    {
+        return return_val;
+    }
+
+    calculate_servtd_hash(tdcs_ptr, true);
+
     /**
      *  Build the MSR bitmaps
      *
@@ -1879,7 +1891,30 @@ bool_t check_and_init_imported_td_state_immutable (tdcs_t* tdcs_ptr)
      */
     set_msr_bitmaps(tdcs_ptr);
 
-    return true;
+    return return_val;
+}
+
+api_error_type check_imported_vp_state(tdr_t* tdr_p, tdcs_t* tdcs_p, tdvps_t* tdvps_p)
+{
+    UNUSED(tdr_p);
+
+    if (tdcs_p->executions_ctl_fields.topology_enum_configured)
+    {
+        uint32_t x2apic_id = tdcs_p->x2apic_ids[tdvps_p->management.vcpu_index];
+
+        for (uint32_t i = 0; i < tdcs_p->management_fields.num_vcpus; i++)
+        {
+            if (x2apic_id == tdcs_p->x2apic_ids[i])
+            {
+                if (i != tdvps_p->management.vcpu_index)
+                {
+                    return api_error_with_operand_id(TDX_X2APIC_ID_NOT_UNIQUE, x2apic_id);
+                }
+            }
+        }
+    }
+
+    return TDX_SUCCESS;
 }
 
 void prepare_td_vmcs(tdvps_t *tdvps_p, uint16_t vm_id)
@@ -1973,6 +2008,7 @@ api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap
                        SIZE_OF_SHA384_HASH_IN_BYTES);
         }
     }
+
     if (!ignore_tdinfo.servtd_hash)
     {
         tdx_memcpy(td_info->servtd_hash.bytes, sizeof(measurement_t),
@@ -2441,11 +2477,6 @@ bool_t translate_gpas(
         goto EXIT;
     }
 
-    /*
-     * Translate the soft-translated GPA L2 VMCS fields whose shadow HPA is NULL_PA,
-     * using the L1 SEPT.
-     */
-
     hpa = tdvps_ptr->management.l2_vapic_hpa[vm_id];
     if (hpa == NULL_PA)
     {
@@ -2591,6 +2622,171 @@ api_error_type l2_sept_walk_guest_side(
         free_la(*l2_septe_ptr);
         *l2_septe_ptr = NULL;
         return TDX_EPT_WALK_FAILED;
+    }
+
+    return TDX_SUCCESS;
+}
+
+uint32_t prepare_servtd_hash_buff(tdcs_t* tdcs_ptr, servtd_hash_buff_t* servtd_has_buf)
+{
+    uint32_t num_tds = 0;
+
+    tdx_debug_assert(MAX_SERVTDS <= 1);
+    // TODO: add sorting for the array when the MAX_SERVTDS is greater than 1
+
+    for (uint32_t i = 0; i < MAX_SERVTDS; i++)
+    {
+        if (tdcs_ptr->service_td_fields.servtd_bindings_table[i].state != SERVTD_NOT_BOUND)
+        {
+            tdx_memcpy(servtd_has_buf[num_tds].info_hash.qwords, sizeof(measurement_t),
+                tdcs_ptr->service_td_fields.servtd_bindings_table[i].info_hash.qwords, sizeof(measurement_t));
+
+            servtd_has_buf[num_tds].type = tdcs_ptr->service_td_fields.servtd_bindings_table[i].type;
+            servtd_has_buf[num_tds].attrib.raw = tdcs_ptr->service_td_fields.servtd_bindings_table[i].attributes.raw;
+            num_tds++;
+        }
+    }
+
+    return num_tds;
+}
+
+void calculate_servtd_hash(tdcs_t* tdcs_ptr, bool_t handle_avx_state)
+{
+    servtd_hash_buff_t servtd_hash_buff[MAX_SERVTDS];
+    basic_memset_to_zero((void*)servtd_hash_buff, (sizeof(servtd_hash_buff_t) * MAX_SERVTDS));
+    uint32_t num_servtds = prepare_servtd_hash_buff(tdcs_ptr, servtd_hash_buff);
+
+    if (num_servtds == 0)
+    {
+        basic_memset_to_zero((void*)&tdcs_ptr->service_td_fields.servtd_hash, sizeof(tdcs_ptr->service_td_fields.servtd_hash));
+    }
+    else
+    {
+        ALIGN(16) uint128_t xmms[16];
+
+        if (handle_avx_state)
+        {
+            store_xmms_in_buffer(xmms);
+        }
+
+        crypto_api_error sha_error_code = sha384_generate_hash((const uint8_t*)servtd_hash_buff,
+            num_servtds * sizeof(servtd_hash_buff_t),
+            (uint64_t*)&tdcs_ptr->service_td_fields.servtd_hash);
+
+        if (handle_avx_state)
+        {
+            load_xmms_from_buffer(xmms);
+            basic_memset_to_zero(xmms, sizeof(xmms));
+        }
+
+        if (sha_error_code != 0)
+        {
+            // Unexpected error - Fatal Error
+            TDX_ERROR("Unexpected error in SHA384 - error = %d\n", sha_error_code);
+            FATAL_ERROR();
+        }
+    }
+}
+
+api_error_type check_cpuid_1f(tdcs_t* tdcs_p, bool_t allow_null)
+{
+    uint32_t cpuid_0b_idx;
+    cpuid_topology_level_type_e prev_level_type;
+    cpuid_topology_level_type_e level_type = LEVEL_TYPE_INVALID;
+
+    cpuid_topology_shift_t cpuid_1f_eax;
+    cpuid_topology_level_t cpuid_1f_ecx;
+
+    bool_t null_config = false;
+    bool_t core_level_scanned = false;
+
+    // Scan the virtual CPUID(0x1F) sub-leaves
+
+    for (uint32_t subleaf = 0; subleaf < LEVEL_TYPE_MAX; subleaf++)
+    {
+        uint32_t cpuid_1f_idx = get_cpuid_lookup_entry(CPUID_GET_TOPOLOGY_LEAF, subleaf);
+
+        cpuid_config_return_values_t cpuid_values = tdcs_p->cpuid_config_vals[cpuid_1f_idx];
+
+        // Null configuration case:  if all CPUID(0x1F) sub-leaves are configured as all-0, use the h/w values.
+        // If the first subleaf is configured as 0, all the rest must be 0.
+        if (subleaf == 0)
+        {
+            if ((cpuid_values.high == 0) && (cpuid_values.low == 0))
+            {
+                if (allow_null)
+                {
+                    null_config = true;
+                }
+                else
+                {
+                    return TDX_CPUID_LEAF_1F_FORMAT_UNRECOGNIZED;
+                }
+            }
+        }
+        else if ((null_config) && (cpuid_values.high || cpuid_values.low))
+        {
+            return TDX_CPUID_LEAF_1F_FORMAT_UNRECOGNIZED;
+        }
+
+        if (null_config)
+        {
+            cpuid_values = get_global_data()->cpuid_values[cpuid_1f_idx].values;
+
+            tdcs_p->cpuid_config_vals[cpuid_1f_idx].low = cpuid_values.low;
+            tdcs_p->cpuid_config_vals[cpuid_1f_idx].high = cpuid_values.high;
+        }
+
+        // We continue even if we use the h/w values, in order to set CPUID(0xB)
+        cpuid_1f_eax.raw = cpuid_values.eax;
+        cpuid_1f_ecx.raw = cpuid_values.ecx;
+
+        prev_level_type = level_type;
+        level_type = cpuid_1f_ecx.level_type;
+
+        if (level_type != LEVEL_TYPE_INVALID)
+        {
+            // This is a valid sub-leaf.  Check that level type higher than the previous one
+            // (initialized to INVALID, which is 0) but does not reach the max.
+            if ((level_type <= prev_level_type) || (level_type >= LEVEL_TYPE_MAX))
+            {
+                return TDX_CPUID_LEAF_1F_FORMAT_UNRECOGNIZED;
+            }
+
+            if (level_type == LEVEL_TYPE_SMT)
+            {
+                // CPUID(0x0B, 0) is the SMT level. It is identical to CPUID(0x1F) at the SMT level.
+                cpuid_0b_idx = get_cpuid_lookup_entry(0xB, 0);
+                tdcs_p->cpuid_config_vals[cpuid_0b_idx] = cpuid_values;
+            }
+            else if (level_type == LEVEL_TYPE_CORE)
+            {
+                core_level_scanned = true;   // Prepare a flag for a sanity check later
+            }
+        }
+        else  // level_type == CPUID_1F_ECX_t::INVALID
+        {
+            // The current sub-leaf is invalid, it marks the end of topology info.
+            // Make sure we had at least one valid sub-leaf, otherwise CPUID leaf 1F is not configured properly.
+            if (subleaf == 0)
+            {
+                return TDX_CPUID_LEAF_1F_FORMAT_UNRECOGNIZED;
+            }
+
+            // Sanity check: core level must have been scanned
+            if (!core_level_scanned)
+            {
+                return TDX_CPUID_LEAF_1F_FORMAT_UNRECOGNIZED;
+            }
+        }
+
+        // Generate virtual CPUID(0xB) values
+
+        // CPUID(0x0B, 1) is the core level.  The information is of the last valid level of CPUID(0x1F)
+        cpuid_0b_idx = get_cpuid_lookup_entry(0xB, 1);
+        cpuid_1f_ecx.level_type = LEVEL_TYPE_CORE;
+        cpuid_values.ecx = cpuid_1f_ecx.raw;
+        tdcs_p->cpuid_config_vals[cpuid_0b_idx] = cpuid_values;
     }
 
     return TDX_SUCCESS;

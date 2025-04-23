@@ -102,7 +102,7 @@
 
 
 #define IA32_SEAMRR_BASE_AND_MASK_MASK           BITS((MAX_PA-1), 25)
-#define MISC_EN_BOOT_NT4_BIT                     BIT(22)
+#define MISC_EN_LIMIT_CPUID_MAXVAL_BIT           BIT(22)
 #define IA32_FMASK_MSR_RESET_STATE               0x20200ULL
 #define IA32_LBR_DEPTH_MSR_RESET_STATE           0x20ULL
 
@@ -466,7 +466,7 @@ typedef union ia32_misc_enable_u
         uint64_t rsvd5                  : 1;  // 17
         uint64_t enable_monitor_fsm     : 1;  // 18
         uint64_t rsvd6                  : 3;  // 21:19
-        uint64_t boot_nt4               : 1;  // 22
+        uint64_t limit_cpuid_maxval     : 1;  // 22
         uint64_t tpr_message_disable    : 1;  // 23
         uint64_t rsvd7                  : 3;  // 26:24
         uint64_t rsvd8                  : 1;  // 27

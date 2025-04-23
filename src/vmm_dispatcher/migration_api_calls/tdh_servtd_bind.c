@@ -241,28 +241,15 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
             return_val = TDX_SERVTD_ATTR_MISMATCH;
             goto EXIT;
         }
-        if (servtd_attr.instance_binding == 1)
-        {
-            if (!tdx_memcmp(&tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].uuid,
-                    &servtd_tdr_p->management_fields.td_uuid, sizeof(servtd_tdr_p->management_fields.td_uuid)))
-            {
-                return_val = TDX_SERVTD_UUID_MISMATCH;
-                goto EXIT;
-            }
-            tdx_memcpy(tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].info_hash.qwords, sizeof(measurement_t),
-                       servtd_info_hash.qwords, sizeof(servtd_info_hash));
 
-        }
-        else
+        if (!tdx_memcmp(tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].info_hash.qwords,
+                        servtd_info_hash.qwords, sizeof(servtd_info_hash)))
         {
-            if (!tdx_memcmp(tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].info_hash.qwords,
-                            servtd_info_hash.qwords, sizeof(servtd_info_hash)))
-            {
-                return_val = TDX_SERVTD_INFO_HASH_MISMATCH;
-                goto EXIT;
-            }
-            tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].uuid = servtd_tdr_p->management_fields.td_uuid;
+            return_val = TDX_SERVTD_INFO_HASH_MISMATCH;
+            goto EXIT;
         }
+        tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].uuid = servtd_tdr_p->management_fields.td_uuid;
+
         break;
     default:
         FATAL_ERROR();

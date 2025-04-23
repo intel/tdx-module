@@ -83,11 +83,10 @@ typedef enum seamcall_leaf_opcode_e
     TDH_VP_WR_LEAF                   = 43,
     TDH_SYS_LP_SHUTDOWN_LEAF         = 44,
     TDH_SYS_CONFIG_LEAF              = 45,
-
-    TDH_SYS_SHUTDOWN_LEAF            = 52,
-    TDH_SYS_UPDATE_LEAF              = 53,
     TDH_SERVTD_BIND_LEAF             = 48,
     TDH_SERVTD_PREBIND_LEAF          = 49,
+    TDH_SYS_SHUTDOWN_LEAF            = 52,
+    TDH_SYS_UPDATE_LEAF              = 53,
     TDH_EXPORT_ABORT_LEAF            = 64,
     TDH_EXPORT_BLOCKW_LEAF           = 65,
     TDH_EXPORT_RESTORE_LEAF          = 66,
@@ -357,8 +356,9 @@ typedef union td_param_attributes_s {
     {
         uint64_t debug           : 1;   // Bit 0
         uint64_t reserved_tud    : 7;   // Bits 7:1
-        uint64_t reserved_sec    : 20;  // Bits 28:8
-        uint64_t sept_ve_disable : 1;   // Bit  28 - disable #VE on pending page access
+        uint64_t reserved_sec    : 19;  // Bits 26:8
+        uint64_t lass            : 1;   // Bit 27
+        uint64_t sept_ve_disable : 1;   // Bit 28 - disable #VE on pending page access
         uint64_t migratable      : 1;   // Bit 29
         uint64_t pks             : 1;   // Bit 30
         uint64_t kl              : 1;   // Bit 31
@@ -716,7 +716,7 @@ tdx_static_assert(sizeof(report_mac_struct_t) == SIZE_OF_REPORTMAC_STRUCT_IN_BYT
 
 
 #define SIZE_OF_TEE_TCB_SVN_IN_BYTES         16
-#define SIZE_OF_TEE_TCB_INFO_STRUCT_IN_BYTES 256
+#define SIZE_OF_TEE_TCB_INFO_STRUCT_IN_BYTES 239
 
 /**
  * @struct tee_tcb_info_t
@@ -739,7 +739,8 @@ typedef struct PACKED tee_tcb_info_s
      */
     measurement_t  mr_signer_seam;
     uint64_t       attributes;  /**< Additional configuration ATTRIBUTES if non-intel SEAM module was loaded */
-    uint8_t        reserved[128];  /**< Must be 0 */
+    uint8_t        tee_tcb_svn2[SIZE_OF_TEE_TCB_SVN_IN_BYTES];
+    uint8_t        reserved[95];  /**< Must be 0 */
 } tee_tcb_info_t;
 tdx_static_assert(sizeof(tee_tcb_info_t) == SIZE_OF_TEE_TCB_INFO_STRUCT_IN_BYTES, tee_tcb_info_t);
 
@@ -797,6 +798,7 @@ typedef struct PACKED td_report_s
      * Includes the SEAM measurements.
      */
     tee_tcb_info_t       tee_tcb_info;
+    uint8_t              reserved[17];
     td_info_t            td_info; /**< TD’s attestable properties */
 } td_report_t;
 tdx_static_assert(sizeof(td_report_t) == SIZE_OF_TD_REPORT_STRUCT_IN_BYTES, td_report_t);
@@ -943,15 +945,6 @@ typedef struct ALIGN(TDMR_INFO_ENTRY_ALIGNMENT) PACKED tdmr_info_entry_s
 // check (MAX_CMRS * cmr_info_entry) equals 512B
 tdx_static_assert((MAX_CMR * sizeof(cmr_info_entry_t)) == 512, MAX_CMR);
 
-typedef union sys_attributes_u
-{
-    struct
-    {
-        uint64_t reserved : 64;
-    };
-    uint64_t raw;
-} sys_attributes_t;
-
 typedef union tdaccept_vmx_eeq_info_u
 {
     struct
@@ -1092,7 +1085,9 @@ typedef union tdx_features_enum0_u
         uint64_t fms_config                  : 1;    // Bit 17
         uint64_t no_rbp_mod                  : 1;    // Bit 18
         uint64_t l2_tlb_invd_opt             : 1;    // Bit 19
-        uint64_t reserved_2                  : 42;   // Bits 63:20
+        uint64_t topology_enum               : 1;    // Bit 20
+        uint64_t reduced_ve                  : 1;    // Bit 21
+        uint64_t reserved_2                  : 41;   // Bits 63:21
     };
     uint64_t raw;
 } tdx_features_enum0_t;

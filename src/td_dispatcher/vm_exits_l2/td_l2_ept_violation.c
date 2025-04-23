@@ -82,7 +82,8 @@ void td_l2_ept_violation_exit(vm_vmexit_exit_reason_t vm_exit_reason, vmx_exit_q
                                             &l1_sept_entry_level, &l1_sept_entry_copy, false);
         
         // L1 leaf SEPT entry found - Check if the EPT violation needs to be handled by the L1 VMM
-        if (sept_state_is_guest_accessible_leaf(l1_sept_entry_copy))
+        if (// Was the page fully accessible to the TD (as a whole)?
+            sept_state_is_guest_accessible_leaf(l1_sept_entry_copy))
         {
             if (l1_sept_entry_ptr != NULL)
             {

@@ -266,17 +266,11 @@ static api_error_type handle_continues_export(api_error_type* return_val, bool_t
             tdx_module_local_t* local_data_ptr = get_local_data();
             migsc_p->interrupted_state.func.raw = local_data_ptr->vmm_regs.rax;
             migsc_p->interrupted_state.page_list_info.raw = page_list_info.raw;
-            if (*return_val == TDX_SUCCESS)
-            {
-                // export of global state done, switch to td state
-                migsc_p->interrupted_state.sys_migrated = true;
-                migsc_p->interrupted_state.field_id.raw = MD_FIELD_ID_NA;
-                migsc_p->interrupted_state.field_id.context_code = MD_CTX_TD;
-            }
-            else
-            {
-                migsc_p->interrupted_state.field_id.raw = next_field_id->raw;
-            }
+            migsc_p->interrupted_state.sys_migrated = *sys_exported;
+            
+            // Set the interrupted field ID depending on the stage we are in
+            migsc_p->interrupted_state.field_id.raw = next_field_id->raw;
+
             migsc_p->interrupted_state.num_processed = page_list_i;
 
             *continue_loop = false;

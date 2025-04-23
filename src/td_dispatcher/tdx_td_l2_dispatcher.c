@@ -106,6 +106,8 @@ void tdx_td_l2_dispatcher(void)
     tdx_sanity_check((vm_id == tdx_local_data_ptr->current_td_vm_id) && (vm_id > 0) && (vm_id < MAX_VMS),
                      SCEC_TD_DISPATCHER_SOURCE, 55);
 
+    bhb_drain_sequence(get_global_data());
+
     stepping_filter_e vmexit_stepping_result;
     vmexit_stepping_result = tdx_td_l1_l2_dispatcher_common_prologue(tdx_local_data_ptr, vm_id, &vm_exit_reason,
                                     &vm_exit_qualification, &vm_exit_inter_info);
@@ -181,18 +183,17 @@ void tdx_td_l2_dispatcher(void)
             {
                 async_tdexit_to_vmm(TDX_NON_RECOVERABLE_TD, vm_exit_reason, vm_exit_qualification.raw, 0, 0, 0);
             }
-            {
-                // EPT violation is one case where NMI may have been unblocked by an IRET instruction
-                // before the VM exit happened.  NMI unblocking is only applicable is no IDT vectoring is indicated.
-                // Record this so NMI will be re-blocked if L2 will be reentered following a TD exit and TD entry.
-                if (vm_exit_qualification.ept_violation.nmi_unblocking_due_to_iret &&
-                    !is_idt_vectoring_info_valid())
-                {
-                    tdvps_p->management.nmi_unblocking_due_to_iret = true;
-                }
 
-                async_tdexit_to_vmm(TDX_SUCCESS, vm_exit_reason, vm_exit_qualification.raw, 0, 0, 0);
+            // EPT violation is one case where NMI may have been unblocked by an IRET instruction
+            // before the VM exit happened.  NMI unblocking is only applicable is no IDT vectoring is indicated.
+            // Record this so NMI will be re-blocked if L2 will be reentered following a TD exit and TD entry.
+            if (vm_exit_qualification.ept_violation.nmi_unblocking_due_to_iret &&
+                !is_idt_vectoring_info_valid())
+            {
+                tdvps_p->management.nmi_unblocking_due_to_iret = true;
             }
+
+            async_tdexit_to_vmm(TDX_SUCCESS, vm_exit_reason, vm_exit_qualification.raw, 0, 0, 0);
 
             break;
 
@@ -221,6 +222,8 @@ void tdx_td_l2_dispatcher(void)
         case VMEXIT_REASON_ENQCMD_PASID_TRANSLATION_FAILURE:
         case VMEXIT_REASON_ENQCMDS_PASID_TRANSLATION_FAILURE:
         case VMEXIT_REASON_SEAMCALL:
+        case VMEXIT_REASON_MWAIT_INSTRUCTION:
+        case VMEXIT_REASON_MONITOR_INSTRUCTION:
         case VMEXIT_REASON_CPUID_INSTRUCTION:
         case VMEXIT_REASON_LOADIWK_INSTRUCTION:
         case VMEXIT_REASON_NMI_WINDOW:
@@ -251,13 +254,9 @@ void tdx_td_l2_dispatcher(void)
         case VMEXIT_REASON_HLT_INSTRUCTION:
         case VMEXIT_REASON_INVD_INSTRUCTION:
         case VMEXIT_REASON_IO_INSTRUCTION:
-        case VMEXIT_REASON_MWAIT_INSTRUCTION:
-        case VMEXIT_REASON_MONITOR_INSTRUCTION:
         case VMEXIT_REASON_WBINVD_INSTRUCTION:
         case VMEXIT_REASON_PCONFIG:
-            {
-                td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info);
-            }
+            td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info);
             break;
 
         case VMEXIT_REASON_CR_ACCESS:

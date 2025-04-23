@@ -35,45 +35,6 @@
 #include "accessors/ia32_accessors.h"
 #include "crypto/sha384.h"
 
-typedef struct PACKED servtd_hash_buff_s
-{
-    measurement_t       info_hash;
-    uint16_t            type;
-    servtd_attributes_t attrib;
-} servtd_hash_buff_t;
-tdx_static_assert(sizeof(servtd_hash_buff_t) == 58, servtd_hash_buff_t);
-
-
-/* Prepare the temporary buffer for SERVTD_HASH calculation.
-   1. Get all service TD binding slots whose SERVTD_BINDING_STATE is not NOT_BOUND.
-      If no service TD binding slots apply, return 0.
-   2. Sort in ascending order by SERVTD_TYPE as the primary key, SERVTD_INFO_HASH a
-      s a secondary key (if multiple service TDs of the same type are bound).
-   3. Copy SERVTD_INFO_HASH, SERVTD_TYPE and SERVTD_ATTR of each slot into a
-      servtd_has_buff entry.
-   4. Return the actual number of entries.
-*/
-static uint32_t prepare_servtd_hash_buff(tdcs_t *tdcs_ptr, servtd_hash_buff_t *servtd_has_buf)
-{
-    uint32_t num_tds = 0;
-
-    tdx_debug_assert(MAX_SERVTDS <= 1);
-    // TODO: add sorting for the array when the MAX_SERVTDS is greater than 1
-
-    for (int i = 0; i < MAX_SERVTDS; i++)
-    {
-        if (tdcs_ptr->service_td_fields.servtd_bindings_table[i].state != SERVTD_NOT_BOUND)
-        {
-            tdx_memcpy(servtd_has_buf[num_tds].info_hash.qwords, sizeof(measurement_t),
-                       tdcs_ptr->service_td_fields.servtd_bindings_table[i].info_hash.qwords, sizeof(measurement_t));
-
-            servtd_has_buf[num_tds].type = tdcs_ptr->service_td_fields.servtd_bindings_table[i].type;
-            servtd_has_buf[num_tds].attrib.raw = tdcs_ptr->service_td_fields.servtd_bindings_table[i].attributes.raw;
-            num_tds++;
-        }
-    }
-    return num_tds;
-}
 
 api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
 {
@@ -144,26 +105,7 @@ api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
         FATAL_ERROR();
     }
 
-    /* Calculate SERVTD_HASH
-    */
-    servtd_hash_buff_t  servtd_hash_buff[MAX_SERVTDS];
-    uint32_t num_servtds = prepare_servtd_hash_buff(tdcs_ptr, servtd_hash_buff);
-
-    if (num_servtds == 0)
-    {
-        basic_memset_to_zero(tdcs_ptr->service_td_fields.servtd_hash.bytes, sizeof(measurement_t));
-    }
-    else
-    {
-        sha_error_code = sha384_generate_hash((uint8_t*)servtd_hash_buff, (num_servtds * sizeof(servtd_hash_buff_t)),
-                                              tdcs_ptr->service_td_fields.servtd_hash.qwords);
-        if (sha_error_code != 0)
-        {
-            // Unexpected error - Fatal Error
-            TDX_ERROR("Unexpected error in SHA384 - error = %d\n", sha_error_code);
-            FATAL_ERROR();
-        }
-    }
+    calculate_servtd_hash(tdcs_ptr, false);
 
     load_xmms_from_buffer(xmms);
     basic_memset_to_zero(xmms, sizeof(xmms));

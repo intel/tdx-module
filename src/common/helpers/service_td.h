@@ -77,7 +77,7 @@ typedef union servtd_attributes_u
     {
         struct
         {
-            uint32_t instance_binding   : 1;  // Bit 0
+            uint32_t instance_binding   : 1;  // Bit 0 (future, must be 0)
             uint32_t solicited_binding  : 1;  // Bit 1 (future, must be 0)
             uint32_t platform_binding   : 1;  // Bit 2 (future, must be 0)
             uint32_t migratable_binding : 1;  // Bit 3 (future, must be 0)

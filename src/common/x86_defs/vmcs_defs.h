@@ -32,7 +32,7 @@
 #include "tdx_basic_defs.h"
 
 
-#define TD_VMCS_SIZE _2KB
+#define TD_VMCS_SIZE _4KB
 
 typedef enum
 {
@@ -55,8 +55,8 @@ typedef enum
     PROCBASED_CTLS2_UNKNOWN    = 0x00000000,
 
     // Note that PROCBASED_CTLS3 enumerates 64 bits
-    PROCBASED_CTLS3_INIT       = 0x0000000000000080,
-    PROCBASED_CTLS3_VARIABLE   = 0x0000000000000020,
+    PROCBASED_CTLS3_INIT       = 0x0000000000000000,
+    PROCBASED_CTLS3_VARIABLE   = 0x00000000000000A0,
     PROCBASED_CTLS3_UNKNOWN    = 0xFFFFFFFFFFFFFF40,
 
     EXIT_CTLS_INIT             = 0x1F3C8204,
@@ -100,8 +100,8 @@ typedef enum
     PROCBASED_CTLS2_L1_WR_MASK    = 0x0C513E0C,
 
     // Note that PROCBASED_CTLS3 enumerates 64 bits
-    PROCBASED_CTLS3_L2_INIT       = 0x0000000000000080,
-    PROCBASED_CTLS3_L2_VARIABLE   = 0x000000000000002E,
+    PROCBASED_CTLS3_L2_INIT       = 0x0000000000000000,
+    PROCBASED_CTLS3_L2_VARIABLE   = 0x00000000000000AE,
     PROCBASED_CTLS3_L2_UNKNOWN    = 0xFFFFFFFFFFFFFF40,
     PROCBASED_CTLS3_L1_WR_MASK    = 0x000000000000000E,
 
@@ -125,7 +125,7 @@ typedef enum
     GUEST_CR4_L2_INIT             = 0x00002040,
     GUEST_CR4_L2_VARIABLE         = 0x0000000003FF1FBF,
     CR4_READ_L2_SHADOW            = 0x0000000000000040,
-    CR4_L1_VMM_WRITE_MASK         = 0x0000000003FF1FBF
+    CR4_L1_VMM_WRITE_MASK         = 0x000000001BFF1FBF
 } td_l2_vmcs_ctl_values_e;
 
 // additional td_vmcs_ctl_values - 64bit
@@ -617,7 +617,9 @@ typedef union
         uint64_t guest_paging_verification      : 1;  // Bit 3
         uint64_t ipi_virtualization             : 1;  // Bit 4
         uint64_t gpaw                           : 1;  // Bit 5
-        uint64_t reserved                       : 58; // Bits 6-63
+        uint64_t reserved_0                     : 1;  // Bit 6;
+        uint64_t virt_ia32_spec_ctrl            : 1;  // Bit 7;
+        uint64_t reserved_1                     : 56; // Bits 8-63
     };
     uint64_t raw;
 } vmx_procbased_ctls3_t;

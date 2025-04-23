@@ -49,11 +49,11 @@
 
 #define NUM_SYS_STATE_EXPORT_PAGES           1   // Num pages used by TDH.EXPORT.STATE.IMMUTABLE for the SYS MD list
 
-#define MIN_TD_IMMUTABLE_STATE_EXPORT_PAGES  3
+#define MIN_TD_IMMUTABLE_STATE_EXPORT_PAGES  4
 #define MIN_TD_STATE_EXPORT_PAGES            2
 #define MIN_VP_STATE_EXPORT_PAGES            5
 
-#define MIN_TD_IMMUTABLE_STATE_IMPORT_PAGES  1   // Not including the pages for SYS metadata
+#define MIN_TD_IMMUTABLE_STATE_IMPORT_PAGES  2   // Not including the pages for SYS metadata
 #define MIN_TD_STATE_IMPORT_PAGES            1
 #define MIN_VP_STATE_IMPORT_PAGES            4
 
@@ -420,5 +420,6 @@ bool_t check_and_get_gpa_from_entry(gpa_list_entry_t gpa_entry, bool_t gpaw, pa_
  * copy MBMD
  */
 void copy_mbmd(mbmd_t* mbmd_dst, mbmd_t* mbmd_src);
+
 
 #endif /* SRC_COMMON_HELPERS_MIGRATION_H_ */

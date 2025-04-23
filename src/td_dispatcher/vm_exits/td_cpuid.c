@@ -110,9 +110,19 @@ void td_cpuid_exit(void)
     switch (leaf)
     {
     case 0x1:
-        // INITIAL_APIC_ID dynamically reflects VCPU_INDEX
         cpuid_01_ebx.raw = return_values.ebx;
-        cpuid_01_ebx.initial_apic_id = vp_ctx->tdvps->management.vcpu_index;
+
+        if (vp_ctx->tdcs->executions_ctl_fields.td_ctls.enum_topology)
+        {
+            // INITIAL_APIC_ID dynamically reflects x2APIC ID, but is limited to 8 bits
+            cpuid_01_ebx.initial_apic_id = (uint8_t)vp_ctx->tdcs->x2apic_ids[vp_ctx->tdvps->management.vcpu_index];
+        }
+        else
+        {
+            // INITIAL_APIC_ID dynamically reflects VCPU_INDEX, but is limited to 8 bits
+            cpuid_01_ebx.initial_apic_id = vp_ctx->tdvps->management.vcpu_index;
+        }
+
         return_values.ebx = cpuid_01_ebx.raw;
 
         // OSXSAVE dynamically reflects guest CR4.OSXSAVE
@@ -166,7 +176,21 @@ void td_cpuid_exit(void)
         }
 
         break;
+    case 0xB:
+    case 0x1F:
+        if (vp_ctx->tdcs->executions_ctl_fields.td_ctls.enum_topology)
+        {
+            // EDX dynamically reflects x2APIC ID
+            return_values.edx = vp_ctx->tdcs->x2apic_ids[vp_ctx->tdvps->management.vcpu_index];
+        }
+        else
+        {
+            // No topology enumeration
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, vp_ctx->tdvps, 0, 0);
+            return;
+        }
 
+        break;
     case 0x80000001:
         // If the guest is running in 64=bit mode, bit SYSCALL_SYSRET is returned as 1.  Otherwise, it's returned as 0
         cpuid_80000001_edx.raw = return_values.edx;

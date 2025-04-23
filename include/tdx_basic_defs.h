@@ -37,7 +37,7 @@
 #endif
 
 //Static Assertion
-#define tdx_static_assert(e,x) typedef char assertion_##x  [(e)?1:-1]
+#define tdx_static_assert(e,x) _Static_assert(e, "Static assertion failure in "#x)
 
 #define _1KB                    0x400ULL
 #define _2KB                    (2 * _1KB)
@@ -60,7 +60,7 @@
 #define PG_START(a)             ((a) & ~0xFFFLLU)
 
 #ifndef offsetof
-#define offsetof(type, field)   (uint64_t)&(((type *)0)->field)
+#define offsetof(type, field)   __builtin_offsetof(type, field)
 #endif
 
 #define sizeof_field(type, field)    sizeof(((type *)0)->field)

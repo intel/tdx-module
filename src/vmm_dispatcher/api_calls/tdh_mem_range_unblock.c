@@ -181,7 +181,7 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
         if (!is_tlb_tracked(tdcs_ptr, unblocked_page_pamt_entry_ptr->bepoch))
         {
             TDX_ERROR("Blocked SEPT page TLB tracking is not complete\n");
-            return_val = api_error_with_operand_id(TDX_TLB_TRACKING_NOT_DONE, OPERAND_ID_SEPT_TREE);
+            return_val = api_error_with_operand_id(TDX_TLB_TRACKING_NOT_DONE, OPERAND_ID_RCX);
             goto EXIT;
         }
     }

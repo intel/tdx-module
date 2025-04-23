@@ -218,9 +218,14 @@ static void init_td_vmcs_exec_control_field(tdcs_t * tdcs_ptr, uint16_t vm_id)
     processor_based_execution_controls.monitor_exiting = ~tdcs_ptr->executions_ctl_fields.cpuid_flags.monitor_mwait_supported;
 
     sec_proc_based_execution_controls.en_guest_wait_pause = tdcs_ptr->executions_ctl_fields.cpuid_flags.waitpkg_supported;
-    sec_proc_based_execution_controls.en_pconfig = tdcs_ptr->executions_ctl_fields.cpuid_flags.mktme_supported;
+    sec_proc_based_execution_controls.en_pconfig = tdcs_ptr->executions_ctl_fields.cpuid_flags.pconfig_supported;
 
     ter_proc_based_execution_controls.gpaw = tdcs_ptr->executions_ctl_fields.gpaw;
+
+    if (get_global_data()->ddpd_supported != tdcs_ptr->executions_ctl_fields.cpuid_flags.ddpd_supported)
+    {
+        ter_proc_based_execution_controls.virt_ia32_spec_ctrl = 1;
+    }
 
     ia32_vmwrite(VMX_VM_EXIT_CONTROL_ENCODE, vmexit_controls_vector);
     ia32_vmwrite(VMX_VM_ENTRY_CONTROL_ENCODE, vmentry_controls_vector);
@@ -333,7 +338,7 @@ static void init_tdcs_dependent_fields_in_vmcs(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr,
     if (vm_id == 0)
     {
         bitmap = ia32_vmx_cr4_fixed0 | (~ia32_vmx_cr4_fixed1);
-        bitmap = bitmap | (BIT(6) | BIT(13) | BIT(14) | BIT(15) | BITS(63,26));
+        bitmap = bitmap | (BIT(6) | BIT(13) | BIT(14) | BIT(15) | BIT(26) | BITS(31,29) | BITS(63,33));
         if ((tdcs_ptr->executions_ctl_fields.xfam & BIT(9)) == 0)
         {
             bitmap |= BIT(22);
@@ -353,6 +358,10 @@ static void init_tdcs_dependent_fields_in_vmcs(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr,
         if (!tdcs_ptr->executions_ctl_fields.attributes.pks)
         {
             bitmap |= BIT(24);
+        }
+        if (!tdcs_ptr->executions_ctl_fields.attributes.lass)
+        {
+            bitmap |= BIT(27);
         }
 
         ia32_vmwrite(VMX_CR4_GUEST_HOST_MASK_ENCODE, bitmap);
@@ -379,8 +388,11 @@ static void init_tdcs_dependent_fields_in_vmcs(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr,
     
     ia32_vmwrite(VMX_CR4_READ_SHADOW_ENCODE, bitmap);
 
-    // Set IA32_SPEC_CTRL Mask to tdcs_p->IA32_SPEC_CTRL_MASK.
-    ia32_vmwrite(VMX_IA32_SPEC_CTRL_MASK, tdcs_ptr->executions_ctl_fields.ia32_spec_ctrl_mask);
+    if (get_global_data()->plt_common_config.ia32_vmx_procbased_ctls3.virt_ia32_spec_ctrl)
+    {
+        // Set IA32_SPEC_CTRL Mask to tdcs_p->IA32_SPEC_CTRL_MASK.
+        ia32_vmwrite(VMX_IA32_SPEC_CTRL_MASK, tdcs_ptr->executions_ctl_fields.ia32_spec_ctrl_mask);
+    }
 }
 
 static void init_tdvps_shadow_masks(tdvps_t* tdvps_ptr, uint16_t vm_id)

@@ -272,9 +272,9 @@ api_error_type tdh_import_state_immutable(uint64_t target_tdr_pa, uint64_t hpa_a
     ia32_misc_enable_t misc_enable;
     misc_enable.raw = ia32_rdmsr(IA32_MISC_ENABLES_MSR_ADDR);
 
-    if (misc_enable.boot_nt4 != 0)
+    if (misc_enable.limit_cpuid_maxval != 0)
     {
-        TDX_ERROR("Boot NT4 bit should not be set\n");
+        TDX_ERROR("limit cpuid maxval bit should not be set\n");
         return_val = TDX_LIMIT_CPUID_MAXVAL_SET;
         goto EXIT;
     }
@@ -533,10 +533,10 @@ api_error_type tdh_import_state_immutable(uint64_t target_tdr_pa, uint64_t hpa_a
     /* Initialize TD-Scope metadata
        - Applies to all the fields marked in the TDR/TDCS spreadsheet as "IB" and "IBS"
     */
-    if (!check_and_init_imported_td_state_immutable(tdcs_p))
+    return_val = check_and_init_imported_td_state_immutable(tdcs_p);
+    if (return_val != TDX_SUCCESS)
     {
         tdcs_p->management_fields.op_state = OP_STATE_FAILED_IMPORT;
-        return_val = api_error_with_operand_id_fatal(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
         goto EXIT;
     }
 

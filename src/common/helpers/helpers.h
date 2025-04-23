@@ -43,7 +43,6 @@
 
 #define PRIVATE_ONLY true
 #define PRIVATE_OR_SHARED false
-#define NUM_OF_BHB_CLEARING_ITERATIONS 32 // 194 branch stews in BHB, NUM_ITERS = round-up(194 / 6) = 32
 
 #define CPUID_LOOKUP_IDX_NA        ((uint32_t)-1)
 #define CPUID_SUBLEAF_NA           ((uint32_t)-1)
@@ -1323,9 +1322,9 @@ _STATIC_INLINE_ bool_t is_tme_supported_in_tdcs(tdcs_t * tdcs_ptr)
 {
     return tdcs_ptr->executions_ctl_fields.cpuid_flags.tme_supported;
 }
-_STATIC_INLINE_ bool_t is_mktme_supported_in_tdcs(tdcs_t * tdcs_ptr)
+_STATIC_INLINE_ bool_t is_pconfig_supported_in_tdcs(tdcs_t * tdcs_ptr)
 {
-    return tdcs_ptr->executions_ctl_fields.cpuid_flags.mktme_supported;
+    return tdcs_ptr->executions_ctl_fields.cpuid_flags.pconfig_supported;
 }
 _STATIC_INLINE_ bool_t is_pks_supported_in_tdcs(tdcs_t * tdcs_ptr)
 {
@@ -1390,13 +1389,12 @@ cr_write_status_e write_guest_cr0(uint64_t value, bool_t allow_pe_disable);
  * @brief Check if CR4 value is allowed by current TD attributes
  *
  * @param cr4
- * @param attributes to be checked
+ * @param tdcs_p
  * @param xfam
  *
  * @return true or false
  */
-bool_t is_guest_cr4_allowed_by_td_config(ia32_cr4_t cr4, td_param_attributes_t attributes,
-                                         ia32_xcr0_t xfam);
+bool_t is_guest_cr4_allowed_by_td_config(ia32_cr4_t cr4, tdcs_t* tdcs_p, ia32_xcr0_t xfam);
 
 /**
  * @brief Checks the validity of input CR4 and writes it to the GUEST_CR4 TD-VMCS field
@@ -1560,7 +1558,7 @@ _STATIC_INLINE_ bool_t op_state_is_seamcall_allowed(seamcall_leaf_opcode_t curre
 
     bool_t is_allowed = false;
 
-    IF_RARE (other_td)
+    IF_RARE(other_td)
     {
         tdx_debug_assert(current_leaf == TDH_SERVTD_BIND_LEAF);
         is_allowed = servtd_bind_othertd_state_lookup[op_state];
@@ -1661,7 +1659,17 @@ bool_t td_immutable_state_cross_check(tdcs_t* tdcs_ptr);
  *
  * @param tdcs_ptr - pointer to tdcs
  */
-bool_t check_and_init_imported_td_state_immutable (tdcs_t * tdcs_ptr);
+api_error_type check_and_init_imported_td_state_immutable (tdcs_t * tdcs_ptr);
+
+/**
+ * check_imported_vp_state /
+ * Check and validate imported vp state.
+ *
+ * @param tdr_p - pointer to tdr
+ * @param tdcs_p - pointer to tdcs
+ * @param tdvps_p - pointer to tdvps
+ */
+api_error_type check_imported_vp_state(tdr_t* tdr_p, tdcs_t* tdcs_p, tdvps_t* tdvps_p);
 
 /**
  * @brief Initialize the TD VMCS version identifier and execute VMCLEAR
@@ -1776,20 +1784,6 @@ void clear_movss_sti_blocking(void);
 uint32_t check_mem_enc_alg(ia32_tme_capability_t tme_capability, ia32_tme_activate_t tme_activate);
 
 /**
- * @brief  TSX-Abort sequence.
- *
- */
-_STATIC_INLINE_ void tsx_abort_sequence()
-{
-    _ASM_VOLATILE_ (
-        "xbegin AbortTarget\n"
-        "xabort $0\n"
-        "lfence\n"
-        "AbortTarget: nop\n"
-        : : : );
-}
-
-/**
  * @brief Called by TDH.SYS.SHUTDOWN to populate handoff data with values of some
  *        variables for the next TDX module
  *
@@ -1856,6 +1850,25 @@ _STATIC_INLINE_ void reset_to_next_iv(migsc_t *migsc, uint64_t iv_counter, uint1
     }
 }
 
+typedef struct PACKED servtd_hash_buff_s
+{
+    measurement_t       info_hash;
+    uint16_t            type;
+    servtd_attributes_t attrib;
+} servtd_hash_buff_t;
+tdx_static_assert(sizeof(servtd_hash_buff_t) == 58, servtd_hash_buff_t);
+
+
+/* Prepare the temporary buffer for SERVTD_HASH calculation.
+   1. Get all service TD binding slots whose SERVTD_BINDING_STATE is not NOT_BOUND.
+      If no service TD binding slots apply, return 0.
+   2. Sort in ascending order by SERVTD_TYPE as the primary key, SERVTD_INFO_HASH a
+      s a secondary key (if multiple service TDs of the same type are bound).
+   3. Copy SERVTD_INFO_HASH, SERVTD_TYPE and SERVTD_ATTR of each slot into a
+      servtd_has_buff entry.
+   4. Return the actual number of entries. */
+uint32_t prepare_servtd_hash_buff(tdcs_t* tdcs_ptr, servtd_hash_buff_t* servtd_has_buf);
+void calculate_servtd_hash(tdcs_t* tdcs_ptr, bool_t handle_avx_state);
 
 _STATIC_INLINE_ bool_t is_td_guest_in_64b_mode(void)
 {
@@ -2005,8 +2018,11 @@ bool_t translate_gpas(
  * @param xfam
  * @return
  */
-_STATIC_INLINE_ ia32_cr4_t calc_base_l2_cr4_write_mask(td_param_attributes_t attributes, ia32_xcr0_t xfam)
+_STATIC_INLINE_ ia32_cr4_t calc_base_l2_cr4_write_mask(tdcs_t* tdcs_ptr)
 {
+    td_param_attributes_t attributes = tdcs_ptr->executions_ctl_fields.attributes;
+    ia32_xcr0_t xfam = { .raw = tdcs_ptr->executions_ctl_fields.xfam };
+
     ia32_cr4_t mask;
 
     // Start with the write mask value as defined in the L2 VMCS spreadsheet
@@ -2044,6 +2060,11 @@ _STATIC_INLINE_ ia32_cr4_t calc_base_l2_cr4_write_mask(td_param_attributes_t att
     if (!attributes.pks)
     {
         mask.pks = 0;
+    }
+
+    if (!attributes.lass)
+    {
+        mask.lass = 0;
     }
 
     return mask;
@@ -2165,5 +2186,56 @@ _STATIC_INLINE_ bool_t is_interrupt_pending_guest_side(void)
 {
     return (ia32_rdmsr(IA32_INTR_PENDING_MSR_ADDR) != 0);
 }
+
+#define NUM_OF_BHB_CLEARING_ITERATIONS 32 // 194 branch stews in BHB, NUM_ITERS = round-up(194 / 6) = 32
+
+_STATIC_INLINE_ void bhb_drain_sequence(tdx_module_global_t* tdx_global_data_ptr)
+{
+    // Execute the BHB defense sequence
+    if (tdx_global_data_ptr->rtm_supported)
+    {
+        // TSX abort sequence
+        _ASM_VOLATILE_ (
+            "xbegin AbortTarget\n"
+            "xabort $0\n"
+            "lfence\n"
+            "AbortTarget: nop\n"
+            : : : );
+    }
+    else
+    {
+        // BHB draining sequence
+        // There are 6 taken branches in each iteration (one CALL, four JMPs, and one JNZ),
+        // so for GLC (194 branch stews in BHB), NUM_ITERS = round-up(194 / 6) = 32.
+        uint64_t num_iters = NUM_OF_BHB_CLEARING_ITERATIONS;
+        uint64_t num_iters_multi_8 = 8*num_iters;
+
+        _ASM_VOLATILE_ (
+            "movq %0, %%rcx\n"
+            "1:  call 2f\n"
+            "lfence\n"
+            "2:  jmp 3f\n"
+            "nop\n"
+            "3:  jmp 4f\n"
+            "nop\n"
+            "4:  jmp 5f\n"
+            "nop\n"
+            "5:  jmp 6f\n"
+            "nop\n"
+            "6:  dec %%rcx\n"
+            "jnz 1b\n"
+            "add %1, %%rsp\n"
+            "lfence\n"
+            : : "a"(num_iters), "b"(num_iters_multi_8) : "memory", "rcx");
+    }
+}
+
+/**
+ * @brief Check the virtual CPUID(0x1F) configuration and set virtual CPUID(0xB)
+ *
+ * @param tdcs_p - TDCS pointer
+ * @param allow_null - Allow all-0 configuration of CPUID(0x1F), indicating usage of h/w values
+ */
+api_error_type check_cpuid_1f(tdcs_t* tdcs_p, bool_t allow_null);
 
 #endif /* SRC_COMMON_HELPERS_HELPERS_H_ */

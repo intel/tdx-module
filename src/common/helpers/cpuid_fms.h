@@ -40,7 +40,7 @@
 #define EMR_LATEST_STEPPING             0x2
 
 #define SRF_NATIVE_FMS                  0xA06F0
-#define SRF_LATEST_STEPPING             0x0
+#define SRF_LATEST_STEPPING             0x3
 
 #define GNR_SP_NATIVE_FMS               0xA06D0
 #define GNR_SP_LATEST_STEPPING          0x0

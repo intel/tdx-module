@@ -68,37 +68,7 @@ void tdx_vmm_dispatcher(void)
 
     TDX_LOG("leaf_opcode = 0x%llx\n", leaf_opcode);
 
-    // Execute the BHB defense sequence.
-    if (global_data->rtm_supported)
-    {
-        tsx_abort_sequence();             
-    }
-    else
-    {
-        // BHB draining sequence
-        // There are 6 taken branches in each iteration (one CALL, four JMPs, and one JNZ), 
-        // so for GLC (194 branch stews in BHB), NUM_ITERS = round-up(194 / 6) = 32.
-        uint64_t num_iters = NUM_OF_BHB_CLEARING_ITERATIONS;
-        uint64_t num_iters_multi_8 = 8*num_iters;
-
-        _ASM_VOLATILE_ (
-            "movq %0, %%rcx\n"
-            "1:  call 2f\n"
-            "lfence\n" 
-            "2:  jmp 3f\n"
-            "nop\n"
-            "3:  jmp 4f\n"
-            "nop\n"
-            "4:  jmp 5f\n"
-            "nop\n"
-            "5:  jmp 6f\n"
-            "nop\n"
-            "6:  dec %%rcx\n"
-            "jnz 1b\n"
-            "add %1, %%rsp\n"
-            "lfence\n"
-            : : "a"(num_iters), "b"(num_iters_multi_8) : "memory", "rcx");
-    }    
+    bhb_drain_sequence(global_data);
 
     mark_lp_as_busy();
 
@@ -154,6 +124,7 @@ void tdx_vmm_dispatcher(void)
             case TDH_MEM_SEPT_REMOVE_LEAF:
             case TDH_MNG_RD_LEAF:
             case TDH_VP_RD_LEAF:
+            case TDH_VP_INIT_LEAF:
                 break;
             default:
                 TDX_ERROR("Version greater than zero not supported for current leaf 0x%llx\n", leaf_opcode.raw);
@@ -437,7 +408,7 @@ void tdx_vmm_dispatcher(void)
     }
     case TDH_SYS_INIT_LEAF:
     {
-        local_data->vmm_regs.rax = tdh_sys_init((sys_attributes_t)local_data->vmm_regs.rcx);
+        local_data->vmm_regs.rax = tdh_sys_init();
         break;
     }
     case TDH_SYS_RD_LEAF:

@@ -105,8 +105,10 @@ bool_t init_virt_ia32_arch_capabilities(tdcs_t* tdcs_p, bool_t config_flag, uint
         config_value.bhi_no = 0;   // Clear for sanity check at the end
     }
 
+    // Fixed-1 bits
+    arch_cap_value.xapic_disable_status = 1;  // Bit 21:  IA32_XAPIC_DISABLE_STATUS (MSR 0xBD) is available
+
     // Fixed-0 bits
-    arch_cap_value.xapic_disable_status = 0;  // Bit 21
     arch_cap_value.reserved_2 = 0;            // Bit 22
     arch_cap_value.overclocking_status = 0;   // Bit 23
 
@@ -157,10 +159,10 @@ bool_t check_virt_ia32_arch_capabilities(tdcs_t* tdcs_p, ia32_arch_capabilities_
         (arch_cap.reserved_1 != 0)           ||   // Bit 16
         (arch_cap.fb_clear != 0)             ||   // Bit 17
         (arch_cap.fb_clear_ctrl != 0)        ||   // Bit 18
-        (arch_cap.xapic_disable_status != 0) ||   // Bit 21
+        (arch_cap.xapic_disable_status != 1) ||   // Bit 21
         (arch_cap.reserved_2 != 0)           ||   // Bit 22
         (arch_cap.overclocking_status != 0)  ||   // Bit 23
-        (arch_cap.reserved_3 != 0))           // Bits 63:25
+        (arch_cap.reserved_3 != 0))               // Bits 63:25
     {
         return false;
     }

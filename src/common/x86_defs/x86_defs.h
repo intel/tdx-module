@@ -145,12 +145,12 @@ tdx_static_assert(sizeof(ia32_cr0_t) == 8, ia32_cr0_t);
 typedef union {
     struct
     {
-        uint64_t
-            reserved_0 : 3,
-            pwt        : 1,
-            pcd        : 1,
-            reserved_1 : 7,
-            base       : 52;
+        uint64_t pcid           : 12;  // Bits 11:0
+        uint64_t pdb            : 40;  // Bits 51:12
+        uint64_t reserved_0     : 9;   // Bits 60:52
+        uint64_t lam_u57        : 1;   // Bit 61
+        uint64_t lam_u48        : 1;   // Bit 62
+        uint64_t reserved_1     : 1;   // Bit 63
     };
     uint64_t raw;
 } ia32_cr3_t;
@@ -187,7 +187,9 @@ typedef union {
             cet        : 1,   // Bit 23
             pks        : 1,   // Bit 24
             uintr      : 1,   // Bit 25
-            reserved_1 : 38;  // Bits 26:63
+            reserved_1 : 1,   // Bit 26
+            lass       : 1,   // Bit 27
+            reserved_2 : 36;  // Bits 28:63
     };
     uint64_t raw;
 } ia32_cr4_t;
@@ -986,6 +988,22 @@ typedef union cpuid_19_ecx_u
     uint32_t raw;
 } cpuid_19_ecx_t;
 tdx_static_assert(sizeof(cpuid_19_ecx_t) == 4, cpuid_19_ecx_t);
+
+#define CORE_TYPE_ATOM          0x20
+#define CORE_TYPE_BIGCORE       0x40
+#define NATIVE_MODEL_INFO_NA    0x0
+#define NUM_CORE_TYPES          2
+
+typedef union cpuid_1a_eax_u
+{
+    struct
+    {
+        uint32_t native_model_id : 24;   // Bits 23:0
+        uint32_t core_type       : 8;    // Bits 31:24
+    };
+    uint32_t raw;
+
+} cpuid_1a_eax_t;
 
 typedef union
 {

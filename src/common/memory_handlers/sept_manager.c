@@ -232,7 +232,7 @@ _STATIC_INLINE_ bool_t is_ept_violation_convertible(ia32e_ept_t* pte, ept_level_
     // The values of certain EPT paging-structure entries determine which EPT violations are convertible. Specifically,
     // bit 63 of certain EPT paging-structure entries may be defined to mean suppress #VE:
     // - If bits 2:0 of an EPT paging-structure entry are all 0, the entry is not present.
-    //      (If the “mode-based execute control for EPT" VM-execution control is 1,
+    //      (If the “mode-based execute control for EPT VM-execution control is 1,
     //       an EPT paging-structure entry is present if any of bits 2:0 or bit 10 is 1)
     //      If the processor encounters such an entry while translating a guest-physical address,
     //      it causes an EPT violation. The EPT violation is convertible if and only if bit 63 of the entry is 0.

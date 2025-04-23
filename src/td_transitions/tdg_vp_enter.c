@@ -92,7 +92,7 @@ api_error_type tdg_vp_enter(uint64_t flags, uint64_t reg_list_gpa)
 
     // Verify GPA is aligned
     if (!is_addr_aligned_pwr_of_2(reg_list_gpa, 256) ||
-        !check_gpa_validity((pa_t)reg_list_gpa, tdcs_p->executions_ctl_fields.gpaw, PRIVATE_ONLY))
+        !check_gpa_validity((pa_t)reg_list_gpa, tdcs_p->executions_ctl_fields.gpaw, PRIVATE_ONLY, tdcs_p->executions_ctl_fields.virt_maxpa))
     {
         return api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
     }

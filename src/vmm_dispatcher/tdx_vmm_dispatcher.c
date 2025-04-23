@@ -106,6 +106,24 @@ void tdx_vmm_dispatcher(void)
         }
     }
 
+    // Set bits 34:33 (IA32_FIXED_CTR1/2 enable) of the IA32_PERF_GLOBAL_CTRL MSR to the value of
+    // bits 34:33 of the SEAM VMCS "Guest Perf Global Control" field, if needed.
+    uint64_t tdx_module_perf_global_ctrl;
+    ia32_vmread(VMX_GUEST_IA32_PERF_GLOBAL_CONTROL_FULL_ENCODE, &tdx_module_perf_global_ctrl);
+
+    tdx_module_perf_global_ctrl &= IA32_PERF_GLOBAL_CTRL_FIXED_CTR12_EN_MASK;
+
+    if (local_data->vmm_ia32_perf_global_ctrl != tdx_module_perf_global_ctrl)
+    {
+        local_data->vmm_ia32_perf_global_ctrl = tdx_module_perf_global_ctrl;
+        ia32_wrmsr(IA32_PERF_GLOBAL_CTRL_MSR_ADDR, tdx_module_perf_global_ctrl);
+        ia32_vmwrite(VMX_HOST_IA32_PERF_GLOBAL_CONTROL_FULL_ENCODE, tdx_module_perf_global_ctrl);
+    }
+
+    // preserve VMM's XCR0 state
+    local_data->vmm_xcr0_state = ia32_xgetbv(0);
+    ia32_xsetbv(0, TDX_MODULE_XCR0_WITH_AVX);
+
     if ((leaf_opcode.reserved0 != 0) || (leaf_opcode.reserved1 != 0))
     {
         TDX_ERROR("Leaf and version not supported 0x%llx\n", leaf_opcode.raw);
@@ -681,8 +699,8 @@ void tdx_vmm_dispatcher(void)
 
     IF_RARE (local_data->reset_avx_state)
     {
-        // Current IPP crypto lib uses SSE state only (XMM's), so we only clear them
-        clear_xmms();
+        // Current IPP crypto lib uses SSE state only (YMM's), so we only clear them
+        clear_ymms();
         local_data->reset_avx_state = false;
     }
 
@@ -708,6 +726,9 @@ void tdx_vmm_post_dispatching(void)
     {
         ia32_wrmsr(IA32_LAM_ENABLE_MSR_ADDR, local_data_ptr->vmm_non_extended_state.ia32_lam_enable);
     }
+
+    // restore VMM's XCR0 state
+    ia32_xsetbv(0, local_data_ptr->vmm_xcr0_state);
 
     mark_lp_as_free();
 

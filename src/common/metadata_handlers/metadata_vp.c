@@ -329,7 +329,7 @@ static bool_t check_guest_cr3_value(uint64_t wr_value, tdcs_t* tdcs_ptr)
     }
 
     // Other than the above, CR3 must hold a valid private GPA
-    return check_gpa_validity((pa_t)cr3.raw, tdcs_ptr->executions_ctl_fields.gpaw, PRIVATE_ONLY);
+    return check_gpa_validity((pa_t)cr3.raw, tdcs_ptr->executions_ctl_fields.gpaw, PRIVATE_ONLY, tdcs_ptr->executions_ctl_fields.virt_maxpa);
 }
 
 static uint64_t md_vp_get_element_special_rd_handle(md_field_id_t field_id, md_access_t access_type,
@@ -1436,7 +1436,7 @@ static api_error_code_e md_vp_handle_field_attribute_on_wr(md_field_id_t field_i
     }
     else if (entry->attributes.gpa && entry->attributes.prvate)
     {
-        if (!check_gpa_validity((pa_t)*wr_value, md_ctx.tdcs_ptr->executions_ctl_fields.gpaw, PRIVATE_ONLY))
+        if (!check_gpa_validity((pa_t)*wr_value, md_ctx.tdcs_ptr->executions_ctl_fields.gpaw, PRIVATE_ONLY, md_ctx.tdcs_ptr->executions_ctl_fields.virt_maxpa))
         {
             return TDX_METADATA_FIELD_VALUE_NOT_VALID;
         }

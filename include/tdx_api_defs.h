@@ -355,8 +355,11 @@ typedef union td_param_attributes_s {
     struct
     {
         uint64_t debug           : 1;   // Bit 0
-        uint64_t reserved_tud    : 7;   // Bits 7:1
-        uint64_t reserved_sec    : 19;  // Bits 26:8
+        uint64_t reserved_tud    : 3;   // Bits 3:1
+        uint64_t reserved_tup    : 12;  // Bits 15:4
+        uint64_t icssd           : 1;   // Bit 16
+        uint64_t reserved_p      : 6;   // Bits 22:17
+        uint64_t reserved_n      : 4;   // Bits 26:23
         uint64_t lass            : 1;   // Bit 27
         uint64_t sept_ve_disable : 1;   // Bit 28 - disable #VE on pending page access
         uint64_t migratable      : 1;   // Bit 29
@@ -405,7 +408,8 @@ typedef union config_flags_s {
         gpaw                : 1,  /**< TD-scope Guest Physical Address Width execution control. */
         flexible_pending_ve : 1,  /**< Controls the guest TD’s ability to change the PENDING page access behavior */
         no_rbp_mod          : 1,  /**< Controls whether RBP value can be modified by TDG.VP.VMCALL and TDH.VP.ENTER. */
-        reserved            : 61; /**< Must be 0. */
+        maxpa_virt          : 1,  /**< Controls MAXPA Virtualization. */
+        reserved            : 60; /**< Must be 0. */
     };
     uint64_t raw;
 } config_flags_t;
@@ -1086,8 +1090,14 @@ typedef union tdx_features_enum0_u
         uint64_t no_rbp_mod                  : 1;    // Bit 18
         uint64_t l2_tlb_invd_opt             : 1;    // Bit 19
         uint64_t topology_enum               : 1;    // Bit 20
-        uint64_t reduced_ve                  : 1;    // Bit 21
-        uint64_t reserved_2                  : 41;   // Bits 63:21
+        uint64_t partitioned_td_migration    : 1;    // Bit 21
+        uint64_t reserved_2                  : 3;    // Bits 24:22
+        uint64_t icssd                       : 1;    // Bit 25
+        uint64_t fixed_ctr12_prof            : 1;    // Bit 26
+        uint64_t maxpa_virt                  : 1;    // Bit 27
+        uint64_t apx                         : 1;    // Bit 28
+        uint64_t cpuid2_virt                 : 1;    // Bit 29
+        uint64_t reserved_4                  : 34;   // Bits 63:30
     };
     uint64_t raw;
 } tdx_features_enum0_t;

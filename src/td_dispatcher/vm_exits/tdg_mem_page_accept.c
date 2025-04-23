@@ -174,7 +174,7 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
     tdx_sanity_check(tdr_p != NULL, SCEC_TDCALL_SOURCE(TDG_MEM_PAGE_ACCEPT_LEAF), 0);
     tdx_sanity_check(tdcs_p != NULL, SCEC_TDCALL_SOURCE(TDG_MEM_PAGE_ACCEPT_LEAF), 1);
 
-    if (!check_gpa_validity(page_gpa, tdcs_p->executions_ctl_fields.gpaw, PRIVATE_ONLY))
+    if (!check_gpa_validity(page_gpa, tdcs_p->executions_ctl_fields.gpaw, PRIVATE_ONLY, tdcs_p->executions_ctl_fields.virt_maxpa))
     {
         TDX_ERROR("Page to accept GPA (=0x%llx) is not not valid\n", page_gpa.raw);
         return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RCX);

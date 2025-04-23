@@ -86,12 +86,12 @@ api_error_type check_and_map_gpa_list(gpa_list_info_t gpa_list_info, gpa_list_en
     return TDX_SUCCESS;
 }
 
-bool_t check_and_get_gpa_from_entry(gpa_list_entry_t gpa_entry, bool_t gpaw, pa_t* output_gpa)
+bool_t check_and_get_gpa_from_entry(gpa_list_entry_t gpa_entry, bool_t gpaw, pa_t* output_gpa, uint8_t virt_maxpa)
 {
     pa_t gpa = { .raw = 0 };
     gpa.page_4k_num = gpa_entry.gpa;
 
-    if (!gpa_list_entry_is_valid(gpa_entry) || !check_gpa_validity(gpa, gpaw, PRIVATE_ONLY))
+    if (!gpa_list_entry_is_valid(gpa_entry) || !check_gpa_validity(gpa, gpaw, PRIVATE_ONLY, virt_maxpa))
     {
         return false;
     }
@@ -105,4 +105,3 @@ void copy_mbmd(mbmd_t* mbmd_dst, mbmd_t* mbmd_src)
 {
     tdx_memcpy(mbmd_dst, sizeof(mbmd_t), mbmd_src, sizeof(mbmd_t));
 }
-

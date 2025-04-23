@@ -249,7 +249,7 @@ _STATIC_INLINE_ uint64_t ia32_seamops_capabilities(void)
 {
     uint64_t leaf = 0; // for CAPABILITES
     uint64_t capabilities = 0;
-
+ 
     _ASM_VOLATILE_ (
             ".byte 0x66; .byte 0x0F; .byte 0x01; .byte 0xCE;"
             :"=a"(capabilities) : "a"(leaf)

@@ -767,9 +767,7 @@ api_error_type tdh_sys_config(uint64_t tdmr_info_array_pa,
 
     if (tdx_global_data_ptr->num_of_init_lps < tdx_global_data_ptr->num_of_lps)
     {
-        TDX_ERROR("Num of initialized lps %d is smaller than total num of lps %d\n",
-                    tdx_global_data_ptr->num_of_init_lps, tdx_global_data_ptr->num_of_lps);
-
+        TDX_ERROR("Num of initialized lps %d is smaller than total num of lps %d\n", tdx_global_data_ptr->num_of_init_lps, tdx_global_data_ptr->num_of_lps);
         retval = TDX_SYS_CONFIG_NOT_PENDING;
         goto EXIT;
     }

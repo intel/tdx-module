@@ -270,19 +270,12 @@ static api_error_type handle_import(page_list_entry_t* new_page_list_p, page_lis
             return api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_MIG_BUFF_LIST_ENTRY);
         }
 
-        if (gpa_list_entry.pending)
-        {
-            // Flush the cache lines of the migration buffer, we're going to convert is to a private page
-            invalidate_cache_lines((uint64_t)(*mig_buff_p), _4KB);
-        }
-        else
+        if (!gpa_list_entry.pending)
         {
             tdx_debug_assert(*mig_buff_mapped);
             // Copy the migration buffer to a temporary buffer
             tdx_memcpy(*buff_4k, _4KB, *mig_buff_p, _4KB);
 
-            // Flush the cache lines of the migration buffer, we're going to convert is to a private page
-            invalidate_cache_lines((uint64_t)(*mig_buff_p), _4KB);
             free_la(*mig_buff_p);
             *mig_buff_mapped = false;
 
@@ -733,7 +726,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
             goto FINALIZE_ENTRY;
         }
 
-        if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &page_gpa))
+        if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &page_gpa, tdcs_p->executions_ctl_fields.virt_maxpa))
         {
             TDX_ERROR("Invalid GPA entry in the list - 0x%llx\n", gpa_list_entry.raw);
 

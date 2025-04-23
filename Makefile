@@ -47,16 +47,21 @@ CFLAGS += -D__FILENAME__=\"$(lastword $(subst /, ,$<))\"
 
 CRYPTO_OBJECTS := $(CRYPTO_LIB_PATH)/$(CRYPTO_LIB_FILENAME)
 
-default: $(TARGET) postBuildScripts
+default: preBuildScripts $(TARGET) postBuildScripts
 all: default
 
 $(CRYPTO_OBJECTS): $(CRYPTO_LIB_SRC_DIR)
 	cd $(CRYPTO_LIB_MAIN_DIR); \
 	CC=$(CC_WITHOUT_CODE_COVERAGE) CXX=$(CXX_WITHOUT_CODE_COVERAGE) cmake CMakeLists.txt \
-	-B_build -DARCH=intel64 -DMERGED_BLD:BOOL=off -DPLATFORM_LIST="y8" \
+	-B_build -DARCH=intel64 -DMERGED_BLD:BOOL=off -DNO_CRYPTO_MB:BOOL=TRUE -DPLATFORM_LIST="l9" \
 	-DIPPCP_CUSTOM_BUILD="IPPCP_AES_ON;IPPCP_CLMUL_ON;IPPCP_VAES_ON;IPPCP_VCLMUL_ON"; \
 	cd _build; \
-	make -j8 ippcp_s_y8
+	make -j8 ippcp_s_l9
+
+preBuildScripts:
+ifneq ($(shell expr $(CCVERSION) \>= 12), 1)
+	$(error Bad clang version - clang version should be 12.0.0 or above)
+endif
 
 $(C_OBJECTS): $(OBJS_DIR)/%.o: %.c
 	@mkdir -p $(@D)
@@ -75,11 +80,9 @@ $(TARGET): $(CRYPTO_OBJECTS) $(OBJECTS)
 	cp $(TARGET) $(ORIG_TARGET)
 
 postBuildScripts: $(TARGET)
-ifndef DO_NOT_STRIP
 ifdef RELEASE
 	strip -s $(RELEASE_DIR)/libtdx.so
 endif #RELEASE
-endif #DO_NOT_STRIP
 
 	#The padding operation must be the last change made to the binary 
 	$(MSG) "Padding Binary to page size granularity"

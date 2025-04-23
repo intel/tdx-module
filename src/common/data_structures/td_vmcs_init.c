@@ -56,6 +56,7 @@ const vmcs_fields_info_t td_vmcs_migrated_state_init_map[] = {
         {.encoding = VMX_GUEST_GDTR_LIMIT_ENCODE, .value = 0x0000FFFFULL},
 
         // Guest MSR
+        // init value when perfmon enabled 0xFFULL
         {.encoding = VMX_GUEST_IA32_PERF_GLOBAL_CONTROL_FULL_ENCODE, .value = 0xFFULL},
         {.encoding = VMX_GUEST_IA32_PAT_FULL_ENCODE, .value = 0x0007040600070406ULL},
         {.encoding = VMX_GUEST_IA32_EFER_FULL_ENCODE, .value = 0x901ULL},
@@ -186,22 +187,14 @@ static void init_td_vmcs_exec_control_field(tdcs_t * tdcs_ptr, uint16_t vm_id)
     vmx_procbased_ctls3_t ter_proc_based_execution_controls = { .raw = td_vmcs_values_ptr->procbased_ctls3 };
 
     // Fixed bits already set in tdh_sys_init
-
-    // Conditional bits:
-
+    // Conditional bits
     if (tdcs_ptr->executions_ctl_fields.attributes.perfmon || tdcs_ptr->executions_ctl_fields.attributes.debug)
     {
-        vmexit_controls_vector  |= (uint32_t)1 << VMCS_EXIT_LOAD_PERF_GLBL_CTRL_BIT_LOCATION;
-        vmexit_controls_vector  |= (uint32_t)1 << VMCS_EXIT_SAVE_PERF_GLBL_CTRL_BIT_LOCATION;
-
-        vmentry_controls_vector |= (uint32_t)1 << VMCS_ENTRY_LOAD_PERF_GLBL_CTRL_BIT_LOCATION;
+        vmexit_controls_vector |= (uint32_t)1 << VMCS_EXIT_SAVE_PERF_GLBL_CTRL_BIT_LOCATION;
     }
     else
     {
-        vmexit_controls_vector  &= ~((uint32_t)1 << VMCS_EXIT_LOAD_PERF_GLBL_CTRL_BIT_LOCATION);
-        vmexit_controls_vector  &= ~((uint32_t)1 << VMCS_EXIT_SAVE_PERF_GLBL_CTRL_BIT_LOCATION);
-
-        vmentry_controls_vector &= ~((uint32_t)1 << VMCS_ENTRY_LOAD_PERF_GLBL_CTRL_BIT_LOCATION);
+        vmexit_controls_vector &= ~((uint32_t)1 << VMCS_EXIT_SAVE_PERF_GLBL_CTRL_BIT_LOCATION);
     }
 
     if (tdcs_ptr->executions_ctl_fields.attributes.pks || tdcs_ptr->executions_ctl_fields.attributes.debug)
@@ -424,7 +417,15 @@ void init_td_vmcs(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, tdvps_t* tdvps_ptr, bool_t i
     {
         while (td_vmcs_migrated_state_init_map[index].encoding != (uint64_t)(-1))
         {
-            ia32_vmwrite(td_vmcs_migrated_state_init_map[index].encoding, td_vmcs_migrated_state_init_map[index].value);
+            if (td_vmcs_migrated_state_init_map[index].encoding == VMX_GUEST_IA32_PERF_GLOBAL_CONTROL_FULL_ENCODE && !tdcs_ptr->executions_ctl_fields.attributes.perfmon)
+            {
+                // init value when perfmon disabled 0x100000000ULL
+                ia32_vmwrite(td_vmcs_migrated_state_init_map[index].encoding, 0x100000000ULL);
+            }
+            else
+            {
+                ia32_vmwrite(td_vmcs_migrated_state_init_map[index].encoding, td_vmcs_migrated_state_init_map[index].value);
+            }
             index++;
         }
 

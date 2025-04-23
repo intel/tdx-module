@@ -449,6 +449,8 @@ _STATIC_INLINE_ void tdx_local_init(tdx_module_local_t* tdx_local_data_ptr,
 
     // Mark the current LP as initialized
     increment_num_of_lps(tdx_global_data_ptr);
+
+    tdx_local_data_ptr->guest_rcx_on_td_entry = 0;
 }
 
 api_error_type tdh_sys_lp_init(void)

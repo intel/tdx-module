@@ -132,6 +132,8 @@ void tdx_return_to_td(bool_t launch_state, bool_t called_from_tdenter, gprs_stat
                   local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_spec_ctrl, TDX_MODULE_IA32_SPEC_CTRL);
     }
 
+    restore_td_xcr0_if_required(local_data_ptr);
+
     // Check that we have no mapped keyholes left, beside the 2 that we store for TDR/TDVPR PAMT entries
     tdx_sanity_check(local_data_ptr->keyhole_state.total_ref_count == NUM_OF_PRESERVED_KEYHOLES,
                      SCEC_KEYHOLE_MANAGER_SOURCE, 30);
@@ -252,6 +254,8 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
         goto EXIT;
     }
 
+    save_td_xcr0_and_set_tdx_xcr0(tdx_local_data_ptr);
+
     switch (leaf_opcode.leaf)
     {
         case TDG_MEM_PAGE_ACCEPT_LEAF:
@@ -277,9 +281,9 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
         case TDG_MR_REPORT_LEAF:
         {
             retval = tdg_mr_report(tdx_local_data_ptr->td_regs.rcx,
-                                   tdx_local_data_ptr->td_regs.rdx,
-                                   tdx_local_data_ptr->td_regs.r8,
-                                   interrupt_occurred);
+                               tdx_local_data_ptr->td_regs.rdx,
+                               tdx_local_data_ptr->td_regs.r8,
+                               interrupt_occurred);
             break;
         }
         case TDG_VP_CPUIDVE_SET_LEAF:
@@ -391,6 +395,8 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
         }
     }
 
+    restore_td_xcr0_if_required(tdx_local_data_ptr);
+
 EXIT:
 
     tdx_sanity_check(retval != UNINITIALIZE_ERROR, SCEC_TD_DISPATCHER_SOURCE, 1);
@@ -444,6 +450,11 @@ EXIT:
     {
         // If TDCALL was interrupt we must clear blocking state
         clear_movss_sti_blocking();
+
+        if (!tdx_local_data_ptr->vp_ctx.tdcs->executions_ctl_fields.attributes.perfmon)
+        {
+            ia32_wrmsr(IA32_FIXED_CTR0_MSR_ADDR, ia32_rdmsr(IA32_FIXED_CTR0_MSR_ADDR) + 2);
+        }
     }
 }
 
@@ -548,9 +559,8 @@ static void handle_idt_vectoring(tdx_module_local_t* tdx_local_data_ptr, vm_vmex
 }
 
 stepping_filter_e tdx_td_l1_l2_dispatcher_common_prologue(tdx_module_local_t* local_data, uint16_t vm_id,
-                                                          vm_vmexit_exit_reason_t* vm_exit_reason,
-                                                          vmx_exit_qualification_t* vm_exit_qualification,
-                                                          vmx_exit_inter_info_t* vm_exit_inter_info)
+        vm_vmexit_exit_reason_t* vm_exit_reason, vmx_exit_qualification_t* vm_exit_qualification,
+        vmx_exit_inter_info_t* vm_exit_inter_info)
 {
     TDX_LOG("TD Dispatcher Entry from VM %d\n", vm_id);
 
@@ -646,8 +656,8 @@ stepping_filter_e tdx_td_l1_l2_dispatcher_common_prologue(tdx_module_local_t* lo
     /*------------------------------
        Single/Zero Step Filtering
     ------------------------------*/
-    stepping_filter_e vmexit_stepping_result = vmexit_stepping_filter(*vm_exit_reason,
-                                                    *vm_exit_qualification, *vm_exit_inter_info);
+    stepping_filter_e vmexit_stepping_result = vmexit_stepping_filter(*vm_exit_reason, *vm_exit_qualification, *vm_exit_inter_info,
+                                                                      (bool_t)local_data->vp_ctx.tdcs->executions_ctl_fields.attributes.perfmon);
     // if stepping cannot be done safely, kill the TD and exit
     if (vmexit_stepping_result == FILTER_FAIL_TDEXIT_WRONG_APIC_MODE)
     {
@@ -697,7 +707,7 @@ void tdx_td_dispatcher(void)
     bool_t interrupt_occurred = false;
 
     uint16_t vm_id = tdx_local_data_ptr->vp_ctx.tdvps->management.curr_vm;
-   
+
     tdx_sanity_check((vm_id == tdx_local_data_ptr->current_td_vm_id) && (vm_id == 0),
                      SCEC_TD_DISPATCHER_SOURCE, 35);
 
@@ -916,6 +926,7 @@ void tdx_td_dispatcher(void)
             ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_PROC_BASED_ENCODE, vm_procbased_ctls.raw);
         }
 
+        increment_fixed_ctr0(tdx_local_data_ptr->vp_ctx.tdcs);
         advance_guest_rip();
     }
 

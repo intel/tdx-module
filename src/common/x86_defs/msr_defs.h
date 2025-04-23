@@ -109,6 +109,8 @@
 #define NUM_PMC                      8
 #define MAX_FIXED_CTR                7ULL // Max supported by TDX module
 
+#define IA32_PERF_GLOBAL_CTRL_FIXED_CTR12_EN_MASK           (BIT(33) | BIT(34))
+
 typedef union
 {
     struct

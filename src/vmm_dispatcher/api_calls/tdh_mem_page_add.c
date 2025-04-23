@@ -72,7 +72,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     pa_t                  source_pa;                 // Physical address of the source page
     void                * source_page_ptr = NULL;    // Pointer to the source page
 
-    uint128_t             xmms[16];                  // SSE state backup for crypto
+    ALIGN(32) uint256_t   ymms[16];                  // SSE state backup for crypto
     sha384_128B_block_t   sha_update_block = {.block_qword_buffer = {0}};
     crypto_api_error      sha_error_code;
     api_error_type        return_val = UNINITIALIZE_ERROR;
@@ -122,7 +122,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
 
     // SEPT tree is implicitly locked in exclusive mode, since TDR is exclusively locked
     // Check GPA
-    if (!check_gpa_validity(page_gpa, tdcs_ptr->executions_ctl_fields.gpaw, PRIVATE_ONLY))
+    if (!check_gpa_validity(page_gpa, tdcs_ptr->executions_ctl_fields.gpaw, PRIVATE_ONLY, tdcs_ptr->executions_ctl_fields.virt_maxpa))
     {
         return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RCX);
         TDX_ERROR("Failed on GPA check - error = 0x%llx\n", return_val);
@@ -205,7 +205,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     sha_update_block.api_name.bytes[11] = 'D';
     sha_update_block.gpa = page_gpa.raw;
 
-    store_xmms_in_buffer(xmms);
+    store_ymms_in_buffer(ymms);
 
     if ((sha_error_code = sha384_update_128B(&(tdcs_ptr->measurement_fields.td_sha_ctx),
                                                &sha_update_block,
@@ -216,8 +216,8 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
         FATAL_ERROR();
     }
 
-    load_xmms_from_buffer(xmms);
-    basic_memset_to_zero(xmms, sizeof(xmms));
+    load_ymms_from_buffer(ymms);
+    basic_memset_to_zero(ymms, sizeof(ymms));
 
     // Increment TDR child count
     tdr_ptr->management_fields.chldcnt++;

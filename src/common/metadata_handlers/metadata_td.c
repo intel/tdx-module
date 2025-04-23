@@ -93,7 +93,8 @@ static uint64_t check_hp_lock_timeout_and_translate_to_tsc(uint64_t timeout, uin
     return true;
 }
 
-static bool_t check_cpuid_xfam_masks(cpuid_config_return_values_t* cpuid_values, uint64_t xfam,
+static bool_t check_cpuid_xfam_masks(cpuid_config_return_values_t* cpuid_values,
+                                     uint64_t xfam,
                                      const cpuid_config_return_values_t* cpuid_masks)
 {
     uint64_t xfam_mask;   // 1-bit mask
@@ -412,6 +413,18 @@ static bool_t check_cpuid_compatibility_and_set_flags(tdcs_t* tdcs_ptr, uint32_t
                 return false;
             }
         }
+    }
+    else if (leaf == 0x80000008)
+    {
+        cpuid_80000008_eax_t cpuid_80000008_eax = { .raw = cpuid_values.eax };
+
+        if (!is_virt_maxpa_on_import_valid(cpuid_80000008_eax.pa_bits))
+        {
+            return false;
+        }
+
+        // Save the virtual MAXPA for easy access
+        tdcs_ptr->executions_ctl_fields.virt_maxpa = cpuid_80000008_eax.pa_bits;
     }
 
     tdcs_ptr->executions_ctl_fields.cpuid_valid[cpuid_index] = true;
@@ -782,6 +795,12 @@ api_error_code_e md_td_write_element(md_field_id_t field_id, const md_lookup_t* 
                 // To enable virtual topology enumeration, all VCPU must have been properly configured
                 td_ctls_t td_ctls = { .raw = wr_value };
                 if (td_ctls.enum_topology && !md_ctx.tdcs_ptr->executions_ctl_fields.topology_enum_configured)
+                {
+                    return TDX_METADATA_FIELD_VALUE_NOT_VALID;
+                }
+
+                // check that no reserved bits are set
+                if (td_ctls.reserved)
                 {
                     return TDX_METADATA_FIELD_VALUE_NOT_VALID;
                 }

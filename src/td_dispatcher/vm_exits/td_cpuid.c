@@ -133,6 +133,15 @@ void td_cpuid_exit(void)
 
         break;
 
+    case 0x2:
+        if (!vp_ctx->tdcs->executions_ctl_fields.td_ctls.virt_cpuid2)
+        {
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, vp_ctx->tdvps, 0, 0);
+            return;
+        }
+
+        break;
+
     case 0x7:
         if (subleaf == 0)
         {

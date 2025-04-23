@@ -47,7 +47,7 @@ api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
 
     tdcs_t              * tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
 
-    uint128_t             xmms[16];                  // SSE state backup for crypto
+    ALIGN(32) uint256_t   ymms[16];                  // SSE state backup for crypto
     crypto_api_error      sha_error_code;
     api_error_type        return_val = UNINITIALIZE_ERROR;
 
@@ -95,7 +95,7 @@ api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
      *  of the hashed message into the output SHA384 digest.
      */
 
-    store_xmms_in_buffer(xmms);
+    store_ymms_in_buffer(ymms);
 
     if ((sha_error_code = sha384_finalize(&(tdcs_ptr->measurement_fields.td_sha_ctx),
                                             tdcs_ptr->measurement_fields.mr_td.qwords)) != 0)
@@ -107,8 +107,8 @@ api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
 
     calculate_servtd_hash(tdcs_ptr, false);
 
-    load_xmms_from_buffer(xmms);
-    basic_memset_to_zero(xmms, sizeof(xmms));
+    load_ymms_from_buffer(ymms);
+    basic_memset_to_zero(ymms, sizeof(ymms));
 
     tdcs_ptr->management_fields.op_state = OP_STATE_RUNNABLE;
 

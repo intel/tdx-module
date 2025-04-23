@@ -172,10 +172,7 @@ bool_t can_inject_epf_ve(vmx_exit_qualification_t last_exit_qualification, tdvps
         && (tdvps_p->ve_info.valid == 0));
 }
 
-stepping_filter_e vmexit_stepping_filter(
-        vm_vmexit_exit_reason_t vm_exit_reason,
-        vmx_exit_qualification_t vm_exit_qualification,
-        vmx_exit_inter_info_t vm_exit_inter_info)
+stepping_filter_e vmexit_stepping_filter(vm_vmexit_exit_reason_t vm_exit_reason, vmx_exit_qualification_t vm_exit_qualification, vmx_exit_inter_info_t vm_exit_inter_info, bool_t perfmon_enabled)
 {
     tdx_module_local_t* ld_p = get_local_data();
 
@@ -203,7 +200,18 @@ stepping_filter_e vmexit_stepping_filter(
 
         if (!ld_p->single_step_def_state.in_inst_step_mode)
         {
-            if ((rip_delta > INTEL64_MAX_INST_LEN * 2) || (vcpu_tsc_delta(ld_p) > STEPPING_TSC_THRESHOLD))
+            // Always use instruction count heuristic if Perfmon is disabled, regardless of TDCS.ATTRIBUTES.ICSSD
+            if (!perfmon_enabled)
+            {
+                uint64_t inst_retired = ia32_rdmsr(IA32_FIXED_CTR0_MSR_ADDR);
+                uint64_t rcx_delta = ld_p->guest_rcx_on_td_entry - ld_p->vp_ctx.tdvps->guest_state.gpr_state.rcx;
+
+                if ((inst_retired > 1) || ((0 == inst_retired) && (rcx_delta > 1)))
+                {
+                    return FILTER_OK_CONTINUE;
+                }
+            }
+            else if ((rip_delta > INTEL64_MAX_INST_LEN * 2) || (vcpu_tsc_delta(ld_p) > STEPPING_TSC_THRESHOLD))
             {
                 return FILTER_OK_CONTINUE;
             }
@@ -302,9 +310,17 @@ stepping_filter_e vmexit_stepping_filter(
         // this may lead to indefinite delay in interruption delivery
         if (is_mtf_exiting(vm_exit_reason))
         {
-            // reset time stamp to avoid restarting stepping mode when
-            // the pending interruption is consumed
-            ld_p->single_step_def_state.last_entry_tsc = 0;
+            if (perfmon_enabled)
+            {
+                // reset time stamp to avoid restarting stepping mode when
+                // the pending interruption is consumed
+                ld_p->single_step_def_state.last_entry_tsc = 0;
+            }
+            else
+            {
+                ia32_wrmsr(IA32_FIXED_CTR0_MSR_ADDR, 2);
+            }
+
             return FILTER_OK_RESUME_TD;
         }
     }

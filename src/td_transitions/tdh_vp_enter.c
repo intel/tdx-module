@@ -41,6 +41,7 @@
 #include "td_transitions/td_exit.h"
 #include "helpers/virt_msr_helpers.h"
 
+
 _STATIC_INLINE_ void guest_ext_state_load_failure()
 {
     vm_vmexit_exit_reason_t vm_exit_reason = { .raw = 0 };
@@ -124,7 +125,7 @@ _STATIC_INLINE_ void restore_guest_td_extended_state(tdvps_t* tdvps_ptr)
 }
 
 static void emulate_ept_violation_td_exit(tdx_module_local_t* local_data_ptr, pa_t faulting_gpa,
-                                          tdvps_t* tdvps_ptr, uint16_t vm_id)
+                                          tdcs_t* tdcs_ptr, tdvps_t* tdvps_ptr, uint16_t vm_id)
 {
     faulting_gpa.low_12_bits = 0;
 
@@ -151,6 +152,10 @@ static void emulate_ept_violation_td_exit(tdx_module_local_t* local_data_ptr, pa
 
     // Other GPRs return 0
     local_data_ptr->vmm_regs.rbx = 0;
+    if (!tdcs_ptr->executions_ctl_fields.config_flags.no_rbp_mod)
+    {
+        local_data_ptr->vmm_regs.rbp = 0;
+    }
     local_data_ptr->vmm_regs.rsi = 0;
     local_data_ptr->vmm_regs.rdi = 0;
     local_data_ptr->vmm_regs.r10 = 0;
@@ -233,9 +238,9 @@ static void set_l2_exit_host_routing(tdvps_t* tdvps_ptr)
 static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* tdvps_ptr)
 {
     tdx_module_global_t* global_data = get_global_data();
-
+    tdx_module_local_t* local_data_ptr = get_local_data();
     // Save MSR (NON_FAULTING_MSR_ADDR) value before the first usage of safe_wrmsr
-    get_local_data()->non_faulting_msr_value = ia32_rdmsr(NON_FAULTING_MSR_ADDR);
+    local_data_ptr->non_faulting_msr_value = ia32_rdmsr(NON_FAULTING_MSR_ADDR);
 
     // CR2 state restoration
     ia32_load_cr2(tdvps_ptr->guest_state.cr2);
@@ -296,6 +301,38 @@ static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* td
             safe_wrmsr(IA32_PEBS_FRONTEND_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_pebs_frontend);
         }
     }
+    else
+    {
+        // save VMM's Fixed Counter Controls (FCC) MSR
+        local_data_ptr->vmm_ia32_fixed_ctr_ctrl = ia32_rdmsr(IA32_FIXED_CTR_CTRL_MSR_ADDR);
+        
+        if (TDX_MODULE_IA32_FIXED_CTR_CTRL != local_data_ptr->vmm_ia32_fixed_ctr_ctrl)
+        {
+            // load TD's FCC with FC0 enabled in all rings, no PMI on overflow
+            safe_wrmsr(IA32_FIXED_CTR_CTRL_MSR_ADDR, TDX_MODULE_IA32_FIXED_CTR_CTRL);
+        }
+
+        // save VMM's FC0 value
+        local_data_ptr->vmm_ia32_fixed_ctr0 = ia32_rdmsr(IA32_FIXED_CTR0_MSR_ADDR);
+
+        if (0x0 != local_data_ptr->vmm_ia32_fixed_ctr0)
+        {
+            // clear FC0
+            safe_wrmsr(IA32_FIXED_CTR0_MSR_ADDR, 0x0);
+        }
+
+        uint64_t perf_global_status_mask = (BIT(32) | BIT(59));
+        // save VMM's Perf Global Status (PGS) counter freezing and FC0 
+        local_data_ptr->vmm_ia32_perf_global_status = ia32_rdmsr(IA32_PERF_GLOBAL_STATUS_MSR_ADDR) & perf_global_status_mask;
+
+        if (0x0 != local_data_ptr->vmm_ia32_perf_global_status)
+        {
+            // unfreeze counters and/or clear FC0 
+            safe_wrmsr(IA32_PERF_GLOBAL_STATUS_RESET_MSR_ADDR, perf_global_status_mask);
+        }
+
+        local_data_ptr->guest_rcx_on_td_entry = tdvps_ptr->guest_state.gpr_state.rcx;
+    }
 
     if (tdcs_ptr->executions_ctl_fields.cpuid_flags.waitpkg_supported)
     {
@@ -310,7 +347,7 @@ static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* td
     {
         // Read the host VMM value of IA32_TSX_CTRL
         ia32_tsx_ctrl_t tsx_ctrl = { .raw = ia32_rdmsr(IA32_TSX_CTRL_MSR_ADDR) };
-        get_local_data()->vmm_non_extended_state.ia32_tsx_ctrl = tsx_ctrl.raw; // Will be used on TD exit
+        local_data_ptr->vmm_non_extended_state.ia32_tsx_ctrl = tsx_ctrl.raw; // Will be used on TD exit
 
         // Optimize by disabling TSX only if not disabled by the host VMM
         if (!tsx_ctrl.rtm_disable || tsx_ctrl.rsvd)
@@ -335,6 +372,7 @@ static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* td
     // Extended state control
     ia32_xsetbv(0, tdvps_ptr->guest_state.xcr0);
     safe_wrmsr(IA32_XSS_MSR_ADDR, tdvps_ptr->guest_msr_state.ia32_xss);
+    local_data_ptr->vp_ctx.td_xcr0_state_modified = false;
 
     if (tdcs_ptr->executions_ctl_fields.cpuid_flags.xfd_supported)
     {
@@ -524,7 +562,7 @@ static api_error_type handle_l2_entry(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, tdvps_t*
                 // Emulate a TD exit.
                 // Note that the sticky host routing indication remains.
                 // It will be handled on the next TD entry.
-                emulate_ept_violation_td_exit(get_local_data(), *faulting_gpa, tdvps_ptr, tdvps_ptr->management.curr_vm);
+                emulate_ept_violation_td_exit(get_local_data(), *faulting_gpa, tdcs_ptr, tdvps_ptr, tdvps_ptr->management.curr_vm);
 
                 TDX_ERROR("Failed to translate L2 GPA - 0x%llx\n", faulting_gpa->raw);
                 return VMEXIT_REASON_EPT_VIOLATION;
@@ -782,7 +820,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
         // decrement the TLB tracker that was incremented at the beginning of TDENTER
         revert_tlb_tracking_state(tdcs_ptr, tdvps_ptr);
 
-        emulate_ept_violation_td_exit(get_local_data(), faulting_gpa, tdvps_ptr, tdvps_ptr->management.curr_vm);
+        emulate_ept_violation_td_exit(get_local_data(), faulting_gpa, tdcs_ptr, tdvps_ptr, tdvps_ptr->management.curr_vm);
 
         TDX_ERROR("Too many EPT violation on private GPA - 0x%llx\n", faulting_gpa.raw);
         return_val = VMEXIT_REASON_EPT_VIOLATION;
@@ -796,7 +834,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
         // decrement the TLB tracker that was incremented at the beginning of TDENTER
         revert_tlb_tracking_state(tdcs_ptr, tdvps_ptr);
 
-        emulate_ept_violation_td_exit(get_local_data(), faulting_gpa, tdvps_ptr, tdvps_ptr->management.curr_vm);
+        emulate_ept_violation_td_exit(get_local_data(), faulting_gpa, tdcs_ptr, tdvps_ptr, tdvps_ptr->management.curr_vm);
         TDX_ERROR("EPT violation due GPA (0x%llx) translation\n", faulting_gpa.raw);
 
         return_val = VMEXIT_REASON_EPT_VIOLATION;

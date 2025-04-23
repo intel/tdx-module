@@ -279,12 +279,6 @@ api_error_type tdh_vp_init(uint64_t target_tdvpr_pa, uint64_t td_vcpu_rcx)
      *  VAPIC page is already 0.
      */
 
-    /**
-     *  No need to explicitly initialize VE_INFO.
-     *  Since the pages are initialized to 0 on TDHVPCREATE/TDVPADDCX,
-     *  VE_INFO.VALID is already 0.
-     */
-
     // Mark the VCPU as initialized and ready
     tdvps_ptr->management.state = VCPU_READY;
     tdvps_ptr->management.last_td_exit = LAST_EXIT_ASYNC_FAULT;

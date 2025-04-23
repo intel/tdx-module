@@ -49,11 +49,9 @@ typedef enum {
  * @param vm_exit_reason
  * @param vm_exit_qualification
  * @param vm_entry_inter_info
+ * @param perfmon_enabled
  */
-stepping_filter_e vmexit_stepping_filter(
-        vm_vmexit_exit_reason_t vm_exit_reason,
-        vmx_exit_qualification_t vm_exit_qualification,
-        vmx_exit_inter_info_t vm_exit_inter_info);
+stepping_filter_e vmexit_stepping_filter(vm_vmexit_exit_reason_t vm_exit_reason, vmx_exit_qualification_t vm_exit_qualification, vmx_exit_inter_info_t vm_exit_inter_info, bool_t perfmon_enabled);
 
 
 /**

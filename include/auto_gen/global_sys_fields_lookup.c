@@ -429,7 +429,17 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // CPUID_CONFIG_LEAVES // 40
+   // MIN_VIRT_MAXPA // 40
+   .field_id =  { .raw  = 0x9900000000000009 },
+   .num_of_fields = 1, .num_of_elem = 1,
+   .vmm_rd_mask = (-1ULL & 0xFFULL), .vmm_wr_mask = (0ULL & 0xFFULL),
+   .guest_rd_mask = (0ULL & 0xFFULL), .guest_wr_mask = (0ULL & 0xFFULL),
+   .export_mask = (0ULL & 0xFFULL), .import_mask = (0ULL & 0xFFULL),
+   .special_rd_handling = false, .special_wr_handling = false,
+   .mig_export = MIG_NONE, .mig_import = MIG_NONE 
+ },
+ {
+   // CPUID_CONFIG_LEAVES // 41
    .field_id =  { .raw  = 0x9900000300000400 },
    .num_of_fields = 32, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -439,7 +449,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // CPUID_CONFIG_VALUES // 41
+   // CPUID_CONFIG_VALUES // 42
    .field_id =  { .raw  = 0x9900000300000500 },
    .num_of_fields = 32, .num_of_elem = 2,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -449,7 +459,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // IA32_ARCH_CAPABILITIES_CONFIG_MASK // 42
+   // IA32_ARCH_CAPABILITIES_CONFIG_MASK // 43
    .field_id =  { .raw  = 0x9900000300000600 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -459,7 +469,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // NUM_ALLOWED_FMS // 43
+   // NUM_ALLOWED_FMS // 44
    .field_id =  { .raw  = 0x9900000100000800 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
@@ -469,7 +479,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // NUM_DISALLOWED_FMS // 44
+   // NUM_DISALLOWED_FMS // 45
    .field_id =  { .raw  = 0x9900000100000801 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
@@ -479,7 +489,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // ALLOWED_FMS // 45
+   // ALLOWED_FMS // 46
    .field_id =  { .raw  = 0x9900000300000810 },
    .num_of_fields = 64, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -489,7 +499,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // DISALLOWED_FMS // 46
+   // DISALLOWED_FMS // 47
    .field_id =  { .raw  = 0x9900000300000850 },
    .num_of_fields = 64, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -499,7 +509,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // MIG_ATTRIBUTES // 47
+   // MIG_ATTRIBUTES // 48
    .field_id =  { .raw  = 0xA000000300000000 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -509,7 +519,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // MIN_EXPORT_VERSION // 48
+   // MIN_EXPORT_VERSION // 49
    .field_id =  { .raw  = 0x2000000100000001 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
@@ -519,7 +529,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // MAX_EXPORT_VERSION // 49
+   // MAX_EXPORT_VERSION // 50
    .field_id =  { .raw  = 0x2000000100000002 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
@@ -529,7 +539,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // MIN_IMPORT_VERSION // 50
+   // MIN_IMPORT_VERSION // 51
    .field_id =  { .raw  = 0x2000000100000003 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
@@ -539,7 +549,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // MAX_IMPORT_VERSION // 51
+   // MAX_IMPORT_VERSION // 52
    .field_id =  { .raw  = 0x2000000100000004 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
@@ -549,7 +559,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // MAX_MIGS // 52
+   // MAX_MIGS // 53
    .field_id =  { .raw  = 0xA000000100000010 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
@@ -559,7 +569,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // NUM_IMMUTABLE_STATE_PAGES // 53
+   // NUM_IMMUTABLE_STATE_PAGES // 54
    .field_id =  { .raw  = 0xA000000000000020 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFULL), .vmm_wr_mask = (0ULL & 0xFFULL),
@@ -569,7 +579,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // NUM_TD_STATE_PAGES // 54
+   // NUM_TD_STATE_PAGES // 55
    .field_id =  { .raw  = 0xA000000000000021 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFULL), .vmm_wr_mask = (0ULL & 0xFFULL),
@@ -579,7 +589,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // NUM_VP_STATE_PAGES // 55
+   // NUM_VP_STATE_PAGES // 56
    .field_id =  { .raw  = 0xA000000000000022 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFULL), .vmm_wr_mask = (0ULL & 0xFFULL),
@@ -589,7 +599,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // MAX_SERV_TDS // 56
+   // MAX_SERV_TDS // 57
    .field_id =  { .raw  = 0xA100000100000000 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
@@ -599,7 +609,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // SERVTD_ATTR_FIXED0 // 57
+   // SERVTD_ATTR_FIXED0 // 58
    .field_id =  { .raw  = 0xA100000300000001 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -609,7 +619,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // SERVTD_ATTR_FIXED1 // 58
+   // SERVTD_ATTR_FIXED1 // 59
    .field_id =  { .raw  = 0xA100000300000002 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -619,7 +629,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // GUEST_L2_GPA_ATTR_MASK // 59
+   // GUEST_L2_GPA_ATTR_MASK // 60
    .field_id =  { .raw  = 0xA200000100000000 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
@@ -629,7 +639,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VM_CTLS_FIXED0 // 60
+   // VM_CTLS_FIXED0 // 61
    .field_id =  { .raw  = 0xA200000300000001 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -639,7 +649,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VM_CTLS_FIXED1 // 61
+   // VM_CTLS_FIXED1 // 62
    .field_id =  { .raw  = 0xA200000300000002 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -649,7 +659,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VPCU_L2_CTLS_FIXED0 // 62
+   // VPCU_L2_CTLS_FIXED0 // 63
    .field_id =  { .raw  = 0xA200000300000003 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -659,7 +669,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VCPU_L2_CTLS_FIXED1 // 63
+   // VCPU_L2_CTLS_FIXED1 // 64
    .field_id =  { .raw  = 0xA200000300000004 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -669,7 +679,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VPCU_L2_DEBUG_CTLS_FIXED0 // 64
+   // VPCU_L2_DEBUG_CTLS_FIXED0 // 65
    .field_id =  { .raw  = 0xA200000300000005 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -679,7 +689,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VCPU_L2_DEBUG_CTLS_FIXED1 // 65
+   // VCPU_L2_DEBUG_CTLS_FIXED1 // 66
    .field_id =  { .raw  = 0xA200000300000006 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),

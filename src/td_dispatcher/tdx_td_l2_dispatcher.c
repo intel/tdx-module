@@ -256,7 +256,9 @@ void tdx_td_l2_dispatcher(void)
         case VMEXIT_REASON_IO_INSTRUCTION:
         case VMEXIT_REASON_WBINVD_INSTRUCTION:
         case VMEXIT_REASON_PCONFIG:
-            td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info);
+            {
+                td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info);
+            }
             break;
 
         case VMEXIT_REASON_CR_ACCESS:
@@ -353,8 +355,10 @@ void tdx_td_l2_dispatcher(void)
     // Entry Interrupt Info valid bit is cleared automatically on every VMEXIT
     vmx_entry_inter_info_t entry_intr_info;
     ia32_vmread(VMX_VM_ENTRY_INTR_INFO_ENCODE, &(entry_intr_info.raw));
+
     if (!entry_intr_info.valid && !interrupt_occurred)
     {
+        increment_fixed_ctr0(tdcs_p);
         advance_guest_rip();
     }
 

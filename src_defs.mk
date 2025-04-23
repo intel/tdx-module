@@ -57,14 +57,14 @@ __ASM_OBJECTS := $(shell cat $(PROJ_DIR)/asm_objects.txt)
 # Libraries
 CRYPTO_LIB_BUILD_FLAVOR := RELEASE
 ifndef CRYPTO_LIB_VERSION
-CRYPTO_LIB_VERSION      := 2021.7.1
+CRYPTO_LIB_VERSION      := 2021_10_0
 endif
-CRYPTO_LIB_MAIN_DIR     := $(PROJ_DIR)/libs/ipp/ipp-crypto-ippcp_$(CRYPTO_LIB_VERSION)
+CRYPTO_LIB_MAIN_DIR     := $(PROJ_DIR)/libs/ipp/ipp-crypto-ipp-crypto_$(CRYPTO_LIB_VERSION)
 CRYPTO_LIB_SRC_DIR      := $(CRYPTO_LIB_MAIN_DIR)/sources
 CRYPTO_LIB_BUILD_PATH   := $(CRYPTO_LIB_MAIN_DIR)/_build/.build/$(CRYPTO_LIB_BUILD_FLAVOR)
 CRYPTO_LIB_PATH         := $(CRYPTO_LIB_BUILD_PATH)/lib
-CRYPTO_LIB_FILENAME     := libippcp_s_y8.a
-CRYPTO_LIB              := -lippcp_s_y8
+CRYPTO_LIB_FILENAME     := libippcp_s_l9.a
+CRYPTO_LIB              := -lippcp_s_l9
 
 
 # Headers include path

@@ -58,6 +58,8 @@ api_error_type tdh_export_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
     bool_t                mig_locked_flag = false;
     bool_t                migsc_locked_flag = false;
 
+    ALIGN(32) uint256_t   ymms[16];                  // SSE state backup for crypto
+
     api_error_type return_val = TDX_OPERAND_INVALID;
 
     // Input register operands
@@ -124,7 +126,7 @@ api_error_type tdh_export_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
         mbmd_hpa_and_size.size = 0;
 
         // Verify the MBMD physical address is canonical, shared, and aligned to 128B
-        pa_t mbmd_hpa_and_size_pa = {.raw = mbmd_hpa_and_size.raw};
+        pa_t mbmd_hpa_and_size_pa = { .raw = mbmd_hpa_and_size.raw };
         return_val = shared_hpa_check_with_pwr_2_alignment(mbmd_hpa_and_size_pa, MBMD_ALIGN);
         if (return_val != TDX_SUCCESS)
         {
@@ -133,7 +135,7 @@ api_error_type tdh_export_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
         }
 
         // Map the MBMD
-        mbmd_p =  (mbmd_t *)map_pa((void*)mbmd_hpa_and_size.raw, TDX_RANGE_RO);
+        mbmd_p = (mbmd_t*)map_pa((void*)mbmd_hpa_and_size.raw, TDX_RANGE_RO);
 
         // Copy the MBMD to an internal buffer
         copy_mbmd(&mbmd, mbmd_p);
@@ -141,14 +143,14 @@ api_error_type tdh_export_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
         // Check the MBMD
         if ((mbmd.header.mig_version != tdcs_p->migration_fields.mig_working_version) ||
             (mbmd.header.size != sizeof(mbmd_t) ||
-            (mbmd.header.mb_type != MB_TYPE_ABORT_TOKEN) ||
-            (mbmd.header.reserved_1 != 0) ||
-            (mbmd.abort_token.reserved != 0) ||
-            (mbmd.header.migs_index != 0)))
-            {
-                return_val = TDX_INVALID_MBMD;
-                goto EXIT;
-            }
+                (mbmd.header.mb_type != MB_TYPE_ABORT_TOKEN) ||
+                (mbmd.header.reserved_1 != 0) ||
+                (mbmd.abort_token.reserved != 0) ||
+                (mbmd.header.migs_index != 0)))
+        {
+            return_val = TDX_INVALID_MBMD;
+            goto EXIT;
+        }
 
         // Lock the MIGSC link
         if (!(migsc_lock(&tdcs_p->b_migsc_link)))
@@ -162,8 +164,11 @@ api_error_type tdh_export_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
         migsc_pa.raw = 0;
         migsc_pa.page_4k_num = tdcs_p->b_migsc_link.migsc_hpa;
 
-        migsc_p = (migsc_t *)map_pa_with_hkid(migsc_pa.raw_void,
-                    tdr_p->key_management_fields.hkid, TDX_RANGE_RW);
+        migsc_p = (migsc_t*)map_pa_with_hkid(migsc_pa.raw_void,
+            tdr_p->key_management_fields.hkid, TDX_RANGE_RW);
+
+        // store AVX state before crypto execution
+        store_ymms_in_buffer(ymms);
 
         // Initialize the MIGSC if needed
         if (!tdcs_p->b_migsc_link.initialized)
@@ -183,8 +188,7 @@ api_error_type tdh_export_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
         mbmd.header.migs_index = 0;
         mbmd.header.iv_counter = 0;
 
-        if (aes_gcm_process_aad(&migsc_p->aes_gcm_context, (uint8_t*)&mbmd.abort_token,
-                MBMD_SIZE_NO_MAC(mbmd.abort_token)) != AES_GCM_NO_ERROR)
+        if (aes_gcm_process_aad(&migsc_p->aes_gcm_context, (uint8_t*)&mbmd.abort_token, MBMD_SIZE_NO_MAC(mbmd.abort_token)) != AES_GCM_NO_ERROR)
         {
             FATAL_ERROR();
         }
@@ -194,6 +198,12 @@ api_error_type tdh_export_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
         {
             FATAL_ERROR();
         }
+        
+        // restore AVX state before crypto execution
+        load_ymms_from_buffer(ymms);
+        basic_memset_to_zero(ymms, sizeof(ymms));
+        get_local_data()->reset_avx_state = false;
+
         if (!tdx_memcmp_safe(mac, mbmd.abort_token.mac, sizeof(mac)))
         {
             return_val = TDX_INCORRECT_MBMD_MAC;

@@ -249,6 +249,7 @@ void tdx_inject_ve(uint64_t vm_exit_reason, uint64_t exit_qualification, tdvps_t
     tdvps_ve_info_t* ve_info_p;
 
     // Before we inject a #VE, reinject IDT vectoring events that happened during VM exit, if any
+
     tdx_debug_assert(tdvps_p->management.curr_vm == 0);
     {
         ve_info_p = &tdvps_p->ve_info;

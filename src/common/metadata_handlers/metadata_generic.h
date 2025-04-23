@@ -141,7 +141,7 @@ typedef union md_field_attributes_u
 } md_field_attributes_t;
 tdx_static_assert(sizeof(md_field_attributes_t) == 1, md_field_attributes_t);
 
-typedef struct md_lookup_s
+typedef struct PACKED md_lookup_s
 {
     md_field_id_t field_id;
     uint16_t num_of_fields;

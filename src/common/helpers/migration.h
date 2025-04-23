@@ -411,10 +411,11 @@ api_error_type check_and_map_gpa_list(gpa_list_info_t gpa_list_info, gpa_list_en
  * @param gpa_entry - GPA list entry
  * @param gpaw - GPAW from the TDCS
  * @param output_gpa - Output GPA from the list entry
+ * @param virt_maxpa - virtual max_pa from the tdcs
  *
  * @return Validness check result
  */
-bool_t check_and_get_gpa_from_entry(gpa_list_entry_t gpa_entry, bool_t gpaw, pa_t* output_gpa);
+bool_t check_and_get_gpa_from_entry(gpa_list_entry_t gpa_entry, bool_t gpaw, pa_t* output_gpa, uint8_t virt_maxpa);
 
 /**
  * copy MBMD

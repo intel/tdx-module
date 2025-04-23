@@ -97,7 +97,8 @@ api_error_type tdg_vp_info(void);
  *
  * @return Success or Error type
  */
-api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_data_gpa, uint64_t sub_type, bool_t* interrupt_occurred);
+api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_data_gpa, uint64_t sub_type,
+                             bool_t* interrupt_occurred);
 
 /**
  * @brief Verifies a REPORTMACSTRUCT structure

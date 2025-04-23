@@ -61,12 +61,11 @@ void tdx_failed_vmentry(void);
  *
  * @return Stepping filter result
  */
-stepping_filter_e tdx_td_l1_l2_dispatcher_common_prologue(
-        tdx_module_local_t* local_data,
-        uint16_t vm_id,
-        vm_vmexit_exit_reason_t* vm_exit_reason,
-        vmx_exit_qualification_t* vm_exit_qualification,
-        vmx_exit_inter_info_t* vm_exit_inter_info);
+stepping_filter_e tdx_td_l1_l2_dispatcher_common_prologue(tdx_module_local_t* local_data,
+                                                          uint16_t vm_id,
+                                                          vm_vmexit_exit_reason_t* vm_exit_reason,
+                                                          vmx_exit_qualification_t* vm_exit_qualification,
+                                                          vmx_exit_inter_info_t* vm_exit_inter_info);
 
 /**
  * @brief Dispatcher for TD side VM Exits

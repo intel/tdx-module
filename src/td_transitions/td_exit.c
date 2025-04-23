@@ -162,6 +162,21 @@ static void load_vmm_state_before_td_exit(tdx_module_local_t* local_data_ptr)
             init_msr_opt(IA32_PERF_METRICS_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_perf_metrics);
         }
     }
+    else
+    {
+        if (TDX_MODULE_IA32_FIXED_CTR_CTRL != local_data_ptr->vmm_ia32_fixed_ctr_ctrl)
+        {
+            ia32_wrmsr(IA32_FIXED_CTR_CTRL_MSR_ADDR, local_data_ptr->vmm_ia32_fixed_ctr_ctrl);
+        }
+
+        // restore VMM's FC0 value
+        ia32_wrmsr(IA32_FIXED_CTR0_MSR_ADDR, local_data_ptr->vmm_ia32_fixed_ctr0);
+
+        if (0 != local_data_ptr->vmm_ia32_perf_global_status)
+        {
+            ia32_wrmsr(IA32_PERF_GLOBAL_STATUS_SET_MSR_ADDR, local_data_ptr->vmm_ia32_perf_global_status);
+        }
+    }
 
     init_msr_opt(IA32_UARCH_MISC_CTL_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_uarch_misc_ctl);
 
@@ -391,7 +406,10 @@ static void async_tdexit_internal(api_error_code_e tdexit_case,
 
     tdx_local_data_ptr->vmm_regs.r15 = 0ULL;
     tdx_local_data_ptr->vmm_regs.rbx = 0ULL;
-    tdx_local_data_ptr->vmm_regs.rbp = 0ULL;
+    if (!tdx_local_data_ptr->vp_ctx.tdcs->executions_ctl_fields.config_flags.no_rbp_mod)
+    {
+        tdx_local_data_ptr->vmm_regs.rbp = 0ULL;
+    }
     tdx_local_data_ptr->vmm_regs.rsi = 0ULL;
     tdx_local_data_ptr->vmm_regs.rdi = 0ULL;
 
@@ -471,6 +489,8 @@ void td_vmexit_to_vmm(uint8_t vcpu_state, uint8_t last_td_exit, uint64_t scrub_m
     // The TD is dead, no need so save its state.
     if (!is_td_dead)
     {
+        restore_td_xcr0_if_required(tdx_local_data_ptr);
+
         // 1.  Save any guest state that it has not saved as part of the common guest-side operation, e.g.,
         //     the extended state per TDCS.XFAM
         save_guest_td_state_before_td_exit(tdcs_ptr, tdx_local_data_ptr);
@@ -602,6 +622,7 @@ static void td_l2_to_l1_exit_internal(api_error_code_e tdexit_case, vm_vmexit_ex
     update_host_state_in_td_vmcs(ld_p, tdvps_ptr, tdvps_ptr->management.curr_vm);
 
     // Advance L1 guest RIP to the next instruction, following the TDCALL(TDG.VP.VMCALL) which entered L2
+    increment_fixed_ctr0(ld_p->vp_ctx.tdcs);
     advance_guest_rip();
 
     // Restore IA32_SPEC_CTR, restore the guest GPRs and enter the guest TD

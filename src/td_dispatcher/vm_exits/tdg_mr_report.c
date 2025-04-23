@@ -39,7 +39,8 @@
 #include "td_transitions/td_exit.h"
 
 
-api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_data_gpa, uint64_t sub_type, bool_t* interrupt_occurred)
+api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_data_gpa, uint64_t sub_type,
+                             bool_t* interrupt_occurred)
 {
     // Local data and TD's structures
     tdx_module_local_t  * local_data_ptr = get_local_data();

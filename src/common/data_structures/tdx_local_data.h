@@ -183,6 +183,8 @@ typedef struct PACKED vp_ctx_s
      */
     uint16_t              active_vmcs;
 
+    bool_t                td_xcr0_state_modified;
+
 } vp_ctx_t;
 
 #define LFSR_INIT_VALUE 0xFEEDBEAF
@@ -231,6 +233,13 @@ typedef struct PACKED tdx_module_local_s
     uint64_t              host_rsp;
     uint64_t              host_ssp;
     uint64_t              host_gs_base;
+    uint64_t              vmm_xcr0_state;
+
+    uint64_t              vmm_ia32_fixed_ctr_ctrl;
+    uint64_t              vmm_ia32_fixed_ctr0;
+    uint64_t              vmm_ia32_perf_global_status;
+    uint64_t              vmm_ia32_perf_global_ctrl;
+    uint64_t              guest_rcx_on_td_entry;
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE
     uint32_t              local_dbg_msg_num;

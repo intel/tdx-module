@@ -45,9 +45,9 @@ api_error_type tdg_mr_rtmr_extend(uint64_t extension_data_gpa, uint64_t index)
     uint64_t cat_extended_mr[SIZE_OF_SHA384_HASH_IN_QWORDS*2] = {0};
     uint64_t* second_hash_extended_mr = NULL;
     crypto_api_error sha_error_code;
-    uint128_t xmms[16];                  // SSE state backup for crypto
-
     bool_t rtmr_locked_flag = false;
+
+    ALIGN(32) uint256_t   ymms[16]; // AVX/SSE state backup for crypto
 
     // Verify GPA is aligned
     if (!is_addr_aligned_pwr_of_2(extension_data_gpa, 64))
@@ -115,14 +115,14 @@ api_error_type tdg_mr_rtmr_extend(uint64_t extension_data_gpa, uint64_t index)
 
     // Calculate hash from 2 concatenated hashes (current rtmr[i] || new extended value)
 
-    store_xmms_in_buffer(xmms);
+    store_ymms_in_buffer(ymms);
 
     sha_error_code = sha384_generate_hash((const uint8_t*)cat_extended_mr,
                                           SIZE_OF_SHA384_HASH_IN_BYTES*2,
                                           tdcs_p->measurement_fields.rtmr[index].qwords);
 
-    load_xmms_from_buffer(xmms);
-    basic_memset_to_zero(xmms, sizeof(xmms));
+    load_ymms_from_buffer(ymms);
+    basic_memset_to_zero(ymms, sizeof(ymms));
 
     if (sha_error_code != 0)
     {

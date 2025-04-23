@@ -372,12 +372,14 @@ _STATIC_INLINE_ void conditionally_write_vmcs_ia32_spec_ctrl_shadow(const tdcs_t
 _STATIC_INLINE_ uint64_t calculate_virt_ia32_spec_ctrl(const tdcs_t* tdcs_p, uint64_t msr_value)
 {
     ia32_spec_ctrl_t spec_ctrl = { .raw = msr_value };
+
     tdx_module_global_t* global_data = get_global_data();
     // If the CPU supports DDPD_U but the TD is configured without DDPD_U support, clear the DDPD_U bit
     if (global_data->ddpd_supported && !tdcs_p->executions_ctl_fields.cpuid_flags.ddpd_supported)
     {
         spec_ctrl.ddpd_u = 0;
     }
+
     return spec_ctrl.raw;
 }
 

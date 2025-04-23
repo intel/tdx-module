@@ -90,9 +90,9 @@ _STATIC_INLINE_ uint64_t ia32_mktme_key_program(mktme_key_program_t *key_program
             ".byte 0x0F\n"
             ".byte 0x01\n"
             ".byte 0xC5\n"
-            "pushfq\n"
-            "popq %%rcx"
-            : "=a"(error_code), "=c"(ret_flags.raw) : "a"(0), "b"(key_program_addr) : "cc");
+        "pushfq\n"
+        "popq %%rcx"
+        : "=a"(error_code), "=c"(ret_flags.raw) : "a"(0), "b"(key_program_addr) : "cc");
     // On return: ZF=0 indicates success; ZF=1 indicates failure (error code in RAX).  ZF is bit 6 in EFLAGS
     return (ret_flags.zf) ? error_code : 0;
 }
@@ -667,6 +667,76 @@ _STATIC_INLINE_ void load_xmms_from_buffer(const uint128_t xmms[16])
             "movdqa 0xF0(%0), %%xmm15\n"
 
         : : "r"(xmms));
+}
+
+_STATIC_INLINE_ void clear_ymms(void)
+{
+    _ASM_VOLATILE_(
+        // XOR the existing YMM's
+        "vpxor %%ymm0, %%ymm0, %%ymm0\n"
+        "vpxor %%ymm1, %%ymm1, %%ymm1\n"
+        "vpxor %%ymm2, %%ymm2, %%ymm2\n"
+        "vpxor %%ymm3, %%ymm3, %%ymm3\n"
+        "vpxor %%ymm4, %%ymm4, %%ymm4\n"
+        "vpxor %%ymm5, %%ymm5, %%ymm5\n"
+        "vpxor %%ymm6, %%ymm6, %%ymm6\n"
+        "vpxor %%ymm7, %%ymm7, %%ymm7\n"
+        "vpxor %%ymm8, %%ymm8, %%ymm8\n"
+        "vpxor %%ymm9, %%ymm9, %%ymm9\n"
+        "vpxor %%ymm10, %%ymm10, %%ymm10\n"
+        "vpxor %%ymm11, %%ymm11, %%ymm11\n"
+        "vpxor %%ymm12, %%ymm12, %%ymm12\n"
+        "vpxor %%ymm13, %%ymm13, %%ymm13\n"
+        "vpxor %%ymm14, %%ymm14, %%ymm14\n"
+        "vpxor %%ymm15, %%ymm15, %%ymm15\n"
+        :::);
+}
+
+_STATIC_INLINE_ void store_ymms_in_buffer(uint256_t ymms[16])
+{
+    _ASM_VOLATILE_(
+        // Storing the existing YMM's
+        "vmovdqa %%ymm0, (%0)\n"
+        "vmovdqa %%ymm1, 0x20(%0)\n"
+        "vmovdqa %%ymm2, 0x40(%0)\n"
+        "vmovdqa %%ymm3, 0x60(%0)\n"
+        "vmovdqa %%ymm4, 0x80(%0)\n"
+        "vmovdqa %%ymm5, 0xA0(%0)\n"
+        "vmovdqa %%ymm6, 0xC0(%0)\n"
+        "vmovdqa %%ymm7, 0xE0(%0)\n"
+        "vmovdqa %%ymm8, 0x100(%0)\n"
+        "vmovdqa %%ymm9, 0x120(%0)\n"
+        "vmovdqa %%ymm10, 0x140(%0)\n"
+        "vmovdqa %%ymm11, 0x160(%0)\n"
+        "vmovdqa %%ymm12, 0x180(%0)\n"
+        "vmovdqa %%ymm13, 0x1A0(%0)\n"
+        "vmovdqa %%ymm14, 0x1C0(%0)\n"
+        "vmovdqa %%ymm15, 0x1E0(%0)\n"
+
+        : : "r"(ymms));
+}
+
+_STATIC_INLINE_ void load_ymms_from_buffer(const uint256_t ymms[16])
+{
+    _ASM_VOLATILE_(
+        "vmovdqa (%0), %%ymm0\n"
+        "vmovdqa 0x20(%0), %%ymm1\n"
+        "vmovdqa 0x40(%0), %%ymm2\n"
+        "vmovdqa 0x60(%0), %%ymm3\n"
+        "vmovdqa 0x80(%0), %%ymm4\n"
+        "vmovdqa 0xA0(%0), %%ymm5\n"
+        "vmovdqa 0xC0(%0), %%ymm6\n"
+        "vmovdqa 0xE0(%0), %%ymm7\n"
+        "vmovdqa 0x100(%0), %%ymm8\n"
+        "vmovdqa 0x120(%0), %%ymm9\n"
+        "vmovdqa 0x140(%0), %%ymm10\n"
+        "vmovdqa 0x160(%0), %%ymm11\n"
+        "vmovdqa 0x180(%0), %%ymm12\n"
+        "vmovdqa 0x1A0(%0), %%ymm13\n"
+        "vmovdqa 0x1C0(%0), %%ymm14\n"
+        "vmovdqa 0x1E0(%0), %%ymm15\n"
+
+        : : "r"(ymms));
 }
 
 _STATIC_INLINE_ void atomic_mem_write_64b(uint64_t* mem, uint64_t val)

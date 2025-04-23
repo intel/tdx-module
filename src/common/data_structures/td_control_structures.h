@@ -222,19 +222,21 @@ tdx_static_assert(sizeof(tdcs_management_fields_t) == 128, tdcs_management_field
 
 #define TDX_ATTRIBUTES_MIGRATABLE_SUPPORT  BIT(29)
 
-#define TDX_ATTRIBUTES_PKS_SUPPORT   BIT(30)
+#define TDX_ATTRIBUTES_PKS_SUPPORT       BIT(30)
 
 #define TDX_ATTRIBUTES_PERFMON_SUPPORT   BIT(63)
+
+#define TDX_ATTRIBUTES_ICSSD_SUPPORT     BIT(16)
 
 //  Supported ATTRIBUTES bits depend on the supported features - bits 0 (DEBUG), 29 (migratable), 30 (PKS),
 //  63 (PERFMON) and 28 (SEPT VE DISABLE)
 #define TDX_ATTRIBUTES_FIXED0 (0x1 | TDX_ATTRIBUTES_MIGRATABLE_SUPPORT | TDX_ATTRIBUTES_PKS_SUPPORT |\
                                TDX_ATTRIBUTES_PERFMON_SUPPORT | TDX_ATTRIBUTES_SEPT_VE_DIS_SUPPORT |\
-                               TDX_ATTRIBUTES_LASS_SUPPORT)
+                               TDX_ATTRIBUTES_LASS_SUPPORT | TDX_ATTRIBUTES_ICSSD_SUPPORT)
 #define TDX_ATTRIBUTES_FIXED1 0x0
 
 
-#define CONFIG_FLAGS_FIXED0   (BIT(0) | BIT(1) | BIT(2))    // gpaw, flexible_pending_ve, no_rbp_mode
+#define CONFIG_FLAGS_FIXED0   (BIT(0) | BIT(1) | BIT(2) | BIT(3))    // gpaw, flexible_pending_ve, no_rbp_mode, maxpa_virt
 #define CONFIG_FLAGS_FIXED1   0x0
 
 
@@ -378,7 +380,8 @@ typedef union
     {
         uint64_t pending_ve_disable : 1; // Bit 0:  Control the way guest TD access to a PENDING page is processed
         uint64_t enum_topology      : 1; // Bit 1:  Controls the enumeration of virtual platform topology
-        uint64_t reserved           : 62;
+        uint64_t virt_cpuid2        : 1; // Bit 2:  Controls the virtualization of CPUID(2)
+        uint64_t reserved           : 61;
     };
     uint64_t raw;
 } td_ctls_t;
@@ -431,12 +434,13 @@ typedef struct tdcs_execution_control_fields_s
     ALIGN(8) uint64_t            ia32_spec_ctrl_mask;
     ALIGN(8) config_flags_t      config_flags;
     ALIGN(8) td_ctls_t           td_ctls;
-    uint32_t                     reserved_1;
+    uint8_t                      virt_maxpa;
+    uint8_t                      reserved_2[3];
     bool_t                       topology_enum_configured;
-    uint8_t                      reserved_2[7];
+    uint8_t                      reserved_3[7];
     uint8_t                      cpuid_valid[80];
     ALIGN(16) uint32_t           xbuff_offsets[XBUFF_OFFSETS_NUM];
-    uint8_t                      reserved_3[36];
+    uint8_t                      reserved_4[36];
 } tdcs_execution_control_fields_t;
 tdx_static_assert(sizeof(tdcs_execution_control_fields_t) == 384, tdcs_execution_control_fields_t);
 // Validate that the size of gpaw (bool_t) is 1 byte

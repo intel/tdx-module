@@ -143,7 +143,7 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
                 err_status = GPA_ENTRY_STATUS_SKIPPED; break;
             }
 
-            if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &gpa))
+            if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &gpa, tdcs_p->executions_ctl_fields.virt_maxpa))
             {
                 gpa_list_entry.operation = GPA_ENTRY_OP_NOP;
                 gpa_list_entry.status = GPA_ENTRY_STATUS_GPA_LIST_ENTRY_INVALID;

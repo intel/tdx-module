@@ -532,18 +532,43 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
                 cpuid_80000008_eax.la_bits = LEGACY_LINEAR_ADDRESS_WIDTH;
             }
 
+            if (td_params_ptr->config_flags.maxpa_virt)
+            {
+                if (cpuid_80000008_eax.pa_bits)
+                {
+                    if (!is_virt_maxpa_valid(tdcs_ptr->executions_ctl_fields.gpaw, cpuid_80000008_eax.pa_bits))
+                    {
+                        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_CPUID_CONFIG);
+                        goto EXIT;
+                    }
+                }
+                else
+                {
+                    // A configured MAXPA value of 0 means the minimum of the native MAXPA and of GPAW should be used
+                    cpuid_80000008_eax.pa_bits = (uint32_t)MIN(global_data_ptr->max_pa, (tdcs_ptr->executions_ctl_fields.gpaw ? MAX_PA : MAX_PA_FOR_GPA_NOT_WIDE));
+                }
+            }
+            else
+            {
+                cpuid_80000008_eax.pa_bits = (uint32_t)global_data_ptr->max_pa;
+            }
+            
+
+            // Save the virtual MAXPA for easy access
+            tdcs_ptr->executions_ctl_fields.virt_maxpa = cpuid_80000008_eax.pa_bits;
+
             final_tdcs_values.eax = cpuid_80000008_eax.raw;
         }
 
         // Write the CPUID values to TDCS and set the CPUID_VALID flag
         tdcs_ptr->cpuid_config_vals[cpuid_index].low = final_tdcs_values.low;
         tdcs_ptr->cpuid_config_vals[cpuid_index].high = final_tdcs_values.high;
-        tdcs_ptr->executions_ctl_fields.cpuid_valid[cpuid_index] = !cpuid_lookup[cpuid_index].faulting;
+        tdcs_ptr->executions_ctl_fields.cpuid_valid[cpuid_index] = cpuid_lookup[cpuid_index].valid_entry? !cpuid_lookup[cpuid_index].faulting: false;
     }
 
     // Check the virtual topology configuration of CPUID(0x1F) and derive CPUID(0xB).
     // If configured as all-0, use the h/w values.
-    return_val = check_cpuid_1f(tdcs_ptr, true);
+    return_val = check_cpuid_1f_and_compute_cpuid_0b(tdcs_ptr, true);
     if (return_val != TDX_SUCCESS)
     {
         goto EXIT;
@@ -584,7 +609,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
     pa_t                  td_params_pa;              // Physical address of the params structure
     td_params_t         * td_params_ptr = NULL;      // Pointer to the parameters structure
 
-    uint128_t             xmms[16];                  // SSE state backup for crypto
+    ALIGN(32) uint256_t   ymms[16];                  // SSE state backup for crypto
     crypto_api_error      sha_error_code;
     api_error_type        return_val = UNINITIALIZE_ERROR;
 
@@ -705,7 +730,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
     /**
      *  Initialize the TD Measurement Fields
      */
-    store_xmms_in_buffer(xmms);
+    store_ymms_in_buffer(ymms);
 
     if ((sha_error_code = sha384_init(&(tdcs_ptr->measurement_fields.td_sha_ctx))) != 0)
     {
@@ -714,8 +739,8 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
         FATAL_ERROR();
     }
 
-    load_xmms_from_buffer(xmms);
-    basic_memset_to_zero(xmms, sizeof(xmms));
+    load_ymms_from_buffer(ymms);
+    basic_memset_to_zero(ymms, sizeof(ymms));
 
     // Zero the RTMR hash values
     basic_memset_to_zero(tdcs_ptr->measurement_fields.rtmr, (SIZE_OF_SHA384_HASH_IN_QWORDS<<3)*NUM_RTMRS);

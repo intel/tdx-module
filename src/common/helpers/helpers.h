@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -31,6 +31,7 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "auto_gen/tdx_error_codes_defs.h"
+#include "auto_gen/td_l2_vmcs_fields_lookup.h"
 #include "tdx_api_defs.h"
 #include "x86_defs/x86_defs.h"
 #include "accessors/data_accessors.h"
@@ -98,13 +99,25 @@ _STATIC_INLINE_ uint64_t construct_wrmsr_value(uint64_t rdx, uint64_t rax)
     return ((rdx << 32) | (rax & BIT_MASK_32BITS));
 }
 
-_STATIC_INLINE_ bool_t are_gpa_bits_above_shared_set(uint64_t gpa, bool_t gpaw, uint64_t max_pa)
+_STATIC_INLINE_ bool_t are_gpa_bits_above_virt_maxpa_set(uint64_t gpa, bool_t gpaw, uint64_t virt_maxpa)
 {
     uint16_t gpa_width = gpaw ? 52 : 48;
+    uint16_t shared_pa = gpa_width - 1;
 
-    if (max_pa > (uint64_t)gpa_width)
+    if (0 == virt_maxpa)
     {
-        return ((gpa & BITS(max_pa-1, gpa_width)) != 0);
+        virt_maxpa = MAX_PA;
+    }
+
+    // If the SHARED bit is 47 and virt_max_pa > 48, then any bits in the range virt_max_pa:48 must be 0
+    if ((47 == shared_pa) && (virt_maxpa > 48) && ((gpa & BITS(virt_maxpa - 1, 48)) != 0))
+    {
+        return true;
+    }
+
+    if (virt_maxpa < 52)
+    {
+        return ((gpa & BITS(51, virt_maxpa) & ~BIT(shared_pa)) != 0);
     }
 
     return false;
@@ -275,6 +288,9 @@ _STATIC_INLINE_ uint64_t leaf_ept_entry_to_hpa(ia32e_sept_t entry, uint64_t gpa,
  */
 void basic_memset(uint64_t dst, uint64_t dst_bytes, uint8_t val, uint64_t nbytes);
 void basic_memset_to_zero(void * dst, uint64_t nbytes);
+#if (!defined(__cplusplus))
+void* memset(void *str, int c, uint32_t n);
+#endif
 
 /**
  * @brief Copies source to destination using movdir64b
@@ -732,13 +748,10 @@ api_error_type check_and_lock_free_range_hpa(
  * @param gpaw - Value of the GPAW of the current TDCS
  * @param check_is_private - Flag to determine whether the GPA will be checked as private GPA
  *                           Use with PRIVATE_ONLY or PRIVATE_OR_SHARED defines.
+ * @param virt_maxpa - virtual maxpa from the tdcs
  * @return true if the GPA is valid, otherwise false
  */
-bool_t check_gpa_validity(
-        pa_t gpa,
-        bool_t gpaw,
-        bool_t check_is_private
-        );
+bool_t check_gpa_validity(pa_t gpa, bool_t gpaw, bool_t check_is_private, uint8_t virt_maxpa);
 
 /**
  * @brief Checks a GPA to be valid, and GPA.SHARED bit == 0, translates it and returns requested
@@ -1411,7 +1424,7 @@ cr_write_status_e write_guest_cr4(uint64_t value, tdcs_t* tdcs_p, tdvps_t* tdvsp
  * @brief Checks the validity the TD attributes that will be set in the TDCS
  *
  * @param attributes to be checked
- * 
+ *
  * @param is_import specifies whether the function was called during import flow
  *
  * @return true of false
@@ -1558,7 +1571,7 @@ _STATIC_INLINE_ bool_t op_state_is_seamcall_allowed(seamcall_leaf_opcode_t curre
 
     bool_t is_allowed = false;
 
-    IF_RARE(other_td)
+    IF_RARE (other_td)
     {
         tdx_debug_assert(current_leaf == TDH_SERVTD_BIND_LEAF);
         is_allowed = servtd_bind_othertd_state_lookup[op_state];
@@ -1767,6 +1780,13 @@ void set_guest_pde_bs(void);
  *        and clear STI blocking and MOVSS blocking interruptibility state.
  */
 void advance_guest_rip(void);
+
+/**
+ * @brief This function increments fixed_ctr0 in case perfmon in disabled.
+ *
+ * @param tdcs_p - tdcs pointer
+ */
+void increment_fixed_ctr0(tdcs_t* tdcs_p);
 
 /**
  * @brief Terminate MOVSS-blocking and STI blocking.
@@ -2236,6 +2256,46 @@ _STATIC_INLINE_ void bhb_drain_sequence(tdx_module_global_t* tdx_global_data_ptr
  * @param tdcs_p - TDCS pointer
  * @param allow_null - Allow all-0 configuration of CPUID(0x1F), indicating usage of h/w values
  */
-api_error_type check_cpuid_1f(tdcs_t* tdcs_p, bool_t allow_null);
+api_error_type check_cpuid_1f_and_compute_cpuid_0b(tdcs_t* tdcs_p, bool_t allow_null);
+
+/* Check a virtual MAXPA value for validity:
+   - Must not be higher than the native MAXPA (in PL.MAXPA)
+   - Must not be lower than the MIN_VIRT_MAXPA
+   Note that we allow virt_max_pa to be higher than GPAW, to support import from older TDX
+   modules which didn't virtualize MAXPA.
+*/
+_STATIC_INLINE_ bool_t is_virt_maxpa_on_import_valid(uint32_t virt_maxpa)
+{
+    return ((virt_maxpa <= get_global_data()->max_pa) && (virt_maxpa >= MIN_VIRT_MAXPA));
+}
+
+/* Check a virtual MAXPA value for validity:
+   - Must not be higher than the native MAXPA (in global_data.max_pa)
+   - Must not be higher than GPAW (note that GPA is boolean, meaning false: 48, true: 52)
+   - Must not be lower than the MIN_VIRT_MAXPA
+*/
+_STATIC_INLINE_ bool_t is_virt_maxpa_valid(bool_t gpaw, uint32_t virt_maxpa)
+{
+    return ((virt_maxpa <= (uint32_t)(gpaw ? MAX_PA : MAX_PA_FOR_GPA_NOT_WIDE)) && is_virt_maxpa_on_import_valid(virt_maxpa));
+}
+
+_STATIC_INLINE_ void save_td_xcr0_and_set_tdx_xcr0(tdx_module_local_t* local_data_ptr)
+{
+    // preserve TD's XCR0 state
+    local_data_ptr->vp_ctx.tdvps->guest_state.xcr0 = ia32_xgetbv(0);
+    ia32_xsetbv(0, TDX_MODULE_XCR0_WITH_AVX);
+
+    local_data_ptr->vp_ctx.td_xcr0_state_modified = true;
+}
+
+_STATIC_INLINE_ void restore_td_xcr0_if_required(tdx_module_local_t* local_data_ptr)
+{
+    if (local_data_ptr->vp_ctx.td_xcr0_state_modified)
+    {
+        // restore TD's XCR0 state
+        ia32_xsetbv(0, local_data_ptr->vp_ctx.tdvps->guest_state.xcr0);
+        local_data_ptr->vp_ctx.td_xcr0_state_modified = false;
+    }
+}
 
 #endif /* SRC_COMMON_HELPERS_HELPERS_H_ */

@@ -37,7 +37,7 @@ STD_FLAGS = -MD -MP -m64 -Wall -Wextra -fPIC -fno-builtin-memset -fvisibility=hi
 			-mstack-alignment=16 -mstackrealign -std=c17 -mno-mmx -mno-sse -fno-jump-tables
 
 # Optimization flags
-OPT_FLAGS = -O2
+OPT_FLAGS = -Os
 
 # SecV mandatory flags
 SECV_FLAGS = -Wdouble-promotion -Wshadow -Wconversion -Wmissing-prototypes -Wpointer-arith -Wuninitialized -Wunreachable-code -Wunused-function -Werror -D_FORTIFY_SOURCE=2 -fno-zero-initialized-in-bss -fstack-protector-strong

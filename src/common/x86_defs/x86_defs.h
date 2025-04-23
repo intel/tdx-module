@@ -41,6 +41,8 @@
 
 #define CR2_RESET_STATE  0x0ULL
 
+#define TDX_MODULE_XCR0_WITH_AVX        0x7ULL
+
 #define XCR0_RESET_STATE 0x1ULL
 #define DR0_RESET_STATE  0x0ULL
 #define DR1_RESET_STATE  0x0ULL
@@ -611,6 +613,7 @@ typedef union ia32e_paging_table_u {
 #define MIN_PA_FOR_PML5         49ULL
 #define MAX_PA_FOR_GPAW         MAX_PA
 #define MAX_PA_FOR_GPA_NOT_WIDE 48ULL
+#define MIN_VIRT_MAXPA          45ULL
 #define NULL_PA                 ~(0ULL) // -1
 
 typedef union pa_u {
@@ -1393,8 +1396,10 @@ tdx_static_assert(sizeof(ia32_apic_register_t) == 4*4, ia32_apic_register_t);
 
 #define APIC_IRR_ISR_SIZE               8
 
-#define POLY_MASK_32 0xB4BCD35C
+#define POLY_MASK_32                    0xB4BCD35C
 
-#define HW_EXCEPTION       3
+#define HW_EXCEPTION                    3
+
+#define TDX_MODULE_IA32_FIXED_CTR_CTRL  0x3
 
 #endif /* SRC_COMMON_X86_DEFS_X86_DEFS_H_ */

@@ -42,6 +42,15 @@
 #include "td_dispatcher/vm_exits/td_vmexit.h"
 #include "virt_msr_helpers.h"
 
+#if (!defined(__cplusplus))
+void* memset(void *str, int c, uint32_t n)
+{
+    basic_memset((uint64_t)str, n, (uint8_t)c, n);
+
+    return str;
+}
+#endif
+
 api_error_code_e program_mktme_keys(uint16_t hkid)
 {
 	mktme_key_program_t mktme_key_program;
@@ -111,9 +120,11 @@ void basic_memset(uint64_t dst, uint64_t dst_bytes, uint8_t val, uint64_t nbytes
 {
     tdx_sanity_check (dst_bytes >= nbytes, SCEC_HELPERS_SOURCE, 2);
 
+    volatile uint64_t junk;
+
     _ASM_VOLATILE_ ("cld\n"
                     "rep; stosb;"
-                    :
+                    :"=D"(junk) // marking that RDI is changing
                     :"c"(nbytes), "a"(val), "D"(dst)
                     :"memory", "cc");
 }
@@ -639,11 +650,7 @@ tdvps_t* map_tdvps(
     return tdvpr_lp;
 }
 
-bool_t check_gpa_validity(
-        pa_t gpa,
-        bool_t gpaw,
-        bool_t check_is_private
-        )
+bool_t check_gpa_validity(pa_t gpa, bool_t gpaw, bool_t check_is_private, uint8_t virt_maxpa)
 {
     uint16_t gpa_width = gpaw ? 52 : 48;
     bool_t gpa_shared_bit = get_gpa_shared_bit(gpa.raw, gpaw);
@@ -653,15 +660,18 @@ bool_t check_gpa_validity(
         return false;
     }
 
-    // Bits higher then MAX_PA except shared bit must be zero (bits above SHARED bit must be zero)
-    if ((gpa.raw & ~BITS(MAX_PA-1,0)) != 0)
+    if (0 == virt_maxpa)
     {
-        return false;
+        virt_maxpa = MAX_PA;
     }
+    
+    uint16_t min_gpa_width = (virt_maxpa < gpa_width) ? virt_maxpa : gpa_width;
 
-    // When a TD is operating with GPAW 48, the CPU will treat bits 51:48 of every paging-structure
-    // entry as reserved and will generate reserved-bit page fault upon encountering such an entry.
-    if (!gpaw && (gpa.raw & BITS(MAX_PA-1, gpa_width)))
+    // Create a mask with bits above min GPA width set, and shared bit removed
+    uint64_t mask_to_check = BITS(63, min_gpa_width) & ~BIT(gpa_width - 1);
+
+    // Bits higher then MAX_PA except shared bit must be zero (bits above SHARED bit must be zero)
+    if ((gpa.raw & mask_to_check) != 0)
     {
         return false;
     }
@@ -720,7 +730,7 @@ static api_error_type lock_sept_check_and_walk_internal(
 
     *is_sept_locked = false;
 
-    if (check_validity && !check_gpa_validity(gpa, gpaw, PRIVATE_ONLY))
+    if (check_validity && !check_gpa_validity(gpa, gpaw, PRIVATE_ONLY, tdcs_p->executions_ctl_fields.virt_maxpa))
     {
         return api_error_with_operand_id(TDX_OPERAND_INVALID, operand_id);
     }
@@ -864,7 +874,7 @@ api_error_code_e check_walk_and_map_guest_side_gpa(
 
     exit_qual.raw = (uint64_t)access_rights.raw;
 
-    if (!check_gpa_validity(gpa, gpaw, check_gpa_is_private))
+    if (!check_gpa_validity(gpa, gpaw, check_gpa_is_private, tdcs_p->executions_ctl_fields.virt_maxpa))
     {
         return TDX_OPERAND_INVALID;
     }
@@ -1402,6 +1412,11 @@ bool_t verify_td_attributes(td_param_attributes_t attributes, bool_t is_import)
         return false;
     }
 
+    if (attributes.perfmon && attributes.icssd)
+    {
+        return false;
+    }
+
     return true;
 }
 
@@ -1655,6 +1670,14 @@ void advance_guest_rip(void)
     set_guest_pde_bs();
 }
 
+void increment_fixed_ctr0(tdcs_t* tdcs_p)
+{
+    if (!tdcs_p->executions_ctl_fields.attributes.perfmon)
+    {
+        ia32_wrmsr(IA32_FIXED_CTR0_MSR_ADDR, ia32_rdmsr(IA32_FIXED_CTR0_MSR_ADDR) + 1);
+    }
+}
+
 void clear_movss_sti_blocking(void)
 {
     vmx_guest_inter_state_t guest_inter_state;
@@ -1876,7 +1899,7 @@ api_error_type check_and_init_imported_td_state_immutable (tdcs_t* tdcs_ptr)
 
     // Check the imported CPUID(0x1F) values and set CPUID(0xB) values
 
-    api_error_type return_val = check_cpuid_1f(tdcs_ptr, false);
+    api_error_type return_val = check_cpuid_1f_and_compute_cpuid_0b(tdcs_ptr, false);
     if (return_val != TDX_SUCCESS)
     {
         return return_val;
@@ -1945,7 +1968,7 @@ api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap
                                             td_info_t* td_info, measurement_t* tee_info_hash, bool_t is_guest)
 {
     td_info_t             td_info_local;
-    uint128_t             xmms[16];                  // SSE state backup for crypto
+    ALIGN(32) uint256_t   ymms[16];                  // AVX/SSE state backup for crypto
     crypto_api_error      sha_error_code;
     api_error_code_e      retval = UNINITIALIZE_ERROR;
     bool_t                rtmr_locked_flag = true;
@@ -2027,7 +2050,7 @@ api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap
     else
     {
         // Compute TEE_INFO_HASH
-        store_xmms_in_buffer(xmms);
+        store_ymms_in_buffer(ymms);
 
         if ((sha_error_code = sha384_generate_hash((const uint8_t *)td_info,
                                                     sizeof(td_info_t),
@@ -2038,8 +2061,8 @@ api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap
             FATAL_ERROR();
         }
 
-        load_xmms_from_buffer(xmms);
-        basic_memset_to_zero(xmms, sizeof(xmms));
+        load_ymms_from_buffer(ymms);
+        basic_memset_to_zero(ymms, sizeof(ymms));
 
         if (ignore_tdinfo.raw == 0)
         {
@@ -2477,6 +2500,11 @@ bool_t translate_gpas(
         goto EXIT;
     }
 
+    /*
+     * Translate the soft-translated GPA L2 VMCS fields whose shadow HPA is NULL_PA,
+     * using the L1 SEPT.
+     */
+
     hpa = tdvps_ptr->management.l2_vapic_hpa[vm_id];
     if (hpa == NULL_PA)
     {
@@ -2662,11 +2690,11 @@ void calculate_servtd_hash(tdcs_t* tdcs_ptr, bool_t handle_avx_state)
     }
     else
     {
-        ALIGN(16) uint128_t xmms[16];
+        ALIGN(32) uint256_t ymms[16];
 
         if (handle_avx_state)
         {
-            store_xmms_in_buffer(xmms);
+            store_ymms_in_buffer(ymms);
         }
 
         crypto_api_error sha_error_code = sha384_generate_hash((const uint8_t*)servtd_hash_buff,
@@ -2675,8 +2703,8 @@ void calculate_servtd_hash(tdcs_t* tdcs_ptr, bool_t handle_avx_state)
 
         if (handle_avx_state)
         {
-            load_xmms_from_buffer(xmms);
-            basic_memset_to_zero(xmms, sizeof(xmms));
+            load_ymms_from_buffer(ymms);
+            basic_memset_to_zero(ymms, sizeof(ymms));
         }
 
         if (sha_error_code != 0)
@@ -2688,11 +2716,14 @@ void calculate_servtd_hash(tdcs_t* tdcs_ptr, bool_t handle_avx_state)
     }
 }
 
-api_error_type check_cpuid_1f(tdcs_t* tdcs_p, bool_t allow_null)
+api_error_type check_cpuid_1f_and_compute_cpuid_0b(tdcs_t* tdcs_p, bool_t allow_null)
 {
     uint32_t cpuid_0b_idx;
     cpuid_topology_level_type_e prev_level_type;
     cpuid_topology_level_type_e level_type = LEVEL_TYPE_INVALID;
+
+    cpuid_config_return_values_t last_cpuid_values;
+    uint32_t cpuid_0b_level = 0;
 
     cpuid_topology_shift_t cpuid_1f_eax;
     cpuid_topology_level_t cpuid_1f_ecx;
@@ -2747,22 +2778,33 @@ api_error_type check_cpuid_1f(tdcs_t* tdcs_p, bool_t allow_null)
         if (level_type != LEVEL_TYPE_INVALID)
         {
             // This is a valid sub-leaf.  Check that level type higher than the previous one
-            // (initialized to INVALID, which is 0) but does not reach the max.
-            if ((level_type <= prev_level_type) || (level_type >= LEVEL_TYPE_MAX))
+            // (initialized to INVALID, which is 0) but does not reach the max. Also check
+            // that ECX provides the correct subleaf number.
+            if ((level_type <= prev_level_type) || (level_type >= LEVEL_TYPE_MAX) || cpuid_1f_ecx.level_number != subleaf)
             {
                 return TDX_CPUID_LEAF_1F_FORMAT_UNRECOGNIZED;
             }
 
             if (level_type == LEVEL_TYPE_SMT)
             {
+                // SMT level, if provided, must be at sub leaf 0
+                if (subleaf != 0)
+                {
+                    return TDX_CPUID_LEAF_1F_FORMAT_UNRECOGNIZED;
+                }
+
                 // CPUID(0x0B, 0) is the SMT level. It is identical to CPUID(0x1F) at the SMT level.
                 cpuid_0b_idx = get_cpuid_lookup_entry(0xB, 0);
                 tdcs_p->cpuid_config_vals[cpuid_0b_idx] = cpuid_values;
+
+                cpuid_0b_level = 1;
             }
             else if (level_type == LEVEL_TYPE_CORE)
             {
                 core_level_scanned = true;   // Prepare a flag for a sanity check later
             }
+
+            last_cpuid_values = cpuid_values;
         }
         else  // level_type == CPUID_1F_ECX_t::INVALID
         {
@@ -2779,14 +2821,36 @@ api_error_type check_cpuid_1f(tdcs_t* tdcs_p, bool_t allow_null)
                 return TDX_CPUID_LEAF_1F_FORMAT_UNRECOGNIZED;
             }
         }
+    }
 
-        // Generate virtual CPUID(0xB) values
+    // Generate virtual CPUID(0xB) values
 
-        // CPUID(0x0B, 1) is the core level.  The information is of the last valid level of CPUID(0x1F)
-        cpuid_0b_idx = get_cpuid_lookup_entry(0xB, 1);
-        cpuid_1f_ecx.level_type = LEVEL_TYPE_CORE;
-        cpuid_values.ecx = cpuid_1f_ecx.raw;
-        tdcs_p->cpuid_config_vals[cpuid_0b_idx] = cpuid_values;
+    // Compute the CPUID(0x0B) core level.  EAX and EBX values are of the last valid level of CPUID(0x1F)
+    cpuid_0b_idx = get_cpuid_lookup_entry(0xB, cpuid_0b_level);
+
+    // ECX values:  sub-leaf and level type CORE
+    cpuid_1f_ecx.raw = 0;
+    cpuid_1f_ecx.level_number = cpuid_0b_level;
+    cpuid_1f_ecx.level_type = LEVEL_TYPE_CORE;
+    last_cpuid_values.ecx = cpuid_1f_ecx.raw;
+    tdcs_p->cpuid_config_vals[cpuid_0b_idx] = last_cpuid_values;
+
+    // Fill the next CPUID(0x0B) levels up to 2 as null, indicating last sub-leaf
+    while (cpuid_0b_level < 2)
+    {
+        cpuid_0b_level++;
+        cpuid_0b_idx = get_cpuid_lookup_entry(0xB, cpuid_0b_level);
+
+        last_cpuid_values.eax = 0;
+        last_cpuid_values.ebx = 0;
+
+        // ECX values:  sub-leaf and level type INVALID
+        cpuid_1f_ecx.raw = 0;
+        cpuid_1f_ecx.level_number = cpuid_0b_level;
+        cpuid_1f_ecx.level_type = LEVEL_TYPE_INVALID;
+        last_cpuid_values.ecx = cpuid_1f_ecx.raw;
+
+        basic_memset_to_zero((void*)&tdcs_p->cpuid_config_vals[cpuid_0b_idx], sizeof(cpuid_config_return_values_t));
     }
 
     return TDX_SUCCESS;

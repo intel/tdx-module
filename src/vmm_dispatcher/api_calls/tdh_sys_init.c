@@ -41,6 +41,7 @@
 
 #include "helpers/smrrs.h"
 #include "auto_gen/cpuid_configurations.h"
+#include "auto_gen/td_vmcs_fields_lookup.h"
 
 /*
  * check_allowed_vmx_ctls
@@ -256,24 +257,19 @@ _STATIC_INLINE_ api_error_type check_key_management_config(tdx_module_global_t* 
     tdx_global_data_ptr->plt_common_config.ia32_tme_capability.raw = ia32_rdmsr(IA32_TME_CAPABILITY_MSR_ADDR);
     tdx_global_data_ptr->plt_common_config.ia32_tme_activate.raw = ia32_rdmsr(IA32_TME_ACTIVATE_MSR_ADDR);
 
-    uint32_t msr_addr = check_mem_enc_alg(tdx_global_data_ptr->plt_common_config.ia32_tme_capability,
-                                          tdx_global_data_ptr->plt_common_config.ia32_tme_activate);
+    uint32_t msr_addr = check_mem_enc_alg(tdx_global_data_ptr->plt_common_config.ia32_tme_capability, tdx_global_data_ptr->plt_common_config.ia32_tme_activate);
     if (msr_addr != 0)
     {
         return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, msr_addr);
     }
 
-    tdx_global_data_ptr->hkid_start_bit = (uint32_t)(MAX_PA -
-            (uint64_t)tdx_global_data_ptr->plt_common_config.ia32_tme_activate.mk_tme_keyid_bits);
+    tdx_global_data_ptr->hkid_start_bit = (uint32_t)(tdx_global_data_ptr->max_pa - (uint64_t)tdx_global_data_ptr->plt_common_config.ia32_tme_activate.mk_tme_keyid_bits);
 
-    tdx_global_data_ptr->hkid_mask = BITS(MAX_PA - 1,
-                                          tdx_global_data_ptr->hkid_start_bit);
+    tdx_global_data_ptr->hkid_mask = BITS(tdx_global_data_ptr->max_pa - 1, tdx_global_data_ptr->hkid_start_bit);
 
-    tdx_global_data_ptr->plt_common_config.ia32_tme_keyid_partitioning.raw =
-            ia32_rdmsr(IA32_MKTME_KEYID_PARTITIONING_MSR_ADDR);
+    tdx_global_data_ptr->plt_common_config.ia32_tme_keyid_partitioning.raw = ia32_rdmsr(IA32_MKTME_KEYID_PARTITIONING_MSR_ADDR);
 
-    tdx_global_data_ptr->private_hkid_min =
-            tdx_global_data_ptr->plt_common_config.ia32_tme_keyid_partitioning.num_mktme_kids + 1;
+    tdx_global_data_ptr->private_hkid_min = tdx_global_data_ptr->plt_common_config.ia32_tme_keyid_partitioning.num_mktme_kids + 1;
 
     tdx_global_data_ptr->private_hkid_max =
             tdx_global_data_ptr->plt_common_config.ia32_tme_keyid_partitioning.num_mktme_kids +
@@ -730,6 +726,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
             cpuid_80000008_eax_t cpuid_80000008_eax = { .raw = cpuid_config.values.eax };
 
             global_data_ptr->max_pa = cpuid_80000008_eax.pa_bits;
+            tdx_sanity_check(global_data_ptr->max_pa <= 52, SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 10);
 
             // Check that LA_BITS is compatible with LA57 from CPUID(7, 0).ECX[16]
             if (global_data_ptr->la57_supported)
@@ -927,6 +924,7 @@ _STATIC_INLINE_ api_error_type check_l2_vmx_msrs(tdx_module_global_t* tdx_global
     vmx_procbased_ctls3_t procbased_ctls3_init = { .raw = PROCBASED_CTLS3_L2_INIT };
 
     vmx_procbased_ctls3_t procbased_ctls3_variable = { .raw = PROCBASED_CTLS3_L2_VARIABLE };
+    
     // The L2 VMCS spreadsheet generates the VARIABLE mask for the VIRTUALIZE_IA32_SPEC_CTRL as 1,
     // however this bit is only set if the CPU supports it. Therefore don't check it.
     procbased_ctls3_variable.virt_ia32_spec_ctrl = 0;
@@ -1028,7 +1026,6 @@ _STATIC_INLINE_ api_error_type check_vmx_msrs(tdx_module_global_t* tdx_global_da
     vmx_procbased_ctls3_t procbased_ctls3_init = {.raw = PROCBASED_CTLS3_INIT};
 
     msr_values_ptr->ia32_vmx_procbased_ctls3.raw = ia32_rdmsr(IA32_VMX_PROCBASED_CTLS3_MSR_ADDR);
-
     // If the CPU supports DDPD, then it must support IA32_SPEC_CTRL virtualization
     if (tdx_global_data_ptr->ddpd_supported &&
         !msr_values_ptr->ia32_vmx_procbased_ctls3.virt_ia32_spec_ctrl)
@@ -1037,7 +1034,7 @@ _STATIC_INLINE_ api_error_type check_vmx_msrs(tdx_module_global_t* tdx_global_da
     }
 
     vmx_procbased_ctls3_t procbased_ctls3_variable = { .raw = PROCBASED_CTLS3_VARIABLE };
-
+    
     // The TD VMCS spreadsheet generates the VARIABLE mask for the VIRTUALIZE_IA32_SPEC_CTRL as 1,
     // however this bit is only set if the CPU supports it. Therefore don't check it.
     procbased_ctls3_variable.virt_ia32_spec_ctrl = 0;

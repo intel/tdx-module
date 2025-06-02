@@ -98,7 +98,7 @@ RUN wget -P /tmp --no-check-certificate https://www.nasm.us/pub/nasm/releasebuil
 RUN apt install -y build-essential checkinstall \
     && apt-get -y install zlib1g-dev \
     && wget -P /tmp --no-check-certificate https://www.python.org/ftp/python/3.8.1/Python-3.8.1.tar.xz \
-    && wget -P /tmp --no-check-certificate https://bootstrap.pypa.io/get-pip.py -o get-pip.py \
+    && wget -P /tmp --no-check-certificate https://bootstrap.pypa.io/pip/3.8/get-pip.py -o get-pip.py \
     && cd /tmp && tar -xvf Python-3.8.1.tar.xz \
     && cd /tmp/Python-3.8.1 \
     && ./configure \

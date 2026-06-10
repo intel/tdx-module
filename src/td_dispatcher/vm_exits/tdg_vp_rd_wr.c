@@ -28,12 +28,12 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_api_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/tdx_local_data.h"
 #include "x86_defs/x86_defs.h"
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
-#include "auto_gen/tdvps_fields_lookup.h"
+#include TDVPS_FIELDS_LOOKUP_HEADER
 
 static api_error_type tdg_vp_rd_wr(md_field_id_t field_id, tdx_module_local_t * local_data_ptr, bool_t write,
                                    uint64_t wr_value, uint64_t wr_request_mask)
@@ -92,7 +92,7 @@ static api_error_type tdg_vp_rd_wr(md_field_id_t field_id, tdx_module_local_t * 
     if (write)
     {
         return_val = md_write_element(MD_CTX_VP, field_id, access_type, access_qual,
-                                      md_ctx, wr_value, wr_request_mask, &rd_value);
+                                      md_ctx, wr_value, wr_request_mask, &rd_value, true);
     }
     else
     {

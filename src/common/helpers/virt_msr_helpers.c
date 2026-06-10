@@ -26,28 +26,28 @@
  */
 
 #include "virt_msr_helpers.h"
-#include "auto_gen/tdr_tdcs_fields_lookup.h"
+#include TDR_TDCS_FIELDS_LOOKUP_HEADER
 #include "x86_defs/vmcs_defs.h"
 
 void init_virt_ia32_vmx_msrs(tdcs_t* tdcs_ptr)
 {
-    tdcs_ptr->virt_msrs.virt_ia32_vmx_basic               = calc_virt_ia32_vmx_basic();
-    tdcs_ptr->virt_msrs.virt_ia32_vmx_misc                = calc_virt_ia32_vmx_misc();
+    tdcs_ptr->virt_msrs.virtual_ia32_vmx_basic               = calc_virt_ia32_vmx_basic();
+    tdcs_ptr->virt_msrs.virtual_ia32_vmx_misc                = calc_virt_ia32_vmx_misc();
 
-    tdcs_ptr->virt_msrs.virt_ia32_vmx_true_pinbased_ctls  = calc_virt_ia32_vmx_true_pinbased_ctls();
-    tdcs_ptr->virt_msrs.virt_ia32_vmx_true_procbased_ctls = calc_virt_ia32_vmx_true_procbased_ctls(tdcs_ptr);
-    tdcs_ptr->virt_msrs.virt_ia32_vmx_procbased_ctls2     = calc_virt_ia32_vmx_procbased_ctls2(tdcs_ptr);
-    tdcs_ptr->virt_msrs.virt_ia32_vmx_procbased_ctls3     = calc_virt_ia32_vmx_procbased_ctls3();
-    tdcs_ptr->virt_msrs.virt_ia32_vmx_true_exit_ctls      = calc_virt_ia32_vmx_true_vmexit_ctls(tdcs_ptr);
-    tdcs_ptr->virt_msrs.virt_ia32_vmx_true_entry_ctls     = calc_virt_ia32_vmx_true_vmentry_ctls(tdcs_ptr);
+    tdcs_ptr->virt_msrs.virtual_ia32_vmx_true_pinbased_ctls  = calc_virt_ia32_vmx_true_pinbased_ctls();
+    tdcs_ptr->virt_msrs.virtual_ia32_vmx_true_procbased_ctls = calc_virt_ia32_vmx_true_procbased_ctls(tdcs_ptr);
+    tdcs_ptr->virt_msrs.virtual_ia32_vmx_procbased_ctls2     = calc_virt_ia32_vmx_procbased_ctls2(tdcs_ptr);
+    tdcs_ptr->virt_msrs.virtual_ia32_vmx_procbased_ctls3     = calc_virt_ia32_vmx_procbased_ctls3();
+    tdcs_ptr->virt_msrs.virtual_ia32_vmx_true_exit_ctls      = calc_virt_ia32_vmx_true_vmexit_ctls(tdcs_ptr);
+    tdcs_ptr->virt_msrs.virtual_ia32_vmx_true_entry_ctls     = calc_virt_ia32_vmx_true_vmentry_ctls(tdcs_ptr);
 
-    tdcs_ptr->virt_msrs.virt_ia32_vmx_ept_vpid_cap        = calc_virt_ia32_vmx_ept_vpid_cap(tdcs_ptr);
-    tdcs_ptr->virt_msrs.virt_ia32_vmx_vmfunc              = calc_virt_ia32_vmx_vmfunc();
+    tdcs_ptr->virt_msrs.virtual_ia32_vmx_ept_vpid_cap        = calc_virt_ia32_vmx_ept_vpid_cap(tdcs_ptr);
+    tdcs_ptr->virt_msrs.virtual_ia32_vmx_vmfunc              = calc_virt_ia32_vmx_vmfunc();
 
-    calc_virt_ia32_vmx_cr0_fixed(&tdcs_ptr->virt_msrs.virt_ia32_vmx_cr0_fixed0.raw,
-                                 &tdcs_ptr->virt_msrs.virt_ia32_vmx_cr0_fixed1.raw);
-    calc_virt_ia32_vmx_cr4_fixed(tdcs_ptr, &tdcs_ptr->virt_msrs.virt_ia32_vmx_cr4_fixed0.raw,
-                                           &tdcs_ptr->virt_msrs.virt_ia32_vmx_cr4_fixed1.raw);
+    calc_virt_ia32_vmx_cr0_fixed(&tdcs_ptr->virt_msrs.virtual_ia32_vmx_cr0_fixed0.raw,
+                                 &tdcs_ptr->virt_msrs.virtual_ia32_vmx_cr0_fixed1.raw);
+    calc_virt_ia32_vmx_cr4_fixed(tdcs_ptr, &tdcs_ptr->virt_msrs.virtual_ia32_vmx_cr4_fixed0.raw,
+                                           &tdcs_ptr->virt_msrs.virtual_ia32_vmx_cr4_fixed1.raw);
 }
 
 // Initialize the values of the virtual IA32_ARCH_CAPABILITIES MSR
@@ -129,7 +129,7 @@ bool_t init_virt_ia32_arch_capabilities(tdcs_t* tdcs_p, bool_t config_flag, uint
         return false;
     }
 
-    tdcs_p->virt_msrs.virt_ia32_arch_capabilities = arch_cap_value.raw;
+    tdcs_p->virt_msrs.virtual_ia32_arch_capabilities = arch_cap_value.raw;
 
     return true;
 }

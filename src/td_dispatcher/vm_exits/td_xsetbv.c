@@ -34,7 +34,7 @@
 #include "x86_defs/vmcs_defs.h"
 #include "data_structures/tdx_local_data.h"
 #include "tdx_td_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "vmm_dispatcher/tdx_vmm_dispatcher.h"
 #include "td_dispatcher/vm_exits/td_vmexit.h"
 #include "helpers/helpers.h"

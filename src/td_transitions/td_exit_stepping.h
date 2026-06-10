@@ -28,7 +28,7 @@
 #ifndef SRC_TD_TRANSITIONS_TD_EXIT_STEPPING_H_
 #define SRC_TD_TRANSITIONS_TD_EXIT_STEPPING_H_
 
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/td_control_structures.h"
 
 typedef enum {
@@ -38,6 +38,7 @@ typedef enum {
     FILTER_FAIL_TDEXIT_WRONG_APIC_MODE,
     FILTER_FAIL_TDENTER_EPFS,
     FILTER_FAIL_SEPT_TREE_BUSY,
+    FILTER_FAIL_TDEXIT_RDRAND
 } stepping_filter_e;
 
 #define STEPPING_EPF_THRESHOLD 6   // Threshold of confidence in detecting EPT fault-based stepping in progress

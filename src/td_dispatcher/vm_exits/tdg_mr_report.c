@@ -28,7 +28,7 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_api_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/tdx_local_data.h"
 #include "x86_defs/x86_defs.h"
 #include "accessors/ia32_accessors.h"
@@ -50,9 +50,9 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
 
     bool_t                interrupt_pending = false;
 
-    tdx_sanity_check(tdr_p != NULL, SCEC_TDCALL_SOURCE(TDG_MR_REPORT_LEAF), 0);
-    tdx_sanity_check(tdcs_p != NULL, SCEC_TDCALL_SOURCE(TDG_MR_REPORT_LEAF), 1);
-    tdx_sanity_check(tdvps_p != NULL, SCEC_TDCALL_SOURCE(TDG_MR_REPORT_LEAF), 2);
+    tdx_sanity_check(tdr_p != NULL, FATAL_ERROR_ID_265, 0);
+    tdx_sanity_check(tdcs_p != NULL, FATAL_ERROR_ID_266, 1);
+    tdx_sanity_check(tdvps_p != NULL, FATAL_ERROR_ID_267, 2);
 
     /**
      * GPA of newly created tdg_mr_report_t and report_data - given as input

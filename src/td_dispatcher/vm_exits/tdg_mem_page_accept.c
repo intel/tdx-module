@@ -28,7 +28,7 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_api_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/tdx_local_data.h"
 #include "accessors/ia32_accessors.h"
 #include "memory_handlers/sept_manager.h"
@@ -130,10 +130,10 @@ static tdaccept_failure_type_t check_tdaccept_failure(bool_t walk_failed, bool_t
     return TDACCEPT_SUCCESS;
 }
 
-static void init_sept_4k_page(ia32e_sept_t sept_entry)
+static void init_sept_4k_page(tdr_t* tdr_p, ia32e_sept_t sept_entry)
 {
     uint64_t page_to_accept_hpa = sept_entry.raw & IA32E_PAGING_STRUCT_ADDR_MASK;
-    void* page_to_accept_la = map_pa((void*)page_to_accept_hpa, TDX_RANGE_RW);
+    void* page_to_accept_la = map_pa_with_hkid((void*)page_to_accept_hpa, tdr_p->key_management_fields.hkid, TDX_RANGE_RW);
 
     // Initialize the 4KB page
     zero_area_cacheline(page_to_accept_la, TDX_PAGE_SIZE_IN_BYTES);
@@ -170,8 +170,8 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
     tdr_t* tdr_p = tdx_local_data_ptr->vp_ctx.tdr;
     tdcs_t* tdcs_p = tdx_local_data_ptr->vp_ctx.tdcs;
 
-    tdx_sanity_check(tdr_p != NULL, SCEC_TDCALL_SOURCE(TDG_MEM_PAGE_ACCEPT_LEAF), 0);
-    tdx_sanity_check(tdcs_p != NULL, SCEC_TDCALL_SOURCE(TDG_MEM_PAGE_ACCEPT_LEAF), 1);
+    tdx_sanity_check(tdr_p != NULL, FATAL_ERROR_ID_258, 0);
+    tdx_sanity_check(tdcs_p != NULL, FATAL_ERROR_ID_259, 1);
 
     if (!check_gpa_validity(page_gpa, tdcs_p->executions_ctl_fields.gpaw, PRIVATE_ONLY, tdcs_p->executions_ctl_fields.virt_maxpa))
     {
@@ -181,7 +181,8 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
     }
 
     ept_level_t ept_level = req_accept_level;
-    return_val = walk_private_gpa(tdcs_p, page_gpa, &sept_entry_ptr, &ept_level, &sept_entry_copy);
+    return_val = walk_private_gpa(tdcs_p, page_gpa, tdr_p->key_management_fields.hkid,
+                                  &sept_entry_ptr, &ept_level, &sept_entry_copy);
 
     bool_t is_leaf = is_secure_ept_leaf_entry(&sept_entry_copy);
 
@@ -219,7 +220,7 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
         }
         else
         {
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_99, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
     }
 
@@ -236,7 +237,7 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
 
     if (req_accept_level == LVL_PT)
     {
-        init_sept_4k_page(sept_entry_copy);
+        init_sept_4k_page(tdr_p, sept_entry_copy);
     }
     else
     {
@@ -244,7 +245,7 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
         bool_t tdaccept_2mb_done = false;
         do
         {
-            init_sept_4k_page(sept_entry_copy);
+            init_sept_4k_page(tdr_p, sept_entry_copy);
 
             if (sept_entry_copy.accept_counter == (NUM_OF_4K_PAGES_IN_2MB - 1))
             {
@@ -288,7 +289,9 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
             return_val = l2_sept_walk(tdr_p, tdcs_p, vm_id, page_gpa, &req_accept_level, &l2_sept_entry_ptr);
             if (return_val != TDX_SUCCESS)
             {
-                FATAL_ERROR(); // Should not happen - no need to free the L2 SEPT PTR's
+                // Should not happen - no need to free the L2 SEPT PTR's
+                extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(tdx_local_data_ptr->vp_ctx.tdr_pa.raw, vm_id, req_accept_level, page_gpa.raw, *l2_sept_entry_ptr);
+                fatal_error(FATAL_ERROR_ID_1, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
             }
 
             sept_l2_unblock(l2_sept_entry_ptr);

@@ -30,9 +30,9 @@
 
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
-#include "auto_gen/tdx_error_codes_defs.h"
-#include "auto_gen/td_l2_vmcs_fields_lookup.h"
 #include "tdx_api_defs.h"
+#include TD_L2_VMCS_FIELDS_LOOKUP_HEADER
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "accessors/data_accessors.h"
 #include "accessors/vt_accessors.h"
@@ -238,7 +238,7 @@ _STATIC_INLINE_ bool_t is_overlap(uint64_t base, uint64_t size, uint64_t base2, 
     // The check here is for DiD only, not functionality
     IF_RARE (!is_valid_integer_range(base, size) || !is_valid_integer_range(base2, size2))
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_37, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     if ((base >= (base2 + size2)) || (base2 >= (base + size)))
@@ -252,7 +252,7 @@ _STATIC_INLINE_ uint64_t mask_to_size(uint64_t mask)
 {
     if (mask == 0)
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_38, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     uint64_t lsb_position;
@@ -320,7 +320,7 @@ _STATIC_INLINE_ uint64_t leaf_ept_entry_to_hpa(ia32e_sept_t entry, uint64_t gpa,
         default:
         {
             // Not supported
-            tdx_sanity_check(0, SCEC_HELPERS_SOURCE, 0);
+            tdx_sanity_check(0, FATAL_ERROR_ID_182, 0);
             return 0;
         }
     }
@@ -440,25 +440,25 @@ _STATIC_INLINE_ void zero_cacheline(void* dst)
 
 _STATIC_INLINE_ void tdx_memcpy(void * dst, uint64_t dst_bytes, void * src, uint64_t nbytes)
 {
-    volatile uint64_t junk_a, junk_b;
+    volatile uint64_t junk_a, junk_b, junk_c;
 
-    tdx_sanity_check (dst_bytes >= nbytes, SCEC_HELPERS_SOURCE, 1);
+    tdx_sanity_check (dst_bytes >= nbytes, FATAL_ERROR_ID_183, 1);
 
     _ASM_VOLATILE_ ("rep; movsb;"
-                    :"=S"(junk_a), "=D"(junk_b)
+                    :"=S"(junk_a), "=D"(junk_b), "=c"(junk_c)
                     :"c"(nbytes), "S"(src), "D"(dst)
                     :"memory");
 }
 
 _STATIC_INLINE_ void tdx_memcpy_dw(void *dst, uint64_t dst_bytes, void *src, uint64_t nbytes)
 {
-    volatile uint64_t junk_a, junk_b;
+    volatile uint64_t junk_a, junk_b, junk_c;
 
-    tdx_sanity_check(dst_bytes >= nbytes, SCEC_HELPERS_SOURCE, 2);
-    tdx_sanity_check((nbytes % 4) == 0, SCEC_HELPERS_SOURCE, 4);
+    tdx_sanity_check(dst_bytes >= nbytes, FATAL_ERROR_ID_184, 2);
+    tdx_sanity_check((nbytes % 4) == 0, FATAL_ERROR_ID_185, 4);
 
     _ASM_VOLATILE_("rep; movsd;"
-                   : "=S"(junk_a), "=D"(junk_b)
+                   : "=S"(junk_a), "=D"(junk_b), "=c"(junk_c)
                    : "c"(nbytes / 4), "S"(src), "D"(dst)
                    : "memory");
 }
@@ -480,11 +480,11 @@ _STATIC_INLINE_ bool_t tdx_memcmp_safe(const void * a, const void * b, uint64_t 
 _STATIC_INLINE_ bool_t tdx_memcmp(void * a, void * b, uint64_t nbytes)
 {
     ia32_rflags_t rflags;
-    uint64_t junk_a, junk_b;
+    uint64_t junk_a, junk_b, junk_c;
     _ASM_VOLATILE_ ("repe; cmpsb;"
                     "pushfq\n"
                     "popq %0"
-                    : "=r"(rflags.raw), "=S"(junk_a), "=D"(junk_b)
+                    : "=r"(rflags.raw), "=S"(junk_a), "=D"(junk_b), "=c"(junk_c)
                     :"c"(nbytes), "S"(b), "D"(a)
                     :"memory");
     if (rflags.zf == 0)
@@ -492,21 +492,6 @@ _STATIC_INLINE_ bool_t tdx_memcmp(void * a, void * b, uint64_t nbytes)
         return false;
     }
     return true;
-}
-
-_STATIC_INLINE_ bool_t tdx_safe_memcmp(const void * a, const void * b, uint64_t nbytes)
-{
-    volatile uint8_t result = 0;
-
-    volatile uint8_t* a_8 = (uint8_t*)a;
-    volatile uint8_t* b_8 = (uint8_t*)b;
-
-    for (uint64_t i = 0; i < nbytes; i++)
-    {
-        result |= (a_8[i] ^ b_8[i]);
-    }
-
-    return (result == 0);
 }
 
 _STATIC_INLINE_ bool_t tdx_memcmp_to_zero(void *a, uint64_t nBytes)
@@ -573,11 +558,13 @@ _STATIC_INLINE_ void invalidate_cache_lines(uint64_t start_addr, uint64_t size)
  * @param hpa - HPA that needs to be checked
  * @param lock_type - What type of lock to take on the PAMT leaf entry
  * @param expected_pt - Check the found PAMT entry against that type
- * @param pamt_block - Returns the the pamt_block virtual structure that covers the HPA
- * @param pamt_entry - Returns the linear pointer to the pamt_entry that belongs to the HPA
- * @param leaf_size  - Returns the PAMT leaf size of the HPA entry
- * @param walk_to_leaf_size - If it is true, leaf_size is used as an input too, and PAMT walk stops at that level
+ * @param target_size - Stops at target size if walk_to_leaf_size is true
+ * @param walk_to_leaf_size - If true, PAMT walk stops at target_size
  * @param is_guest - Indicated whether the PAMT walk/lock request came from the TD guest
+ * @param pamt_block - Returns the the pamt_block virtual structure that covers the HPA
+ * @param pamt_walk_result - Returns the linear pointers of all PAMT entries reached during the walk.
+ *                           Returns the reached level.
+ *                           Non-reached levels contain NULL. Must be passed to pamt_unwalk to be freed after use.
  *
  * @return Error code that states the reason of failure
  */
@@ -585,11 +572,11 @@ api_error_code_e non_shared_hpa_metadata_check_and_lock(
         pa_t hpa,
         lock_type_t lock_type,
         page_type_t expected_pt,
+        page_size_t target_size,
+        bool_t walk_to_target_size,
+        bool_t is_guest,
         pamt_block_t* pamt_block,
-        pamt_entry_t** pamt_entry,
-        page_size_t*   leaf_size,
-        bool_t walk_to_leaf_size,
-        bool_t is_guest
+        pamt_walk_result_t* pamt_walk_result
         );
 
 /**
@@ -656,8 +643,9 @@ api_error_code_e hpa_check_with_pwr_2_alignment(pa_t hpa, uint64_t size);
  * @param lock_type - What type of lock to take on the PAMT leaf entry
  * @param expected_pt - Check the found PAMT entry against that type - should be either PT_NDA during
  *                      TDR creation, or PT_TDR for everything else.
- * @param pamt_block - Returns the virtual pamt_block structure that covers the HPA
- * @param pamt_entry - Returns the pointer to the pamt_entry that belongs to the HPA
+ * @param pamt_walk_result - Returns the linear pointers of all PAMT entries reached during the walk.
+ *                           Returns the reached level.
+ *                           Non-reached levels contain NULL. Must be passed to pamt_unwalk to be freed after use.
  * @param is_locked  - Returns TRUE if the lock on PAMT was taken
  * @param tdr_p      - Returns the linear pointer to the TDR page. Should be freed after use.
  *
@@ -669,8 +657,7 @@ api_error_type check_lock_and_map_explicit_tdr(
         mapping_type_t mapping_type,
         lock_type_t lock_type,
         page_type_t expected_pt,
-        pamt_block_t* pamt_block,
-        pamt_entry_t** pamt_entry,
+        pamt_walk_result_t* pamt_walk_result,
         bool_t* is_locked,
         tdr_t** tdr_p
         );
@@ -685,8 +672,9 @@ api_error_type check_lock_and_map_explicit_tdr(
  * @param lock_type - What type of lock to take on the PAMT leaf entry
  * @param expected_pt - Check the found PAMT entry against that type - should be either PT_NDA during
  *                      TDR creation, or PT_TDR for everything else.
- * @param pamt_block - Returns the virtual pamt_block structure that covers the HPA
- * @param pamt_entry - Returns the pointer to the pamt_entry that belongs to the HPA
+ * @param pamt_walk_result - Returns the linear pointers of all PAMT entries reached during the walk.
+ *                           Returns the reached level.
+ *                           Non-reached levels contain NULL. Must be passed to pamt_unwalk to be freed after use.
  * @param is_locked  - Returns TRUE if the lock on PAMT was taken
  * @param tdr_p      - Returns the linear pointer to the TDR page. Should be freed after use.
  *
@@ -698,8 +686,7 @@ api_error_type othertd_check_lock_and_map_explicit_tdr(
         mapping_type_t mapping_type,
         lock_type_t lock_type,
         page_type_t expected_pt,
-        pamt_block_t* pamt_block,
-        pamt_entry_t** pamt_entry,
+        pamt_walk_result_t* pamt_walk_result,
         bool_t* is_locked,
         tdr_t** tdr_p
         );
@@ -716,8 +703,9 @@ api_error_type othertd_check_lock_and_map_explicit_tdr(
  * @param mapping_type - If write access is required
  * @param lock_type - What type of lock to take on the PAMT leaf entry
  * @param expected_pt - Check the found PAMT entry against that type
- * @param pamt_block - Returns the virtual pamt_block structure that covers the HPA
- * @param pamt_entry - Returns the linear pointer to the pamt_entry that belongs to the HPA
+ * @param pamt_walk_result - Returns the linear pointers of all PAMT entries reached during the walk.
+ *                           Returns the reached level.
+ *                           Non-reached levels contain NULL. Must be passed to pamt_unwalk to be freed after use.
  * @param is_locked  - Returns TRUE if the lock on PAMT was taken
  * @param la         - Returns mapped linear address of the HPA. Should be freed after use.
  *
@@ -730,8 +718,7 @@ api_error_type check_lock_and_map_explicit_private_4k_hpa(
         mapping_type_t mapping_type,
         lock_type_t lock_type,
         page_type_t expected_pt,
-        pamt_block_t* pamt_block,
-        pamt_entry_t** pamt_entry,
+        pamt_walk_result_t* pamt_walk_result,
         bool_t* is_locked,
         void**         la
         );
@@ -745,10 +732,12 @@ api_error_type check_lock_and_map_explicit_private_4k_hpa(
  * @param alignment - the hpa alignment
  * @param lock_type - What type of lock to take on the PAMT leaf entry
  * @param expected_pt - Check the found PAMT entry against that type
+ * @param target_size  - Returns the PAMT leaf size of the HPA entry
+ * @param walk_to_target_size - If it is true, leaf_size is used as an input too, and PAMT walk stops at that level
  * @param pamt_block - Returns the virtual pamt_block structure that covers the HPA
- * @param pamt_entry - Returns the linear pointer to the pamt_entry that belongs to the HPA
- * @param leaf_size  - Returns the PAMT leaf size of the HPA entry
- * @param walk_to_leaf_size - If it is true, leaf_size is used as an input too, and PAMT walk stops at that level
+ * @param pamt_walk_result - Returns the linear pointers of all PAMT entries reached during the walk.
+ *                           Returns the reached level.
+ *                           Non-reached levels contain NULL. Must be passed to pamt_unwalk to be freed after use.
  * @param is_locked  - Returns TRUE if the lock on PAMT was taken
  *
  * @return Error code that states the reason of failure
@@ -759,10 +748,10 @@ api_error_type check_and_lock_explicit_private_hpa(
         uint64_t alignment,
         lock_type_t lock_type,
         page_type_t expected_pt,
+        page_size_t target_size,
+        bool_t walk_to_target_size,
         pamt_block_t* pamt_block,
-        pamt_entry_t** pamt_entry,
-        page_size_t* leaf_size,
-        bool_t walk_to_leaf_size,
+        pamt_walk_result_t* pamt_walk_result,
         bool_t* is_locked
         );
 
@@ -774,8 +763,9 @@ api_error_type check_and_lock_explicit_private_hpa(
  * @param operand_id - Operand ID number
  * @param lock_type - What type of lock to take on the PAMT leaf entry
  * @param expected_pt - Check the found PAMT entry against that type
- * @param pamt_block - Returns the virtual pamt_block structure that covers the HPA
- * @param pamt_entry - Returns the linear pointer to the pamt_entry that belongs to the HPA
+ * @param pamt_walk_result - Returns the linear pointers of all PAMT entries reached during the walk.
+ *                           Returns the reached level.
+ *                           Non-reached levels contain NULL. Must be passed to pamt_unwalk to be freed after use.
  * @param is_locked  - Returns TRUE if the lock on PAMT was taken
  *
  * @return Error code that states the reason of failure
@@ -785,8 +775,7 @@ api_error_type check_and_lock_explicit_4k_private_hpa(
         uint64_t operand_id,
         lock_type_t lock_type,
         page_type_t expected_pt,
-        pamt_block_t* pamt_block,
-        pamt_entry_t** pamt_entry,
+        pamt_walk_result_t* pamt_walk_result,
         bool_t* is_locked
         );
 
@@ -798,8 +787,9 @@ api_error_type check_and_lock_explicit_4k_private_hpa(
  * @param operand_id - Operand ID number
  * @param lock_type - What type of lock to take on the PAMT leaf entry
  * @param range_size - Desired range size to check and lock. Should be only 4KB or 2MB.
- * @param pamt_block - Returns the virtual pamt_block structure that covers the HPA
- * @param pamt_entry - Returns the linear pointer to the pamt_entry that belongs to the HPA
+ * @param pamt_walk_result - Returns the linear pointers of all PAMT entries reached during the walk.
+ *                           Returns the reached level.
+ *                           Non-reached levels contain NULL. Must be passed to pamt_unwalk to be freed after use.
  * @param is_locked  - Returns TRUE if the lock on PAMT was taken
  *
  * @return Error code that states the reason of failure
@@ -809,8 +799,7 @@ api_error_type check_and_lock_free_range_hpa(
         uint64_t operand_id,
         lock_type_t lock_type,
         page_size_t range_size,
-        pamt_block_t* pamt_block,
-        pamt_entry_t** pamt_entry,
+        pamt_walk_result_t* pamt_walk_result,
         bool_t* is_locked
         );
 
@@ -835,6 +824,7 @@ bool_t check_gpa_validity(pa_t gpa, bool_t gpaw, bool_t check_is_private, uint8_
  * @param tdcs_p - Linear pointer to the TDCS - used to get GPAW, SEPTP and acquire SEPT lock.
  * @param operand_id - Operand ID number
  * @param gpa - GPA - Guest Physical Address that needs to be checked and translated.
+ * @param hkid - HKID to be used during the SEPT page walk (accesses to SEPT entries)
  * @param lock_type - Type of lock to take on the SEPT root lock
  * @param sept_entry - Returns a linear pointer to the SEPT entry at the requested level.
  *                     Returns NULL if walk failed and didn't reach the requested level.
@@ -851,6 +841,7 @@ api_error_type lock_sept_check_and_walk_private_gpa(
         tdcs_t* tdcs_p,
         uint64_t operand_id,
         pa_t gpa,
+        uint16_t hkid,
         lock_type_t lock_type,
         ia32e_sept_t** sept_entry,
         ept_level_t* level,
@@ -867,6 +858,7 @@ api_error_type lock_sept_check_and_walk_private_gpa(
  * @param tdcs_p - Linear pointer to the TDCS - used to get GPAW, SEPTP and acquire SEPT lock.
  * @param operand_id - Operand ID number
  * @param gpa - GPA - Guest Physical Address that needs to be checked and translated.
+ * @param hkid - HKID to be used during the SEPT page walk (accesses to SEPT entries)
  * @param lock_type - Type of lock to take on the SEPT root lock
  * @param sept_entry - Returns a linear pointer to the SEPT entry at the requested level.
  *                     Returns NULL if walk failed and didn't reach the requested level.
@@ -883,6 +875,7 @@ api_error_type lock_sept_and_walk_gpa(
         tdcs_t* tdcs_p,
         uint64_t operand_id,
         pa_t gpa,
+        uint16_t hkid,
         lock_type_t lock_type,
         ia32e_sept_t** sept_entry_ptr,
         ept_level_t* level,
@@ -902,6 +895,7 @@ api_error_type check_and_walk_private_gpa_to_leaf(
         tdcs_t* tdcs_p,
         uint64_t operand_id,
         pa_t gpa,
+        uint16_t hkid,
         ia32e_sept_t** sept_entry_ptr,
         ept_level_t* level,
         ia32e_sept_t* cached_sept_entry
@@ -932,6 +926,7 @@ api_error_type lock_sept_check_and_walk_private_gpa_to_leaf(
         tdcs_t* tdcs_p,
         uint64_t operand_id,
         pa_t gpa,
+        uint16_t hkid,
         lock_type_t lock_type,
         ia32e_sept_t** sept_entry_ptr,
         ept_level_t* level,
@@ -965,6 +960,7 @@ uint64_t get_page_size_per_level(ept_level_t ept_level);
  *
  * @param tdcs_p - Linear pointer to the TDCS - used to get GPAW, SEPTP and acquire SEPT lock.
  * @param gpa - GPA - Guest Physical Address that needs to be checked and translated.
+ * @param hkid - HKID to be used during the SEPT page walk (accesses to SEPT entries)
  * @param sept_entry - Returns a linear pointer to the SEPT entry at the requested level.
  *                     Returns NULL if walk failed and didn't reach the requested level.
  *                     Should be freed after finishing using it (only on success).
@@ -978,6 +974,7 @@ uint64_t get_page_size_per_level(ept_level_t ept_level);
 api_error_type walk_private_gpa(
         tdcs_t* tdcs_p,
         pa_t gpa,
+        uint16_t hkid,
         ia32e_sept_t** sept_entry,
         ept_level_t* level,
         ia32e_sept_t* cached_sept_entry
@@ -1004,24 +1001,6 @@ api_error_code_e check_walk_and_map_guest_side_gpa(
         uint16_t hkid,
         mapping_type_t mapping_type,
         bool_t check_gpa_is_private,
-        void ** la
-        );
-
-/**
- * @brief If shared bit is 1, walks the shared EPT (taken from the TD VMCS)
- *        Else walk the SEPT and finally maps the translated GPA
- *
- * @param tdcs_p Linear pointer to the TDCS - used to get GPAW and SEPTP
- * @param gpa GPA - sGuest Physical Address that needs to be checked and translated.
- * @param hkid HKID to be used during the SEPT page walk (accesses to SEPT entries)
- * @param mapping_type RW access to mapped linear address
- * @param la Pointer to linear address mapped from translated GPA
- */
-void walk_and_map_guest_side_gpa(
-        const tdcs_t *const tdcs_p,
-        const pa_t gpa,
-        const uint16_t hkid,
-        const mapping_type_t mapping_type,
         void ** la
         );
 
@@ -1236,6 +1215,8 @@ _STATIC_INLINE_ void set_seam_vmcs_as_active(void)
     get_local_data()->vp_ctx.active_vmcs = ACTIVE_VMCS_NONE;
 }
 
+uint64_t get_guest_cr0_pe(void);
+
 /**
  * @brief Reinjects IDT vectoring event as VOE instead to the TD.
  *
@@ -1287,7 +1268,7 @@ _STATIC_INLINE_ void inject_gp(uint32_t error_code)
     rflags.rf = 1;
     ia32_vmwrite(VMX_GUEST_RFLAGS_ENCODE, rflags.raw);
 
-    ia32_vmwrite(VMX_VM_ENTRY_INTR_INFO_ENCODE, GP_INTERRUPTION_INFO);
+    ia32_vmwrite(VMX_VM_ENTRY_INTR_INFO_ENCODE, GP_INTERRUPTION_INFO | (get_guest_cr0_pe() << DELIVER_ERROR_CODE_OFFSET));
     ia32_vmwrite(VMX_VM_ENTRY_EXCEPTION_ERRORCODE_ENCODE, (uint64_t)error_code);
 }
 
@@ -1304,7 +1285,7 @@ _STATIC_INLINE_ void inject_ve(void)
  */
 _STATIC_INLINE_ void inject_df(void)
 {
-    ia32_vmwrite(VMX_VM_ENTRY_INTR_INFO_ENCODE, DF_INTERRUPTION_INFO);
+    ia32_vmwrite(VMX_VM_ENTRY_INTR_INFO_ENCODE, DF_INTERRUPTION_INFO | (get_guest_cr0_pe() << DELIVER_ERROR_CODE_OFFSET));
     ia32_vmwrite(VMX_VM_ENTRY_EXCEPTION_ERRORCODE_ENCODE, 0);
 }
 
@@ -1326,7 +1307,7 @@ _STATIC_INLINE_ void current_vmcs_guest_rip_advance(uint64_t instruction_len)
     if (instruction_len == 0)
     {
         ia32_vmread(VMX_VM_EXIT_INSTRUCTION_LENGTH_ENCODE, &instruction_len);
-        tdx_sanity_check(instruction_len != 0, SCEC_HELPERS_SOURCE, 1);
+        tdx_sanity_check(instruction_len != 0, FATAL_ERROR_ID_186, 1);
     }
 
     ia32_vmwrite(VMX_GUEST_RIP_ENCODE, current_vmm_rip + instruction_len);
@@ -1338,12 +1319,13 @@ _STATIC_INLINE_ void save_guest_td_extended_state(tdvps_t* tdvps_ptr, uint64_t x
     ia32_xsetbv(0, xfam & XCR0_USER_BIT_MASK);
     ia32_wrmsr(IA32_XSS_MSR_ADDR, xfam & XCR0_SUPERVISOR_BIT_MASK);
 
-    ia32_xsaves(&tdvps_ptr->guest_extension_state.xbuf, xfam);
+    ia32_xsaves(&tdvps_ptr->guest_extension_state.xbuff, xfam);
 }
 
 _STATIC_INLINE_ ia32e_eptp_t get_l2_septp_with_hkid(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, uint16_t vm_id)
 {
     pa_t sept_root_hpa = { .raw = tdr_ptr->management_fields.tdcx_pa[get_tdcs_sept_root_page_index(vm_id)] };
+    sept_root_hpa = set_hkid_to_pa(sept_root_hpa, tdr_ptr->key_management_fields.hkid);
 
     ia32e_eptp_t eptp = tdcs_ptr->executions_ctl_fields.eptp;
     eptp.fields.base_pa = sept_root_hpa.page_4k_num;
@@ -1419,43 +1401,6 @@ _STATIC_INLINE_ bool_t is_tlb_tracked(tdcs_t * tdcs_ptr, bepoch_t bepoch)
 }
 
 /**
- * @brief Checks IOTLB tracking conditions
- *
- * @param tdcs_t Pointer to TDCS for reading TD's epoch value and refcount
- * @param bepoch The EPOCH value that needs to be checked if tracked
- */
-_STATIC_INLINE_ bool_t is_iotlb_tracked(
-    const tdcs_t *const tdcs_ptr,
-    const bepoch_t bepoch)
-{
-    return bepoch.raw < tdcs_ptr->epoch_tracking.epoch_and_refcount.td_epoch - 1 ||
-           (tdcs_ptr->tdxio_fields.prev_iotlb_cnt == 0 &&
-            bepoch.raw == tdcs_ptr->epoch_tracking.epoch_and_refcount.td_epoch - 1);
-}
-
-/**
- * @brief Checks TLB and IOTLB tracking conditions
-*/
-_STATIC_INLINE_ api_error_type is_tlb_and_iotlb_tracked(tdcs_t * tdcs_ptr, bepoch_t bepoch)
-{
-    // Check TLB tracking
-    if (!is_tlb_tracked(tdcs_ptr, bepoch))
-    {
-        TDX_ERROR("TLB tracking not done\n");
-        return TDX_TLB_TRACKING_NOT_DONE;
-    }
-
-    // Check IOTLB tracking
-    if (!is_iotlb_tracked(tdcs_ptr, bepoch))
-    {
-        TDX_ERROR("IOTLB tracking not done\n");
-        return TDX_IOMMU_IOTLB_TRACKING_NOT_DONE;
-    }
-
-    return TDX_SUCCESS;
-}
-
-/**
  * @brief Decrement the TLB tracking state if was incremented earlier and need to be reverted
  * @param tdcs_ptr Pointer to TDCS for reading TD's epoch value and refcount
  */
@@ -1494,7 +1439,6 @@ _STATIC_INLINE_ bool_t is_cet_supported_in_tdcs(tdcs_t * tdcs_ptr)
     return ((tdcs_ptr->executions_ctl_fields.xfam & (BIT(11))) |
             (tdcs_ptr->executions_ctl_fields.xfam & (BIT(12)))) ? true : false;
 }
-
 
 _STATIC_INLINE_ bool_t is_pt_supported_in_tdcs(tdcs_t * tdcs_ptr)
 {
@@ -1546,6 +1490,12 @@ _STATIC_INLINE_ bool_t is_tsx_supported_in_tdcs(tdcs_t * tdcs_ptr)
     return tdcs_ptr->executions_ctl_fields.cpuid_flags.tsx_supported;
 }
 
+_STATIC_INLINE_ bool_t is_perfmon_and_pebs_available_supported_in_tdcs (tdcs_t * tdcs_ptr)
+{
+    return tdcs_ptr->executions_ctl_fields.attributes.perfmon &&
+        !get_global_data()->plt_common_config.ia32_misc_enable.pebs_unavailable;
+}
+
 _STATIC_INLINE_ bool_t is_idt_vectoring_info_valid(void)
 {
     vmx_idt_vectoring_info_t idt_vectoring_info;
@@ -1561,7 +1511,7 @@ _STATIC_INLINE_ uint64_t get_ln2_value(uint64_t value)
 {
     if (value == 0)
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_39, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     uint64_t lsb_position;
@@ -1632,7 +1582,8 @@ bool_t is_guest_cr4_allowed_by_td_config(ia32_cr4_t cr4, tdcs_t* tdcs_p, ia32_xc
  *
  * @return Success status or a #GP/#VE indicator
  */
-cr_write_status_e write_guest_cr4(uint64_t value, tdcs_t* tdcs_p);
+cr_write_status_e write_guest_cr4(uint64_t value, tdcs_t* tdcs_p
+    );
 
 /**
  * @brief Checks the validity the TD attributes that will be set in the TDCS
@@ -1724,19 +1675,14 @@ _STATIC_INLINE_ uint32_t crystal_clock_virt_to_real(uint32_t crystal_clock)
  */
 void send_self_ipi(apic_delivery_mode_t delivery_mode, uint32_t vector);
 
-/**
- * @brief Initialize the LFSR
- *
- * @return False if there's no sufficient entropy, otherwise True
- */
-bool_t lfsr_init_seed (uint32_t* lfsr_value);
+#define RDRAND_RETRIES_LIMIT 10
 
 /**
- * @brief
+ * @brief Have RETRY_LIMIT rertries to get a 64 bit random number
  *
- * @return True
+ * @return True if succeeded, false otherwise
  */
-uint32_t lfsr_get_random (void);
+bool_t get_random_64b(uint64_t* rand);
 
 /**
  * @brief Helper functions that establish if a SEAMCALL allowed or specific operation required
@@ -1812,7 +1758,8 @@ _STATIC_INLINE_ bool_t op_state_is_tdcall_allowed(tdcall_leaf_opcode_t current_l
     }
     else
     {
-        FATAL_ERROR(); // Not supported yet
+        // Not supported yet
+        fatal_error(FATAL_ERROR_ID_40, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     return is_allowed;
@@ -1834,6 +1781,7 @@ typedef enum
     MSR_BITMAP_DYN_XFD,
     MSR_BITMAP_DYN_PKS,
     MSR_BITMAP_DYN_TSX,
+    MSR_BITMAP_PERFMON_AND_LEGACY_PEBS,
     MSR_BITMAP_DYN_OTHER
 } msr_bitmap_bit_type;
 
@@ -1887,9 +1835,10 @@ void init_imported_td_state_mutable (tdcs_t * tdcs_ptr);
  * @brief Cross-check TD-scope immutable state for correctness
  *        Called at the end of TD init or end of TD metadata import
  * @param tdcs_ptr
+ * @param is_import
  * @return
  */
-bool_t td_immutable_state_cross_check(tdcs_t* tdcs_ptr);
+api_error_type td_immutable_state_cross_check(tdcs_t* tdcs_ptr, bool_t is_import);
 
 /**
  * init_imported_td_state_immutable /
@@ -2041,23 +1990,6 @@ uint32_t check_mem_enc_alg(ia32_tme_capability_t tme_capability, ia32_tme_activa
 api_error_type check_td_in_correct_build_state(tdr_t *tdr_p);
 
 /**
- * @brief Converts handle to HPA using TDR.RND_HPA_OFFSET
- *
- * @param devif_handle
- * @param tdr_ptr
- */
-_STATIC_INLINE_ pa_t hpa_of_handle(
-    const uint64_t devif_handle,
-    const tdr_t *const tdr_ptr)
-{
-    // Check for underflow
-	tdx_debug_assert(devif_handle > tdr_ptr->tdx_io_fields.rnd_hpa_offset);
-
-    pa_t devif_handle_pa = {.raw = devif_handle - tdr_ptr->tdx_io_fields.rnd_hpa_offset};
-    return devif_handle_pa;
-}
-
-/**
  * @brief Called by TDH.SYS.SHUTDOWN to populate handoff data with values of some
  *        variables for the next TDX module
  *
@@ -2115,13 +2047,13 @@ _STATIC_INLINE_ void reset_to_next_iv(migsc_t *migsc, uint64_t iv_counter, uint1
     // Refresh the context
     if (aes_gcm_refresh_context(&migsc->aes_gcm_context) != AES_GCM_NO_ERROR)
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_41, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     // Calculate the MAC
     if (aes_gcm_reset(&migsc->aes_gcm_context, &iv) != AES_GCM_NO_ERROR)
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_42, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 }
 
@@ -2143,7 +2075,7 @@ tdx_static_assert(sizeof(servtd_hash_buff_t) == 58, servtd_hash_buff_t);
       servtd_has_buff entry.
    4. Return the actual number of entries. */
 uint32_t prepare_servtd_hash_buff(tdcs_t* tdcs_ptr, servtd_hash_buff_t* servtd_has_buf);
-void calculate_servtd_hash(tdcs_t* tdcs_ptr, bool_t handle_avx_state);
+void calculate_servtd_hash(tdcs_t* tdcs_ptr);
 
 // Update TDCS.CPUID_FLAGS based on TD_CTLS.REDUCE_VE and FEATURE_PARAVIRT_CTLS
 // This helper is used on write by the guest TD and at the end of mutable TD state import
@@ -2190,7 +2122,7 @@ _STATIC_INLINE_ void set_vm_vmcs_as_active(tdvps_t* tdvps_p, uint16_t vm_id)
 {
     if (get_local_data()->vp_ctx.active_vmcs != vm_id)
     {
-        uint64_t vm_vmcs_pa = tdvps_p->management.tdvps_pa[get_tdvps_vmcs_page_index(vm_id)];
+        uint64_t vm_vmcs_pa = tdvps_p->management.tdvps_page_pa[get_tdvps_vmcs_page_index(vm_id)];
 
         ia32_vmptrld((vmcs_ptr_t*)vm_vmcs_pa);
         get_local_data()->vp_ctx.active_vmcs = vm_id;
@@ -2217,7 +2149,7 @@ _STATIC_INLINE_ void clear_module_host_state_flags(tdvps_t* tdvps_p)
     // Mark all VMs' VMCSes as needing host state HPA updates to match the new LP
     for (uint16_t vm_id = 0; vm_id < MAX_VMS; vm_id++)
     {
-        tdvps_p->management.module_dependent_hpa_updated[vm_id] = false;
+        tdvps_p->management.module_dependent_fields_updated[vm_id] = false;
     }
 }
 
@@ -2227,13 +2159,13 @@ _STATIC_INLINE_ void clear_module_host_state_flags(tdvps_t* tdvps_p)
  */
 _STATIC_INLINE_ void update_host_state_in_td_vmcs(tdx_module_local_t* ld_p, tdvps_t* tdvps_p, uint16_t vm_id)
 {
-    if (!tdvps_p->management.module_dependent_hpa_updated[vm_id])
+    if (!tdvps_p->management.module_dependent_fields_updated[vm_id])
     {
         // TDX module has been updated, need to update host state fields.
         // This also updates LP-dependent host state fields.
         init_module_host_state_in_td_vmcs();
 
-        tdvps_p->management.module_dependent_hpa_updated[vm_id] = true;
+        tdvps_p->management.module_dependent_fields_updated[vm_id] = true;
         tdvps_p->management.lp_dependent_hpa_updated[vm_id] = true;
     }
     else if (!tdvps_p->management.lp_dependent_hpa_updated[vm_id])
@@ -2262,6 +2194,7 @@ void set_vmx_preemption_timer(tdvps_t* tdvps_p, uint16_t vm_id);
 /**
  * @brief Translate the TDG.VP.ENTER guest state buffer GPA before L2 VM entry
  *
+ * @param tdr_p - inear pointer to TDR
  * @param tdcs_p - inear pointer to TDCS
  * @param tdvps_p - inear pointer to TDVPS
  * @param vm_id
@@ -2270,6 +2203,7 @@ void set_vmx_preemption_timer(tdvps_t* tdvps_p, uint16_t vm_id);
  * @return If the translation suceeded or not
  */
 bool_t translate_l2_enter_guest_state_gpa(
+    tdr_t *    tdr_ptr,
     tdcs_t *   tdcs_ptr,
     tdvps_t *  tdvps_ptr,
     uint16_t   vm_id,
@@ -2278,6 +2212,7 @@ bool_t translate_l2_enter_guest_state_gpa(
 /**
  * @brief Translate soft-translated GPAs before L2 VM entry
  *
+ * @param tdr_p - inear pointer to TDR
  * @param tdcs_p - inear pointer to TDCS
  * @param tdvps_p - inear pointer to TDVPS
  * @param vm_id
@@ -2286,6 +2221,7 @@ bool_t translate_l2_enter_guest_state_gpa(
  * @return If the translation suceeded or not
  */
 bool_t translate_gpas(
+    tdr_t *    tdr_ptr,
     tdcs_t *   tdcs_ptr,
     tdvps_t *  tdvps_ptr,
     uint16_t   vm_id,
@@ -2427,16 +2363,16 @@ api_error_type l2_sept_walk_guest_side(
  *
  * @return bool_t
  */
-_STATIC_INLINE_ bool_t is_gpa_attr_legal(
-    const gpa_attr_single_vm_t gpa_attr_single_vm,
-    const bool_t is_mmio)
+_STATIC_INLINE_ bool_t is_gpa_attr_legal(const gpa_attr_single_vm_t gpa_attr_single_vm
+                                         , const bool_t is_mmio
+)
 {
     if ((!gpa_attr_single_vm.valid && gpa_attr_single_vm.raw) ||
          gpa_attr_single_vm.reserved_14_8 ||
         (gpa_attr_single_vm.w && (!gpa_attr_single_vm.r)) ||
         (gpa_attr_single_vm.pwa && (!gpa_attr_single_vm.r)) ||
-         gpa_attr_single_vm.sve ||
-         (is_mmio &&
+         gpa_attr_single_vm.sve
+        || (is_mmio &&
           !(gpa_attr_single_vm.xs == 0 && gpa_attr_single_vm.xu == 0 &&
             gpa_attr_single_vm.vgp == 0 && gpa_attr_single_vm.pwa == 0 &&
             gpa_attr_single_vm.sss == 0)))
@@ -2565,6 +2501,51 @@ _STATIC_INLINE_ void restore_td_xcr0_if_required(tdx_module_local_t* local_data_
     }
 }
 
+/**
+ * @brief Fills the xbuff_offsets and xbuff_size values in the given TDCS,
+ *        based on the given xfam
+ *
+ * @param tdcs_ptr - TDCS pointer
+ * @param xfam     - XFAM mask on which the filled values will be based
+ */
+void set_xbuff_offsets_and_size(tdcs_t* tdcs_ptr, uint64_t xfam);
+
+/**
+ * @brief Checks IOTLB tracking conditions
+ *
+ * @param tdcs_t Pointer to TDCS for reading TD's epoch value and refcount
+ * @param bepoch The EPOCH value that needs to be checked if tracked
+ */
+_STATIC_INLINE_ bool_t is_iotlb_tracked(
+    const tdcs_t* const tdcs_ptr,
+    const bepoch_t bepoch)
+{
+    return bepoch.raw < tdcs_ptr->epoch_tracking.epoch_and_refcount.td_epoch - 1 ||
+        (tdcs_ptr->tdxio_fields.prev_iotlb_cnt == 0 &&
+            bepoch.raw == tdcs_ptr->epoch_tracking.epoch_and_refcount.td_epoch - 1);
+}
+
+/**
+ * @brief Checks TLB and IOTLB tracking conditions
+*/
+_STATIC_INLINE_ api_error_type is_tlb_and_iotlb_tracked(tdcs_t* tdcs_ptr, bepoch_t bepoch)
+{
+    // Check TLB tracking
+    if (!is_tlb_tracked(tdcs_ptr, bepoch))
+    {
+        TDX_ERROR("TLB tracking not done\n");
+        return TDX_TLB_TRACKING_NOT_DONE;
+    }
+
+    // Check IOTLB tracking
+    if (!is_iotlb_tracked(tdcs_ptr, bepoch))
+    {
+        TDX_ERROR("IOTLB tracking not done\n");
+        return TDX_IOMMU_IOTLB_TRACKING_NOT_DONE;
+    }
+
+    return TDX_SUCCESS;
+}
 
 /**
  * @brief
@@ -2575,9 +2556,17 @@ _STATIC_INLINE_ void restore_td_xcr0_if_required(tdx_module_local_t* local_data_
  */
 _STATIC_INLINE_ bool_t is_valid_tdx_io_host_call(const tdx_leaf_and_version_t tdx_leaf_and_version)
 {
-    return get_global_data()->tdx_io_supported ||
-           tdx_leaf_and_version.leaf < TDH_IOMMU_SETREG_LEAF ||
-           tdx_leaf_and_version.leaf > TDH_DEVIF_MT_RD_LEAF;
+    bool_t is_tdx_io_api = (tdx_leaf_and_version.leaf >= TDH_IOMMU_SETREG_LEAF &&
+                            tdx_leaf_and_version.leaf <= TDH_DEVIF_MT_RD_LEAF);
+
+    if (is_tdx_io_api && (!get_global_data()->tdx_io_supported
+            || get_global_data()->dynamic_pamt_enabled)
+    )
+    {
+        return false;
+    }
+
+    return true;
 }
 
 /**
@@ -2589,19 +2578,18 @@ _STATIC_INLINE_ bool_t is_valid_tdx_io_host_call(const tdx_leaf_and_version_t td
  */
 _STATIC_INLINE_ bool_t is_valid_tdx_io_guest_call(const tdx_leaf_and_version_t tdx_leaf_and_version)
 {
-    return get_global_data()->tdx_io_supported ||
-           tdx_leaf_and_version.leaf < TDG_SPDM_TPA_SET_LEAF ||
-           tdx_leaf_and_version.leaf > TDG_IQ_INV_REQUEST_LEAF;
-}
+    bool_t is_tdx_io_api = (tdx_leaf_and_version.leaf >= TDG_SPDM_TPA_SET_LEAF &&
+                            tdx_leaf_and_version.leaf <= TDG_IQ_INV_REQUEST_LEAF);
 
-/**
- * @brief Fills the xbuff_offsets and xbuff_size values in the given TDCS,
- *        based on the given xfam
- *
- * @param tdcs_ptr - TDCS pointer
- * @param xfam     - XFAM mask on which the filled values will be based
- */
-void set_xbuff_offsets_and_size(tdcs_t* tdcs_ptr, uint64_t xfam);
+    if (is_tdx_io_api && (!get_global_data()->tdx_io_supported
+            || get_global_data()->dynamic_pamt_enabled)
+    )
+    {
+        return false;
+    }
+
+    return true;
+}
 
 /**
  * @brief check the message length is shorter than the buffer length.
@@ -2655,6 +2643,23 @@ _STATIC_INLINE_ api_error_code_e check_no_tdx_io_device_attached(
     return TDX_SUCCESS;
 }
 
+/**
+ * @brief Converts handle to HPA using TDR.RND_HPA_OFFSET
+ *
+ * @param devif_handle
+ * @param tdr_ptr
+ */
+_STATIC_INLINE_ pa_t hpa_of_handle(
+    const uint64_t devif_handle,
+    const tdr_t* const tdr_ptr)
+{
+    // Check for underflow
+    tdx_debug_assert(devif_handle > tdr_ptr->tdx_io_fields.rnd_hpa_offset_6b);
+
+    pa_t devif_handle_pa = { .raw = devif_handle - tdr_ptr->tdx_io_fields.rnd_hpa_offset_6b };
+    return devif_handle_pa;
+}
+
 // TODO: remove define once WA is removed
 #define GNR_A0_CPUID 0xA06D0
 #define GNR_D_A0_CPUID 0xA06E0
@@ -2699,6 +2704,12 @@ _STATIC_INLINE_ uint64_t GET_TDX_MODULE_IA32_SPEC_CTRL(void)
     return res;
 }
 
+/**
+ * @brief Return first non-zero MSR Index, 0 if all MSRs are 0's
+ *        Check all IA32_PERFEVTSELx_EXT and IA32_FIXED_CTRy_CTRL_EXT MSRs for zeros, where x & y are coming from the bitmaps
+*/
+uint64_t check_for_zeros_arch_pebs_msrs(void);
+
 _STATIC_INLINE_ void set_qword_bm(
     uint64_t *bm_arr_ptr,
     uint64_t idx,
@@ -2722,5 +2733,36 @@ _STATIC_INLINE_ bool_t get_qword_bm(
 {
     return (bm_arr_ptr[idx / 64] & BIT(idx % 64)) > 0;
 }
+
+_STATIC_INLINE_ bool_t is_event_allowed(tdcs_t* tdcs_p, uint16_t evt, uint16_t events_num)
+{
+    int32_t left = 0;
+    int32_t right = events_num - 1;
+
+    while (left <= right)
+    {
+        int32_t mid = left + (right - left) / 2;
+
+        if (tdcs_p->event_filters_internal[mid].raw == evt)
+        {
+            return true;
+        }
+        else if (tdcs_p->event_filters_internal[mid].raw < evt)
+        {
+            left = mid + 1;
+        }
+        else
+        {
+            right = mid - 1;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @brief Stores host's XCR0 state before usage of AVX and marks AVX regs as 'used'
+ */
+void prepare_state_for_avx_usage(void);
 
 #endif /* SRC_COMMON_HELPERS_HELPERS_H_ */

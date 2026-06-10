@@ -29,7 +29,7 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_api_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "helpers/helpers.h"
 
 #include "data_structures/tdxio/ide_stream_defs.h"

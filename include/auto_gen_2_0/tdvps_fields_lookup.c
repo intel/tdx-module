@@ -24,7 +24,7 @@
  *  Spreadsheet Format Version - '28'
  **/
 
-#include "auto_gen/tdvps_fields_lookup.h"
+#include "./tdvps_fields_lookup.h"
 
 
 const md_lookup_t tdvps_lookup[MAX_NUM_TDVPS_LOOKUP] = {
@@ -458,7 +458,7 @@ const md_lookup_t tdvps_lookup[MAX_NUM_TDVPS_LOOKUP] = {
    .mig_export = MIG_ME, .mig_import = MIG_ME 
  },
  {
-   // IA32_PERFEVTSELx // 39
+   // IA32_PMC_GP_CFG_Ax // 39
    .field_id =  { .raw  = 0x1320000300000186 }, 
    .num_of_fields = 8, .num_of_elem = 1, .offset = 0x0A98, .attributes = { .raw = 0x0 },
    .prod_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .prod_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -513,7 +513,7 @@ const md_lookup_t tdvps_lookup[MAX_NUM_TDVPS_LOOKUP] = {
    .mig_export = MIG_ME, .mig_import = MIG_ME 
  },
  {
-   // IA32_FIXED_CTRx // 44
+   // IA32_PMC_FX_CTRx // 44
    .field_id =  { .raw  = 0x1320000300000309 }, 
    .num_of_fields = 7, .num_of_elem = 1, .offset = 0x0AF8, .attributes = { .raw = 0x0 },
    .prod_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .prod_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -601,7 +601,7 @@ const md_lookup_t tdvps_lookup[MAX_NUM_TDVPS_LOOKUP] = {
    .mig_export = MIG_ME, .mig_import = MIG_ME 
  },
  {
-   // IA32_A_PMCx // 52
+   // IA32_PMC_GP_CTRx // 52
    .field_id =  { .raw  = 0x13200003000004C1 }, 
    .num_of_fields = 8, .num_of_elem = 1, .offset = 0x0B68, .attributes = { .raw = 0x0 },
    .prod_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .prod_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -1190,9 +1190,9 @@ const md_lookup_t tdvps_lookup[MAX_NUM_TDVPS_LOOKUP] = {
    .prod_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .prod_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
    .dbg_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .dbg_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
    .guest_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .guest_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
-   .export_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
+   .export_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .special_rd_handling = false, .special_wr_handling = false,
-   .mig_export = MIG_NONE, .mig_import = MIG_IES 
+   .mig_export = MIG_ME, .mig_import = MIG_ME 
  },
  {
    // L2_ENTER_GUEST_STATE_HPA // 106
@@ -1288,9 +1288,9 @@ const md_lookup_t tdvps_lookup[MAX_NUM_TDVPS_LOOKUP] = {
    .prod_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .prod_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
    .dbg_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .dbg_wr_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .guest_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .guest_wr_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL),
-   .export_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
+   .export_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .special_rd_handling = true, .special_wr_handling = true,
-   .mig_export = MIG_NONE, .mig_import = MIG_NONE 
+   .mig_export = MIG_ME, .mig_import = MIG_ME 
  },
  {
    // L2_SHADOW_MSR_BITMAPS_1 // 115
@@ -1320,9 +1320,9 @@ const md_lookup_t tdvps_lookup[MAX_NUM_TDVPS_LOOKUP] = {
    .prod_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .prod_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
    .dbg_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .dbg_wr_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .guest_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .guest_wr_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL),
-   .export_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
+   .export_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .special_rd_handling = true, .special_wr_handling = true,
-   .mig_export = MIG_NONE, .mig_import = MIG_NONE 
+   .mig_export = MIG_ME, .mig_import = MIG_ME 
  },
  {
    // L2_SHADOW_MSR_BITMAPS_2 // 118
@@ -1352,9 +1352,9 @@ const md_lookup_t tdvps_lookup[MAX_NUM_TDVPS_LOOKUP] = {
    .prod_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .prod_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
    .dbg_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .dbg_wr_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .guest_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .guest_wr_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL),
-   .export_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
+   .export_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .special_rd_handling = true, .special_wr_handling = true,
-   .mig_export = MIG_NONE, .mig_import = MIG_NONE 
+   .mig_export = MIG_ME, .mig_import = MIG_ME 
  },
  {
    // L2_SHADOW_MSR_BITMAPS_3 // 121

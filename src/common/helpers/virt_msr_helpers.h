@@ -82,7 +82,7 @@ _STATIC_INLINE_ ia32_vmx_allowed_bits_t calc_allowed32_vmx_ctls(uint32_t init, u
 
     // Sanity check on the TDX-SEAM module's constants:
     // Any bit can't be both fixed-1 (bits that are 1 in NOT_ALLOWED0) and fixed-0 (bits that are 0 in ALLOWED1)
-    tdx_sanity_check((allowed.not_allowed0 & ~allowed.allowed1) == 0, SCEC_HELPERS_SOURCE, 30);
+    tdx_sanity_check((allowed.not_allowed0 & ~allowed.allowed1) == 0, FATAL_ERROR_ID_206, 30);
 
     return allowed;
 }
@@ -112,7 +112,7 @@ _STATIC_INLINE_ void calc_allowed64_vmx_ctls(uint64_t init, uint64_t variable_ma
     // Sanity check:
     // Any bit can't be both fixed-1 (bits that are 1 in not_allowed0) and
     // fixed-0 (bits that are 0 in allowed1)
-    tdx_sanity_check((*not_allowed0 & ~(*allowed1)) == 0, SCEC_HELPERS_SOURCE, 31);
+    tdx_sanity_check((*not_allowed0 & ~(*allowed1)) == 0, FATAL_ERROR_ID_207, 31);
 }
 
 /* Calculate the initial value of L2 VMCS' pin-based controls field,
@@ -296,6 +296,197 @@ _STATIC_INLINE_ void calc_virt_ia32_vmx_cr4_fixed(tdcs_t* tdcs_p, uint64_t* not_
     calc_allowed64_vmx_ctls(GUEST_CR4_L2_INIT, write_mask.raw, not_allowed0, allowed1);
 }
 
+// Check the value of virtual IA32_VMX_BASIC for current TDX module support
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_basic(uint64_t value)
+{
+    ia32_vmx_basic_t msr = {.raw = value};
+
+    // Clear bits that we don't care about
+    msr.vmcs_revision_id = 0;
+    msr.vmcs_region_size = 0;
+    msr.dual_monitor = 0;
+    msr.vmcs_mt = 0;
+
+    return (msr.raw == calc_virt_ia32_vmx_basic().raw);
+}
+
+// Check the value of virtual IA32_VMX_MISC for current TDX module support
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_misc(uint64_t value)
+{
+    ia32_vmx_misc_t msr = {.raw = value};
+
+    // Clear bits that we don't care about
+    msr.vmx_preempt_timer_tsc_factor = 0;
+    msr.activity_wait_for_sipi = 0;
+    msr.ia32_smbase = 0;
+    msr.ia32_smm_monitor_ctl = 0;
+    msr.max_msr_list_size = 0;
+    msr.mseg_rev_id = 0;
+
+    return (msr.raw == calc_virt_ia32_vmx_misc().raw);
+}
+
+// Check the imported value of VMX control MSR (e.g., IA32_VMX_TRUE_PROCBASED_CTLS) for compatibility.
+// The local values may be more permissive than the imported values.
+_STATIC_INLINE_ bool_t check_allowed32_vmx_ctls(ia32_vmx_allowed_bits_t imported, ia32_vmx_allowed_bits_t local)
+{
+    // Any bit that is ALLOWED1 in the imported value must be ALLOWED1 in the local value
+    // Any bit that is NOT_ALLOWED0 in the local value must be NOT_ALLOWED0 in the imported value
+    if ((imported.allowed1 & ~local.allowed1) || (local.not_allowed0 & ~imported.not_allowed0))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+// Check the imported value of VMX control MSR (e.g., IA32_VMX_CR0_FIXED) for compatibility.
+// The local values may be more permissive than the imported values.
+_STATIC_INLINE_ bool_t check_not_allowed0_vmx_ctls(uint64_t imported, uint64_t local)
+
+{
+    // Any bit that is allowed to be 0 (0) in the imported value must be allowed to be 0 (0) in the local value
+    return ((~imported & ~local) == ~imported);
+}
+
+// Check the imported value of VMX control MSR (e.g., IA32_VMX_EXEC_CTLS3) for compatibility.
+// The local values may be more permissive than the imported values.
+_STATIC_INLINE_ bool_t check_allowed1_virt_vmx_ctls(uint64_t imported, uint64_t local)
+{
+    // Any bit that is allowed to be 1 (1) in the imported value must be allowed to be 1 (1) in the local value
+    return ((imported & local) == imported);
+}
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_true_pinbased_ctls(uint64_t value)
+{
+    ia32_vmx_allowed_bits_t imported;
+
+    imported.raw = value;
+    return check_allowed32_vmx_ctls(imported, calc_virt_ia32_vmx_true_pinbased_ctls());
+}
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_true_procbased_ctls(tdcs_t* tdcs_ptr)
+{
+    ia32_vmx_allowed_bits_t imported, local;
+
+    local = calc_virt_ia32_vmx_true_procbased_ctls(tdcs_ptr);
+
+    imported.raw = tdcs_ptr->virt_msrs.virtual_ia32_vmx_true_procbased_ctls.raw;
+    return check_allowed32_vmx_ctls(imported, local);
+}
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_procbased_ctls2(tdcs_t* tdcs_ptr)
+{
+    ia32_vmx_allowed_bits_t imported, local;
+
+    local = calc_virt_ia32_vmx_procbased_ctls2(tdcs_ptr);
+
+    imported.raw = tdcs_ptr->virt_msrs.virtual_ia32_vmx_procbased_ctls2.raw;
+    return check_allowed32_vmx_ctls(imported, local);
+}
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_procbased_ctls3(uint64_t value)
+{
+    uint64_t local;
+
+    local = calc_virt_ia32_vmx_procbased_ctls3();
+
+    // Any bit that is allowed (1) in the imported value must be allowed (1) in the local value
+    return check_allowed1_virt_vmx_ctls(value, local);
+}
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_true_exit_ctls(tdcs_t* tdcs_p)
+{
+    ia32_vmx_allowed_bits_t imported, local;
+
+    local = calc_virt_ia32_vmx_true_vmexit_ctls(tdcs_p);
+
+    imported.raw = tdcs_p->virt_msrs.virtual_ia32_vmx_true_exit_ctls.raw;
+    return check_allowed32_vmx_ctls(imported, local);
+}
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_true_entry_ctls(tdcs_t* tdcs_p)
+{
+    ia32_vmx_allowed_bits_t imported, local;
+
+    local = calc_virt_ia32_vmx_true_vmentry_ctls(tdcs_p);
+
+    imported.raw = tdcs_p->virt_msrs.virtual_ia32_vmx_true_entry_ctls.raw;
+    return check_allowed32_vmx_ctls(imported, local);
+}
+
+
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_ept_vpid_cap(tdcs_t* tdcs_p)
+{
+    ia32_vmx_ept_vpid_cap_t msr;
+
+    msr.raw = tdcs_p->virt_msrs.virtual_ia32_vmx_ept_vpid_cap.raw;
+
+    // Clear bits that we don't care about
+    msr.pml4_supported = 0;
+    msr.pml5_supported = 0;
+    msr.uc_supported = 0;
+    msr.wb_supported = 0;
+    msr.invept_supported = 0;
+    msr.invvpid_supported = 0;
+    msr.ad_supported = 0;
+    msr.single_context_invept_supported = 0;
+    msr.single_context_invvpid_supported = 0;
+    msr.single_contx_retaining_globals_invvpid_supp = 0;
+    msr.all_context_invept_supported = 0;
+    msr.all_context_invvpid_supported = 0;
+    msr.individual_addr_invvpid_supported = 0;
+
+    return (msr.raw == calc_virt_ia32_vmx_ept_vpid_cap(tdcs_p).raw);
+}
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_vmfunc(uint64_t value)
+{
+    return (value == 0);
+}
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_cr0_fixed0(uint64_t value)
+{
+    uint64_t not_allowed0, allowed1;
+
+    calc_virt_ia32_vmx_cr0_fixed(&not_allowed0, &allowed1);
+
+    // Any bit that is allowed (1) in the imported value must be allowed (1) in the local value
+    return check_not_allowed0_vmx_ctls(value, not_allowed0);
+}
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_cr0_fixed1(uint64_t value)
+{
+    uint64_t not_allowed0, allowed1;
+
+    calc_virt_ia32_vmx_cr0_fixed(&not_allowed0, &allowed1);
+
+    // Any bit that is allowed (1) in the imported value must be allowed (1) in the local value
+    return check_allowed1_virt_vmx_ctls(value, allowed1);
+}
+
+
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_cr4_fixed0(tdcs_t* tdcs_p)
+{
+    uint64_t not_allowed0, allowed1;
+
+    calc_virt_ia32_vmx_cr4_fixed(tdcs_p, &not_allowed0, &allowed1);
+
+    // Any bit that is allowed (1) in the imported value must be allowed (1) in the local value
+    return check_not_allowed0_vmx_ctls(tdcs_p->virt_msrs.virtual_ia32_vmx_cr4_fixed0.raw, not_allowed0);
+}
+
+_STATIC_INLINE_ bool_t check_virt_ia32_vmx_cr4_fixed1(tdcs_t* tdcs_p)
+{
+    uint64_t not_allowed0, allowed1;
+
+    calc_virt_ia32_vmx_cr4_fixed(tdcs_p, &not_allowed0, &allowed1);
+
+    // Any bit that is allowed (1) in the imported value must be allowed (1) in the local value
+    return check_allowed1_virt_vmx_ctls(tdcs_p->virt_msrs.virtual_ia32_vmx_cr4_fixed1.raw, allowed1);
+}
 
 /**
  * @brief Initialize the values of the virtual IA32_VMS_* MSRs,
@@ -308,33 +499,33 @@ void init_virt_ia32_vmx_msrs(tdcs_t* tdcs_ptr);
 // Check the native value of IA32_ARCH_CAPABILITIES MSR
 _STATIC_INLINE_ bool_t check_native_ia32_arch_capabilities(ia32_arch_capabilities_t arch_cap)
 {
-    if (is_not_gnr_a0_stepping())
+    if (!is_not_gnr_a0_stepping())
     {
-        return (arch_cap.rdcl_no == 1)           &&   // Bit 0
-            (arch_cap.irbs_all == 1)             &&   // Bit 1
-            (arch_cap.rsba == 0)                 &&   // Bit 2
-            (arch_cap.skip_l1dfl_vmentry == 1)   &&   // Bit 3
-            (arch_cap.mds_no == 1)               &&   // Bit 5
-            (arch_cap.if_pschange_mc_no == 1)    &&   // Bit 6
-            (arch_cap.taa_no == 1)               &&   // Bit 8
-            (arch_cap.misc_package_ctls == 1)    &&   // Bit 10
-            (arch_cap.energy_filtering_ctl == 1) &&   // Bit 11
-            (arch_cap.doitm == 1)                &&   // Bit 12
-            (arch_cap.sbdr_ssdp_no == 1)         &&   // Bit 13
-            (arch_cap.fbsdp_no == 1)             &&   // Bit 14
-            (arch_cap.psdp_no == 1)              &&   // Bit 15
-            (arch_cap.fb_clear_ctrl == 0)        &&   // Bit 18
-            (arch_cap.xapic_disable_status == 1);
+        return (arch_cap.rdcl_no == 1)              &&   // Bit 0
+               (arch_cap.irbs_all == 1)             &&   // Bit 1
+               (arch_cap.skip_l1dfl_vmentry == 1)   &&   // Bit 3
+               (arch_cap.mds_no == 1)               &&   // Bit 5
+               (arch_cap.if_pschange_mc_no == 1)    &&   // Bit 6
+               (arch_cap.taa_no == 1)               &&   // Bit 8
+               (arch_cap.misc_package_ctls == 1)    &&   // Bit 10
+               (arch_cap.energy_filtering_ctl == 1);
     }
 
-    return (arch_cap.rdcl_no == 1)              &&   // Bit 0
-           (arch_cap.irbs_all == 1)             &&   // Bit 1
-           (arch_cap.skip_l1dfl_vmentry == 1)   &&   // Bit 3
-           (arch_cap.mds_no == 1)               &&   // Bit 5
-           (arch_cap.if_pschange_mc_no == 1)    &&   // Bit 6
-           (arch_cap.taa_no == 1)               &&   // Bit 8
-           (arch_cap.misc_package_ctls == 1)    &&   // Bit 10
-           (arch_cap.energy_filtering_ctl == 1);
+    return (arch_cap.rdcl_no == 1) &&              // Bit 0
+           (arch_cap.irbs_all == 1) &&             // Bit 1
+           (arch_cap.rsba == 0) &&                 // Bit 2
+           (arch_cap.skip_l1dfl_vmentry == 1) &&   // Bit 3
+           (arch_cap.mds_no == 1) &&               // Bit 5
+           (arch_cap.if_pschange_mc_no == 1) &&    // Bit 6
+           (arch_cap.taa_no == 1) &&               // Bit 8
+           (arch_cap.misc_package_ctls == 1) &&    // Bit 10
+           (arch_cap.energy_filtering_ctl == 1) && // Bit 11
+           (arch_cap.doitm == 1) &&                // Bit 12
+           (arch_cap.sbdr_ssdp_no == 1) &&         // Bit 13
+           (arch_cap.fbsdp_no == 1) &&             // Bit 14
+           (arch_cap.psdp_no == 1) &&              // Bit 15
+           (arch_cap.fb_clear_ctrl == 0) &&        // Bit 18
+           (arch_cap.xapic_disable_status == 1);
 }
 
 /**
@@ -442,6 +633,12 @@ _STATIC_INLINE_ void conditionally_write_vmcs_ia32_perf_global_ctrl_msr(tdcs_t* 
         // Set temp.EN_FC0 (bit 32).  This is done to enable Fixed Counter 0 for 0/1-step mitigation
         ia32_vmwrite(VMX_GUEST_IA32_PERF_GLOBAL_CONTROL_FULL_ENCODE, (get_local_data()->vmm_ia32_perf_global_ctrl | BIT(32)));
     }
+}
+
+_STATIC_INLINE_ ia32_efer_t update_ia32_efer_cross_cr0(ia32_efer_t ia32_efer, ia32_cr0_t cr0)
+{
+    ia32_efer.lma = ia32_efer.lme && cr0.pg;
+    return ia32_efer;
 }
 
 #endif /* SRC_COMMON_HELPERS_VIRT_MSR_HELPERS_H_ */

@@ -25,8 +25,8 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/op_state_lookup.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include OP_STATE_LOOKUP_HEADER
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
@@ -40,8 +40,7 @@ api_error_type tdh_import_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
     // TDR and TDCS
     tdr_t             *tdr_p = NULL;         // Pointer to the owner TDR page
     pa_t               tdr_pa;               // Physical address of the owner TDR page
-    pamt_block_t       tdr_pamt_block;       // TDR PAMT block
-    pamt_entry_t      *tdr_pamt_entry_ptr = NULL;
+    pamt_walk_result_t tdr_pamt_walk_result;
     tdcs_t            *tdcs_p = NULL;        // Pointer to the TDCS structure
     bool_t             tdr_pamt_locked_flag = false;
 
@@ -67,8 +66,7 @@ api_error_type tdh_import_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
                                                  TDX_RANGE_RO,
                                                  TDX_LOCK_EXCLUSIVE,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_pamt_locked_flag,
                                                  &tdr_p);
 
@@ -162,11 +160,11 @@ api_error_type tdh_import_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
     if (aes_gcm_process_aad(&migsc_p->aes_gcm_context,(uint8_t*)&mbmd.abort_token,
             (MBMD_SIZE_NO_MAC(mbmd.abort_token))) != AES_GCM_NO_ERROR)
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_146, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
     if (aes_gcm_finalize(&migsc_p->aes_gcm_context, mbmd.abort_token.mac))
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_147, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     // Update the MBMD with values not included in the MAC calculation
@@ -208,7 +206,7 @@ EXIT:
 
     if (tdr_pamt_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_p);
     }
 

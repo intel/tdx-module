@@ -49,12 +49,13 @@
 #define NUM_SYS_STATE_EXPORT_PAGES           1   // Num pages used by TDH.EXPORT.STATE.IMMUTABLE for the SYS MD list
 
 #define MIN_TD_IMMUTABLE_STATE_EXPORT_PAGES  6
+
 #define MIN_TD_STATE_EXPORT_PAGES            2
-#define MIN_VP_STATE_EXPORT_PAGES            5
+#define MIN_VP_STATE_EXPORT_PAGES            9
 
 #define MIN_TD_IMMUTABLE_STATE_IMPORT_PAGES  1   // Not including the pages for SYS metadata
 #define MIN_TD_STATE_IMPORT_PAGES            1
-#define MIN_VP_STATE_IMPORT_PAGES            4
+#define MIN_VP_STATE_IMPORT_PAGES            1
 
 // One page for SYS MD list + 1 page for TD Metadata (-1 for the last page number)
 #define MIN_IMPORT_STATE_IMMUTABLE_LAST_ENTRY ((NUM_SYS_STATE_EXPORT_PAGES) + (MIN_TD_IMMUTABLE_STATE_IMPORT_PAGES) -1)
@@ -260,7 +261,8 @@ typedef struct PACKED migsc_s {
         api_error_type         status;
         uint64_t               extended_err_info[2];
 
-        uint8_t                reserved_2[24];
+        pa_t                   l2_attr_list_pa;
+        uint8_t                reserved_2[16];
     } interrupted_state;
 
     mbmd_t         mbmd;
@@ -346,10 +348,12 @@ typedef union page_list_entry_u
 {
     struct
     {
-        uint64_t reserved_11_0  : 12;  // Bits 11:0
-        uint64_t hpa            : 40;  // Bits 51:12
-        uint64_t reserved_62_52 : 11;  // Bits 62:52
-        uint64_t invalid        : 1;   // Bit 63
+        uint64_t reserved_11_0     : 12;  // Bits 11:0
+        uint64_t hpa               : 40;  // Bits 51:12
+        uint64_t reserved_60_52    : 9;   // Bits 60:52
+        uint64_t removed           : 1;   // Bit 61
+        uint64_t pamt_removal_hint : 1;   // Bit 62
+        uint64_t invalid           : 1;   // Bit 63
     };
     uint64_t raw;
 } page_list_entry_t;
@@ -374,7 +378,7 @@ _STATIC_INLINE_ void migsc_unlock(migsc_link_t *mgsc_link)
     bool_t old;
 
     old = _lock_btr_64b(&mgsc_link->raw, MIGSC_LINK_LOCK_BIT);
-    tdx_sanity_check(old, SCEC_LOCK_SOURCE, 9);
+    tdx_sanity_check(old, FATAL_ERROR_ID_187, 9);
 }
 
 _STATIC_INLINE_ bool_t is_gpa_list_entry_op_cancel_or_nop(gpa_list_entry_t gpa_list_entry)
@@ -382,6 +386,17 @@ _STATIC_INLINE_ bool_t is_gpa_list_entry_op_cancel_or_nop(gpa_list_entry_t gpa_l
     return ((gpa_list_entry.operation & GPA_ENTRY_OP_EXPORT_NOP_MASK) == GPA_ENTRY_OP_NOP);
 }
 
+_STATIC_INLINE_ bool_t gpa_list_entry_is_aliased(gpa_list_entry_t gpa_list_entry, uint16_t vm_id)
+{
+    tdx_debug_assert((vm_id >= 1) && (vm_id <= MAX_L2_VMS));
+    return ((gpa_list_entry.l2_map & BIT(vm_id - 1)) != 0);
+}
+
+_STATIC_INLINE_ void gpa_list_entry_set_alias(gpa_list_entry_t* gpa_list_entry, uint16_t vm_id)
+{
+    tdx_debug_assert((vm_id >= 1) && (vm_id <= MAX_L2_VMS));
+    gpa_list_entry->l2_map |= BIT(vm_id - 1);
+}
 
 _STATIC_INLINE_ bool_t gpa_list_entry_is_valid(gpa_list_entry_t gpa_list_entry)
 {
@@ -424,4 +439,4 @@ bool_t check_and_get_gpa_from_entry(gpa_list_entry_t gpa_entry, bool_t gpaw, pa_
 void copy_mbmd(mbmd_t* mbmd_dst, mbmd_t* mbmd_src);
 
 
-#endif /* SRC_COMMON_HELPERS_MIGRATION_H_ */
+#endif // TD_PART_MIGRATION_SUPPORTED

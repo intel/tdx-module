@@ -28,7 +28,7 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_vmm_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 #include "data_structures/tdx_global_data.h"
 #include "data_structures/tdx_local_data.h"
@@ -42,10 +42,9 @@
 #include "accessors/vt_accessors.h"
 #include "tdxio/vtbar.h"
 #include "tdxio/kcbar.h"
-
 #include "helpers/smrrs.h"
 #include "memory_handlers/keyhole_manager.h"
-#include "auto_gen/cpuid_configurations.h"
+#include CPUID_CONFIGURATIONS_HEADER
 
 _STATIC_INLINE_ api_error_type check_msrs(tdx_module_global_t* tdx_global_data_ptr)
 {
@@ -249,6 +248,17 @@ _STATIC_INLINE_ api_error_type compare_cpuid_configuration(tdx_module_global_t* 
         }
     }
 
+    // this is a WA for CWF. on DMR, this cpuid should exist in the lut.
+    tmp_cpuid_config.leaf_subleaf.leaf = 0x23;
+    tmp_cpuid_config.leaf_subleaf.subleaf = 5;
+    ia32_cpuid(tmp_cpuid_config.leaf_subleaf.leaf, tmp_cpuid_config.leaf_subleaf.subleaf,
+               &tmp_cpuid_config.values.eax, &tmp_cpuid_config.values.ebx,
+               &tmp_cpuid_config.values.ecx, &tmp_cpuid_config.values.edx);
+
+    // Save LP ARCH PEBS supported counter bitmaps
+    tdx_local_data_ptr->arch_pebs_pmc_gp_cfg_c_bitmap = tmp_cpuid_config.values.eax;
+    tdx_local_data_ptr->arch_pebs_pmc_fx_cfg_c_bitmap = tmp_cpuid_config.values.ecx;
+
     // Compare IA32_TSC_ADJUST to the value sampled on TDHSYSINIT
     if (ia32_rdmsr(IA32_TSC_ADJ_MSR_ADDR) != tdx_global_data_ptr->plt_common_config.ia32_tsc_adjust)
     {
@@ -432,6 +442,27 @@ _STATIC_INLINE_ api_error_type check_enumeration_and_compare_configuration(tdx_m
     return TDX_SUCCESS;
 }
 
+_STATIC_INLINE_ void map_fatal_info_pointer(void)
+{
+    tdx_module_global_t* global_data = get_global_data();
+
+    // only the first thread who reaches here should do the mapping
+    if (LOCK_RET_SUCCESS == acquire_sharex_lock_ex(&global_data->fatal_info_lock))
+    {
+        // verify all checks in tdh_sys_init passed and the fatal error info mem should be mapped
+        if ((uint64_t)(-1) != global_data->fatal_info_config_hpa)
+        {
+            global_data->fatal_info_p = (uint64_t*)map_pa((void*)global_data->fatal_info_config_hpa, TDX_RANGE_RW);
+            get_local_data()->fatal_error_mem_mapped = 1;
+
+            zero_cacheline((void*)global_data->fatal_info_p);
+            global_data->fatal_info_config_hpa = (uint64_t)(-1);
+        }
+
+        release_sharex_lock_ex(&global_data->fatal_info_lock);
+    }
+}
+
 _STATIC_INLINE_ void increment_num_of_lps(tdx_module_global_t* tdx_global_data_ptr)
 {
     (void)_lock_xadd_32b(&tdx_global_data_ptr->num_of_init_lps, 1);
@@ -599,14 +630,6 @@ api_error_type tdh_sys_lp_init(void)
 
     // Explicit LP-scope state initialization
     tdx_local_data_ptr->vp_ctx.last_tdvpr_pa.raw = NULL_PA;
-    uint32_t lfsr_value = LFSR_INIT_VALUE;
-    if (!lfsr_init_seed (&lfsr_value))
-    {
-        TDX_ERROR("LFSR initialization failed\n");
-        retval = TDX_RND_NO_ENTROPY;
-        goto EXIT;
-    }
-    tdx_local_data_ptr->single_step_def_state.lfsr_value = lfsr_value;
 
     /* Do a global EPT flush.  This is required to guarantee security in case of
        a TDX-SEAM module update. */
@@ -633,6 +656,10 @@ api_error_type tdh_sys_lp_init(void)
 
     // Initialize keyhole
     init_keyhole_state();
+
+    // map the fatal error info memmory if needed
+    map_fatal_info_pointer();
+
     /**
      * Calc LPID from local_data_ptr
      */

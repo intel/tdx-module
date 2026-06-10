@@ -1,1 +1,0 @@
-tdx_td_transitions.o  tdx_seamcall_entry_point.o  tdx_seamret_to_vmm.o  exception_handling_asm.o

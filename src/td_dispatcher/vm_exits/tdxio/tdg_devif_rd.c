@@ -78,7 +78,7 @@ api_error_type tdg_devif_rd(
         result = devif_verify_param.devifcs_ptr->tdisp_version;
         break;
     default:
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_102, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         goto EXIT;
     }
 

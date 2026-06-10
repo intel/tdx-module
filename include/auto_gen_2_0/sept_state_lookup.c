@@ -24,7 +24,7 @@
  *  Spreadsheet Format Version - '6'
  **/
 
-#include "auto_gen/sept_state_lookup.h"
+#include "./sept_state_lookup.h"
 
 
 const bool_t seamcall_sept_state_lookup[MAX_SEAMCALL_LEAF][NUM_SEPT_STATES] = {

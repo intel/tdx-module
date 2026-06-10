@@ -28,7 +28,7 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_api_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/tdx_local_data.h"
 #include "x86_defs/x86_defs.h"
 #include "accessors/data_accessors.h"
@@ -39,12 +39,12 @@
 
 _STATIC_INLINE_ bool_t is_operand_busy_error_code(api_error_type error)
 {
-    if (HIGH_32BITS(error) == HIGH_32BITS(TDX_OPERAND_BUSY))
-    {
-        return true;
-    }
+    return (HIGH_32BITS(error) == HIGH_32BITS(TDX_OPERAND_BUSY));
+}
 
-    return false;
+_STATIC_INLINE_ bool_t is_operand_busy_host_priority_error_code(api_error_type error)
+{
+    return (HIGH_32BITS(error) == HIGH_32BITS(TDX_OPERAND_BUSY_HOST_PRIORITY));
 }
 
 static api_error_type tdg_servtd_rd_wr(servtd_binding_handle_t binding_handle, md_field_id_t field_id,
@@ -53,8 +53,7 @@ static api_error_type tdg_servtd_rd_wr(servtd_binding_handle_t binding_handle, m
     tdx_module_local_t* lp = get_local_data();
 
     tdr_t               * target_tdr_ptr = NULL;            // Pointer to the TDR page (linear address)
-    pamt_block_t          target_tdr_pamt_block;            // TDR PAMT block
-    pamt_entry_t        * target_tdr_pamt_entry_ptr = NULL; // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    target_tdr_pamt_walk_result = { .valid = false };
     bool_t                target_tdr_locked_flag = false;   // Indicate TDR is locked
 
     tdcs_t              * target_tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
@@ -102,13 +101,17 @@ static api_error_type tdg_servtd_rd_wr(servtd_binding_handle_t binding_handle, m
                                                  write ? TDX_RANGE_RW : TDX_RANGE_RO,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &target_tdr_pamt_block,
-                                                 &target_tdr_pamt_entry_ptr,
+                                                 &target_tdr_pamt_walk_result,
                                                  &target_tdr_locked_flag,
                                                  &target_tdr_ptr);
     if (return_val != TDX_SUCCESS)
     {
         if (is_operand_busy_error_code(return_val))
+        {
+            TDX_ERROR("Failed to check/lock/map a Target TDR - error = %llx\n", return_val);
+            goto EXIT;
+        }
+        else if (is_operand_busy_host_priority_error_code(return_val))
         {
             TDX_ERROR("Failed to check/lock/map a Target TDR - error = %llx\n", return_val);
             goto EXIT;
@@ -141,7 +144,7 @@ static api_error_type tdg_servtd_rd_wr(servtd_binding_handle_t binding_handle, m
 
      if (!is_equal_256bit(target_tdr_ptr->management_fields.td_uuid, target_uuid))
      {
-         if (is_equal_256bit(target_tdcs_ptr->migration_fields.preimport_uuid, target_uuid))
+         if (is_equal_256bit(target_tdcs_ptr->migration_fields.pre_import_uuid, target_uuid))
          {
              // This is the case where the binding happened before import
              lp->vp_ctx.tdvps->guest_state.gpr_state.r10 = target_tdr_ptr->management_fields.td_uuid.qwords[0];
@@ -238,7 +241,7 @@ static api_error_type tdg_servtd_rd_wr(servtd_binding_handle_t binding_handle, m
      if (write)
      {
          return_val = md_write_element(MD_CTX_TD, field_id, access_type, access_qual,
-                                       md_ctx, wr_value, wr_request_mask, &rd_value);
+                                       md_ctx, wr_value, wr_request_mask, &rd_value, true);
      }
      else
      {
@@ -278,7 +281,7 @@ EXIT:
 
     if (target_tdr_locked_flag)
     {
-        pamt_unwalk(target_tdr_pa, target_tdr_pamt_block, target_tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&target_tdr_pamt_walk_result);
         free_la(target_tdr_ptr);
     }
 

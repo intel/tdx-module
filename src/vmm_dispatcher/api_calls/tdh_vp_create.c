@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/td_control_structures.h"
 #include "memory_handlers/keyhole_manager.h"
@@ -41,15 +41,13 @@ api_error_type tdh_vp_create(uint64_t target_tdvpr_pa, uint64_t target_tdr_pa)
     // TDVPS related variables
     pa_t                  tdvpr_pa;                  // TDVPR physical address
     tdvps_t             * tdvps_ptr;                 // Pointer to the TDVPS (multi-page linear address)
-    pamt_block_t          tdvpr_pamt_block;          // TDVPR PAMT block
-    pamt_entry_t        * tdvpr_pamt_entry_ptr;      // Pointer to the TDVPR PAMT entry
+    pamt_walk_result_t    tdvpr_pamt_walk_result;
     bool_t                tdvpr_locked_flag = false; // Indicate TDVPR is locked
 
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
     tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
-    pamt_block_t          tdr_pamt_block;            // TDR PAMT block
-    pamt_entry_t        * tdr_pamt_entry_ptr;        // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
     tdcs_t              * tdcs_ptr = NULL;           // Pointer to the TDCS page (linear address)
@@ -65,8 +63,7 @@ api_error_type tdh_vp_create(uint64_t target_tdvpr_pa, uint64_t target_tdr_pa)
                                                  TDX_RANGE_RW,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -92,8 +89,7 @@ api_error_type tdh_vp_create(uint64_t target_tdvpr_pa, uint64_t target_tdr_pa)
                                                             TDX_RANGE_RW,
                                                             TDX_LOCK_EXCLUSIVE,
                                                             PT_NDA,
-                                                            &tdvpr_pamt_block,
-                                                            &tdvpr_pamt_entry_ptr,
+                                                            &tdvpr_pamt_walk_result,
                                                             &tdvpr_locked_flag,
                                                             (void**)&tdvps_ptr);
     if (return_val != TDX_SUCCESS)
@@ -114,20 +110,22 @@ api_error_type tdh_vp_create(uint64_t target_tdvpr_pa, uint64_t target_tdr_pa)
      */
     tdvps_ptr->management.num_tdvps_pages = 1;
     tdvps_ptr->management.assoc_lpid = (uint32_t)-1;
-    tdvps_ptr->management.tdvps_pa[0] = assign_hkid_to_hpa(tdr_ptr, tdvpr_pa).raw;
+    tdvps_ptr->management.tdvps_page_pa[0] = assign_hkid_to_hpa(tdr_ptr, tdvpr_pa).raw;
 
     // Register the new TDVPR page in its owner TDR
     (void)_lock_xadd_64b(&(tdr_ptr->management_fields.chldcnt), 1);
 
     // Set the new TDVPR page PAMT fields
-    tdvpr_pamt_entry_ptr->pt = PT_TDVPR;
-    set_pamt_entry_owner(tdvpr_pamt_entry_ptr, tdr_pa);
+    tdvpr_pamt_walk_result.pamt_entry_p->pt = PT_TDVPR;
+    set_pamt_entry_owner(tdvpr_pamt_walk_result.pamt_entry_p, tdr_pa);
+
+    pamt_inc_nl_page_count(tdvpr_pamt_walk_result.pamt_walk_path_nl[PT_2MB]);
 
 EXIT:
     // Release all acquired locks and free keyhole mappings
     if (tdvpr_locked_flag)
     {
-        pamt_unwalk(tdvpr_pa, tdvpr_pamt_block, tdvpr_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&tdvpr_pamt_walk_result);
         free_la(tdvps_ptr);
     }
 
@@ -139,7 +137,7 @@ EXIT:
 
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_ptr);
     }
 

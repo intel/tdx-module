@@ -34,7 +34,7 @@
 #include "x86_defs/vmcs_defs.h"
 #include "data_structures/tdx_local_data.h"
 #include "tdx_td_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "vmm_dispatcher/tdx_vmm_dispatcher.h"
 #include "helpers/helpers.h"
 #include "memory_handlers/sept_manager.h"
@@ -45,6 +45,7 @@ void td_ept_violation_exit(vmx_exit_qualification_t exit_qualification, vm_vmexi
     tdx_module_local_t* tdx_local_data_ptr = get_local_data();
 
     tdcs_t* tdcs_p = tdx_local_data_ptr->vp_ctx.tdcs;
+    tdr_t* tdr_p = tdx_local_data_ptr->vp_ctx.tdr;
 
     bool_t gpaw = tdcs_p->executions_ctl_fields.gpaw;
     pa_t gpa;
@@ -112,6 +113,7 @@ void td_ept_violation_exit(vmx_exit_qualification_t exit_qualification, vm_vmexi
         ept_level_t level = LVL_PT; // Walk till leaf entry
         ia32e_sept_t  sept_entry;
         ia32e_sept_t* sept_entry_ptr = secure_ept_walk(tdcs_p->executions_ctl_fields.eptp, gpa,
+                                                       tdr_p->key_management_fields.hkid,
                                                        &level, &sept_entry, false);
 
         free_la(sept_entry_ptr);

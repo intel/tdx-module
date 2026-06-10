@@ -25,12 +25,12 @@
  */
 
 #include "metadata_generic.h"
-#include "auto_gen/global_sys_fields_lookup.h"
-#include "auto_gen/tdr_tdcs_fields_lookup.h"
-#include "auto_gen/td_vmcs_fields_lookup.h"
-#include "auto_gen/td_l2_vmcs_fields_lookup.h"
-#include "auto_gen/tdvps_fields_lookup.h"
-#include "auto_gen/cpuid_configurations.h"
+#include GLOBAL_SYS_FIELDS_LOOKUP_HEADER
+#include TDR_TDCS_FIELDS_LOOKUP_HEADER
+#include TD_VMCS_FIELDS_LOOKUP_HEADER
+#include TD_L2_VMCS_FIELDS_LOOKUP_HEADER
+#include TDVPS_FIELDS_LOOKUP_HEADER
+#include CPUID_CONFIGURATIONS_HEADER
 #include "helpers/error_reporting.h"
 #include "helpers/helpers.h"
 #include "metadata_sys.h"
@@ -129,7 +129,7 @@ _STATIC_INLINE_ uint32_t md_get_num_of_td_vp_ctx_unused_entries(md_context_code_
             unused_entries = 0;
             break;
         default:
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_64, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             break;
     }
 
@@ -175,7 +175,7 @@ const md_lookup_t* md_get_lookup_table(md_context_code_e ctx_code, md_field_id_t
             }
             break;
         default:
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_65, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             break;
     }
 
@@ -260,7 +260,7 @@ static md_field_id_t md_get_next_cpuid_value_entry(md_field_id_t field_id, bool_
     md_cpuid_field_id_get_leaf_subleaf(field_id, &leaf, &subleaf);
     uint32_t index = get_cpuid_lookup_entry(leaf, subleaf);
 
-    tdx_sanity_check(index != CPUID_LOOKUP_IDX_NA, SCEC_METADATA_HANDLER_SOURCE, 0);
+    tdx_sanity_check(index != CPUID_LOOKUP_IDX_NA, FATAL_ERROR_ID_230, 0);
 
     do
     {
@@ -360,7 +360,7 @@ static void md_get_next_item_with_iterator(lookup_iterator_t* lookup_context, md
         goto EXIT;
     }
 
-    tdx_sanity_check(lookup_context->table_idx != MD_NO_ENTRY_IDX, SCEC_METADATA_HANDLER_SOURCE, 1);
+    tdx_sanity_check(lookup_context->table_idx != MD_NO_ENTRY_IDX, FATAL_ERROR_ID_231, 1);
 
     IF_RARE (is_special_cpuid_field_id(lookup_context->field_id))
     {
@@ -611,13 +611,14 @@ void md_get_rd_wr_mask(const md_lookup_t* entry, md_access_t access_type, md_acc
             *out_wr_mask = (entry->mig_import == MIG_ME   || entry->mig_import == MIG_CE ||
                             entry->mig_import == MIG_MEO  || entry->mig_import == MIG_CEO ||
                             entry->mig_import == MIG_IE   || entry->mig_import == MIG_IES ||
-                            entry->mig_import == MIG_IEME || entry->mig_import == MIG_IESME ||
-                            entry->mig_import == MIG_IESMEO) ? entry->import_mask : 0;
+                            entry->mig_import == MIG_IEME || entry->mig_import == MIG_IEMEO ||
+                            entry->mig_import == MIG_IESME || entry->mig_import == MIG_IESMEO)
+                            ? entry->import_mask : 0;
             *out_rd_mask = ~(0ULL);
             break;
         default:
             TDX_ERROR("Incorrect access type : 0x%x\n", access_type);
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_66, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             break;
     }
 
@@ -665,16 +666,16 @@ api_error_code_e md_read_element(md_context_code_e ctx_code, md_field_id_t field
             retval = md_vp_read_element(field_id, entry, access_type, access_qual, md_ctx, value);
             break;
         default:
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_67, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             break;
     }
 
     return retval;
 }
 
-api_error_code_e md_write_element(md_context_code_e ctx_code, md_field_id_t field_id,
-         md_access_t access_type, md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx,
-         uint64_t value, uint64_t wr_mask, uint64_t* old_value)
+api_error_code_e md_write_element(md_context_code_e ctx_code, md_field_id_t field_id, md_access_t access_type,
+                                  md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx,
+                                  uint64_t value, uint64_t wr_mask, uint64_t* old_value, bool_t wr_mask_valid)
 {
     api_error_code_e retval;
     const md_lookup_t* entry = md_check_element_and_get_entry(ctx_code, field_id, md_ctx);
@@ -692,14 +693,14 @@ api_error_code_e md_write_element(md_context_code_e ctx_code, md_field_id_t fiel
             break;
         case MD_CTX_TD:
             retval = md_td_write_element(field_id, entry, access_type, access_qual, md_ctx,
-                                         value, wr_mask, old_value);
+                                         value, wr_mask, old_value, wr_mask_valid);
             break;
         case MD_CTX_VP:
             retval = md_vp_write_element(field_id, entry, access_type, access_qual, md_ctx,
-                                         value, wr_mask, old_value, true);
+                                         value, wr_mask, old_value, true, wr_mask_valid);
             break;
         default:
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_68, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             break;
     }
 
@@ -724,7 +725,7 @@ static const md_lookup_t* md_check_field_and_get_entry(md_context_code_e ctx_cod
         return NULL;
     }
 
-    tdx_sanity_check(entry->num_of_elem <= MAX_ELEMENTS_IN_FIELD, SCEC_METADATA_HANDLER_SOURCE, 2);
+    tdx_sanity_check(entry->num_of_elem <= MAX_ELEMENTS_IN_FIELD, FATAL_ERROR_ID_232, 2);
 
     if (lookup_context != NULL)
     {
@@ -734,6 +735,7 @@ static const md_lookup_t* md_check_field_and_get_entry(md_context_code_e ctx_cod
         lookup_context->field_id = entry->field_id;
         // Set up the exact input field code
         lookup_context->field_id.field_code = field_id.field_code;
+        lookup_context->field_id.class_code = field_id.class_code;
     }
 
     return entry;
@@ -762,7 +764,7 @@ static api_error_code_e md_read_field_with_entry(md_context_code_e ctx_code, md_
             retval = md_vp_read_field(field_id, entry, access_type, access_qual, md_ctx, value);
             break;
         default:
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_69, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             break;
     }
 
@@ -770,8 +772,9 @@ static api_error_code_e md_read_field_with_entry(md_context_code_e ctx_code, md_
 }
 
 static api_error_code_e md_write_field_with_entry(md_context_code_e ctx_code, md_field_id_t field_id,
-        md_access_t access_type, md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx,
-        uint64_t value[MAX_ELEMENTS_IN_FIELD], uint64_t wr_mask, const md_lookup_t* entry, bool_t is_import)
+                                                  md_access_t access_type, md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx,
+                                                  uint64_t value[MAX_ELEMENTS_IN_FIELD], uint64_t wr_mask, const md_lookup_t* entry,
+                                                  bool_t is_import, bool_t wr_mask_valid)
 {
     api_error_code_e retval;
 
@@ -786,13 +789,13 @@ static api_error_code_e md_write_field_with_entry(md_context_code_e ctx_code, md
             retval = md_sys_write_field(field_id, entry, access_type, access_qual, value, wr_mask);
             break;
         case MD_CTX_TD:
-            retval = md_td_write_field(field_id, entry, access_type, access_qual, md_ctx, value, wr_mask, is_import);
+            retval = md_td_write_field(field_id, entry, access_type, access_qual, md_ctx, value, wr_mask, is_import, wr_mask_valid);
             break;
         case MD_CTX_VP:
-            retval = md_vp_write_field(field_id, entry, access_type, access_qual, md_ctx, value, wr_mask);
+            retval = md_vp_write_field(field_id, entry, access_type, access_qual, md_ctx, value, wr_mask, wr_mask_valid);
             break;
         default:
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_70, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             break;
     }
 
@@ -887,7 +890,8 @@ static dump_seq_status_e md_dump_sequence(md_sequence_t* sequence_ptr, md_contex
         {
             TDX_ERROR("Unexpected error during sequence dump - 0x%llx, field_id = 0x%llx\n",
                     retval, lkp_ctx->field_id.raw);
-            FATAL_ERROR();
+            
+            fatal_error(FATAL_ERROR_ID_71, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
         // Fetch next field in context and class
@@ -913,7 +917,6 @@ static dump_seq_status_e md_dump_sequence(md_sequence_t* sequence_ptr, md_contex
             }
             break;
         }
-
         entry = &lkp_ctx->lookup_table[lkp_ctx->table_idx];
     }
 
@@ -988,10 +991,9 @@ api_error_code_e md_dump_list(md_context_code_e ctx_code, md_field_id_t field_id
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE
         uint64_t prev_field_id = lookup_context.field_id.raw;
 #endif // DEBUGFEATURE_TDX_DBG_TRACE
-
         sequence_done = md_dump_sequence(sequence_ptr, ctx_code, md_ctx, buff_size, access_type, access_qual,
                                          &elements_written, &lookup_context);
-
+        
         // Check that it's not an empty sequence
         IF_COMMON (sequence_done != DUMP_SEQUENCE_EMPTY)
         {
@@ -1018,7 +1020,7 @@ api_error_code_e md_dump_list(md_context_code_e ctx_code, md_field_id_t field_id
         // Fetch next field table entry, to see the number of elements in the loop condition
         entry = &lookup_context.lookup_table[lookup_context.table_idx];
     }
-
+    
     // Next field id will either get -1 if we finished the context, or the next field id to be written
     // in case of unfinished sequence, or unfinished context
     next_field_id->raw = lookup_context.field_id.raw;
@@ -1074,9 +1076,9 @@ _STATIC_INLINE_ bool_t is_required_or_optional_entry(const md_lookup_t* entry, m
 }
 
 static api_error_code_e md_write_sequence(md_sequence_t* sequence_ptr, md_context_ptrs_t md_ctx,
-                                uint32_t buff_size, md_access_t access_type, md_access_qualifier_t access_qual,
-                                uint32_t* elements_read, lookup_iterator_t* lkp_iter, bool_t skip_non_writable,
-                                uint64_t ext_err_info[2], bool_t is_import)
+                                          uint32_t buff_size, md_access_t access_type, md_access_qualifier_t access_qual,
+                                          uint32_t* elements_read, lookup_iterator_t* lkp_iter, bool_t skip_non_writable,
+                                          uint64_t ext_err_info[2], bool_t is_import)
 {
     md_context_code_e ctx_code = sequence_ptr->sequence_header.context_code;
     uint32_t sequence_idx = 0;
@@ -1141,7 +1143,7 @@ static api_error_code_e md_write_sequence(md_sequence_t* sequence_ptr, md_contex
         {
             retval = md_write_field_with_entry(ctx_code, lkp_iter->field_id,
                                                access_type, access_qual, md_ctx, &sequence_ptr->element[sequence_idx],
-                                               wr_mask, entry, is_import);
+                                               wr_mask, entry, is_import, sequence_ptr->sequence_header.write_mask_valid);
 
             if (retval != TDX_SUCCESS)
             {
@@ -1156,13 +1158,15 @@ static api_error_code_e md_write_sequence(md_sequence_t* sequence_ptr, md_contex
         // Update the remaining output buffer size, and advance the sequence buffer index
         buff_size -= (entry->num_of_elem * sizeof(uint64_t));
         sequence_idx += entry->num_of_elem;
+
+        uint32_t prev_class_code = lkp_iter->field_id.class_code;
         // Fetch next field in context and class
         md_get_next_item_with_iterator(lkp_iter, md_ctx, false);
         // If no next field in table (current context), or no next field in class, and apparently we still
         // have fields left...
         if ((i < (num_fields - 1)) &&
             (is_null_field_id(lkp_iter->field_id) ||
-            (lkp_iter->field_id.class_code != entry->field_id.class_code)))
+            (lkp_iter->field_id.class_code != prev_class_code)))
         {
             ext_err_info[0] = sequence_ptr->sequence_header.raw;
             return TDX_METADATA_FIELD_ID_INCORRECT;

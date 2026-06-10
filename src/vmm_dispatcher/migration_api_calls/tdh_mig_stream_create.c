@@ -36,8 +36,7 @@ api_error_type tdh_mig_stream_create(uint64_t migsc_pa, uint64_t target_tdr_pa)
     // TDR and TDCS
     tdr_t           * tdr_p = NULL;           // Pointer to the owner TDR page
     pa_t              tdr_pa;                 // Physical address of the owner TDR page
-    pamt_block_t      tdr_pamt_block;         // TDR PAMT block
-    pamt_entry_t    * tdr_pamt_entry_ptr;
+    pamt_walk_result_t tdr_pamt_walk_result;
     tdcs_t          * tdcs_p = NULL;          // Pointer to the TDCS structure
     bool_t            tdr_locked_flag = false;
 
@@ -47,8 +46,7 @@ api_error_type tdh_mig_stream_create(uint64_t migsc_pa, uint64_t target_tdr_pa)
     uint16_t          migsc_i;
     migsc_t         * migsc_p = NULL;          // Pointer to the MIGSC
     pa_t              migsc;                   // Physical address of the new MIGSC page
-    pamt_block_t      migsc_pamt_block;        // New TD page PAMT block
-    pamt_entry_t    * migsc_pamt_entry_p;      // Pointer to the TD PAMT entry
+    pamt_walk_result_t migsc_pamt_walk_result;
     bool_t            migsc_pamt_locked_flag = false;
     migsc_link_t      migsc_link;
 
@@ -66,8 +64,7 @@ api_error_type tdh_mig_stream_create(uint64_t migsc_pa, uint64_t target_tdr_pa)
                                                  TDX_RANGE_RW,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_p);
 
@@ -111,8 +108,7 @@ api_error_type tdh_mig_stream_create(uint64_t migsc_pa, uint64_t target_tdr_pa)
                                                             TDX_RANGE_RW,
                                                             TDX_LOCK_EXCLUSIVE,
                                                             PT_NDA,
-                                                            &migsc_pamt_block,
-                                                            &migsc_pamt_entry_p,
+                                                            &migsc_pamt_walk_result,
                                                             &migsc_pamt_locked_flag,
                                                             (void**)&migsc_p);
 
@@ -136,8 +132,10 @@ api_error_type tdh_mig_stream_create(uint64_t migsc_pa, uint64_t target_tdr_pa)
     (void)_lock_xadd_64b(&tdr_p->management_fields.chldcnt, 1);
 
     // Update the new page’s PAMT entry
-    migsc_pamt_entry_p->pt = PT_TDCX;
-    migsc_pamt_entry_p->owner = tdr_pa.page_4k_num;
+    migsc_pamt_walk_result.pamt_entry_p->pt = PT_TDCX;
+    migsc_pamt_walk_result.pamt_entry_p->owner = tdr_pa.page_4k_num;
+
+    pamt_inc_nl_page_count(migsc_pamt_walk_result.pamt_walk_path_nl[PT_2MB]);
 
     // Initialize the applicable forward link entry in TDCS
     migsc_link.raw = migsc.raw;
@@ -149,27 +147,31 @@ api_error_type tdh_mig_stream_create(uint64_t migsc_pa, uint64_t target_tdr_pa)
 
 EXIT:
     // Release all acquired locks
-    if (op_state_locked_flag)
+    if(migsc_pamt_locked_flag)
     {
-        release_sharex_lock_hp(&(tdcs_p->management_fields.op_state_lock), TDX_LOCK_EXCLUSIVE);
+        pamt_unwalk(&migsc_pamt_walk_result);
+        free_la(migsc_p);
     }
-    if (tdr_locked_flag)
-    {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
-        free_la(tdr_p);
-    }
+
     if (mig_lock_flag)
     {
         release_sharex_lock(&tdcs_p->migration_fields.mig_lock, TDX_LOCK_EXCLUSIVE);
     }
+
+    if (op_state_locked_flag)
+    {
+        release_sharex_lock_hp(&(tdcs_p->management_fields.op_state_lock), TDX_LOCK_EXCLUSIVE);
+    }
+
     if (tdcs_p != NULL)
     {
         free_la(tdcs_p);
     }
-    if(migsc_pamt_locked_flag)
+
+    if (tdr_locked_flag)
     {
-        pamt_unwalk(migsc, migsc_pamt_block, migsc_pamt_entry_p, TDX_LOCK_EXCLUSIVE, PT_4KB);
-        free_la(migsc_p);
+        pamt_unwalk(&tdr_pamt_walk_result);
+        free_la(tdr_p);
     }
 
     return return_val;

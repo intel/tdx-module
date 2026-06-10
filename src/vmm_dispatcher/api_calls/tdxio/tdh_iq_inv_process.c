@@ -31,10 +31,11 @@
 #include "common/memory_handlers/sept_manager.h"
 
 _STATIC_INLINE_ void emulate_wait_complete(
+    tdr_t *const tdr_ptr,
     tdcs_t *const tdcs_ptr,
     tdcs_tdxio_fields_t *const tdcs_tdxio_fields_ptr)
 {
-    if (!tdcs_tdxio_fields_ptr->status_complete_write)
+    if (!tdcs_tdxio_fields_ptr->status_complete_wr)
     {
         return;
     }
@@ -47,7 +48,7 @@ _STATIC_INLINE_ void emulate_wait_complete(
     bool_t sept_locked_flag = false;
 
     // Do not call again
-    tdcs_tdxio_fields_ptr->status_complete_write = false;
+    tdcs_tdxio_fields_ptr->status_complete_wr = false;
 
     /**
      * @brief Get the HPA for the Status Complete GPA. The page must be guest accessible (Mapped) otherwise
@@ -58,6 +59,7 @@ _STATIC_INLINE_ void emulate_wait_complete(
     return_val = lock_sept_check_and_walk_private_gpa_to_leaf(tdcs_ptr,
                                                                 OPERAND_ID_RCX,
                                                                 tdcs_tdxio_fields_ptr->status_complete_gpa,
+                                                                tdr_ptr->key_management_fields.hkid,
                                                                 TDX_LOCK_SHARED,
                                                                 &sept_entry,
                                                                 &ept_level,
@@ -76,7 +78,7 @@ _STATIC_INLINE_ void emulate_wait_complete(
     *wait_status_ptr = tdcs_tdxio_fields_ptr->status_complete_data;
     free_la(wait_status_ptr);
 
-    tdcs_tdxio_fields_ptr->status_complete_write = false;
+    tdcs_tdxio_fields_ptr->status_complete_wr = false;
 
     if (sept_locked_flag)
     {
@@ -99,8 +101,7 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
     dmar_state_info_t dmar_state_info = {0};
 
     tdr_t *tdr_ptr = NULL;
-    pamt_block_t tdr_pamt_block;             // TDR PAMT block
-    pamt_entry_t *tdr_pamt_entry_ptr = NULL; // Pointer to the TDR PAMT entry
+    pamt_walk_result_t tdr_pamt_walk_result;
     bool_t is_tdr_locked = false;            // Indicate TDR is locked
     tdcs_t *tdcs_ptr = NULL;                 // Pointer to the TDCS structure (Multi-page)
     bool_t op_state_locked_flag = false;
@@ -176,8 +177,7 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
                     mapping_type,
                     TDX_LOCK_SHARED,
                     PT_TDR,
-                    &tdr_pamt_block,
-                    &tdr_pamt_entry_ptr,
+                    &tdr_pamt_walk_result,
                     &is_tdr_locked,
                     &tdr_ptr);
                 if (return_val != TDX_SUCCESS)
@@ -202,7 +202,7 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
                         free_la(tdcs_ptr);
 
                         free_la(tdr_ptr);
-                        pamt_unwalk(object_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+                        pamt_unwalk(&tdr_pamt_walk_result);
                         goto EXIT;
                     }
 
@@ -216,7 +216,7 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
 
                         free_la(tdcs_ptr);
                         free_la(tdr_ptr);
-                        pamt_unwalk(object_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+                        pamt_unwalk(&tdr_pamt_walk_result);
 
                         goto EXIT;
                     }
@@ -226,15 +226,15 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
                     _lock_xadd_64b(&tdcs_ptr->tdxio_fields.prev_iotlb_cnt, (uint64_t)-1);
                     iotlb_inv_tracker->inv_req = 0;
 
-                    if (tdcs_tdxio_fields_ptr->is_req_active &&
+                    if (tdcs_tdxio_fields_ptr->req_active &&
                         get_qword_bm(tdcs_tdxio_fields_ptr->req_iommu_bm.qwords, iommu_id_reg.raw))
                     {
                         set_qword_bm(tdcs_tdxio_fields_ptr->req_iommu_bm.qwords, iommu_id_reg.raw, false);
                         if (tdx_memcmp_to_zero(&tdcs_tdxio_fields_ptr->req_iommu_bm, sizeof(tdcs_tdxio_fields_ptr->req_iommu_bm)) &&
                             !tdr_ptr->management_fields.fatal)
                         {
-                            emulate_wait_complete(tdcs_ptr, tdcs_tdxio_fields_ptr);
-                            tdcs_tdxio_fields_ptr->is_req_active = false;
+                            emulate_wait_complete(tdr_ptr, tdcs_ptr, tdcs_tdxio_fields_ptr);
+                            tdcs_tdxio_fields_ptr->req_active = false;
                         }
                     }
 
@@ -252,7 +252,7 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
                     {
                         TDX_ERROR("State check or TDCS lock failure - error = %llx\n", return_val);
                         free_la(tdr_ptr);
-                        pamt_unwalk(object_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+                        pamt_unwalk(&tdr_pamt_walk_result);
                         goto EXIT;
                     }
                     op_state_locked_flag = true;
@@ -269,11 +269,11 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
                         free_la(tdcs_ptr);
 
                         free_la(tdr_ptr);
-                        pamt_unwalk(object_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+                        pamt_unwalk(&tdr_pamt_walk_result);
                         goto EXIT;
                     }
 
-                    if (tdcs_tdxio_fields_ptr->is_req_active)
+                    if (tdcs_tdxio_fields_ptr->req_active)
                     {
                         tdcs_tdxio_fields_ptr->iotlb_complete[iommu_id_reg.raw]++;
                         if (tdcs_tdxio_fields_ptr->iotlb_complete[iommu_id_reg.raw] == tdcs_tdxio_fields_ptr->req_num)
@@ -282,8 +282,8 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
                             if (tdx_memcmp_to_zero(&tdcs_tdxio_fields_ptr->req_iommu_bm, sizeof(tdcs_tdxio_fields_ptr->req_iommu_bm)) &&
                                 !tdr_ptr->management_fields.fatal)
                             {
-                                emulate_wait_complete(tdcs_ptr, tdcs_tdxio_fields_ptr);
-                                tdcs_tdxio_fields_ptr->is_req_active = false;
+                                emulate_wait_complete(tdr_ptr, tdcs_ptr, tdcs_tdxio_fields_ptr);
+                                tdcs_tdxio_fields_ptr->req_active = false;
                             }
                         }
                     }
@@ -297,7 +297,7 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
                     op_state_locked_flag = false;
                 }
                 free_la(tdcs_ptr);
-                pamt_unwalk(object_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+                pamt_unwalk(&tdr_pamt_walk_result);
 
                 // Note, tdr_ptr gets unmapped at the end of the while loop
                 object_ptr = tdr_ptr;
@@ -305,7 +305,7 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
                 break;
             default:
                 TDX_ERROR("Invalid invalidation request type (%u)\n", iq_ctx_ptr->inv_req_type);
-                FATAL_ERROR();
+                fatal_error(FATAL_ERROR_ID_120, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             }
 
             if (iq_ctx_ptr->inv_req_type != INV_REQ_IOTLB &&

@@ -25,8 +25,8 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/op_state_lookup.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include OP_STATE_LOOKUP_HEADER
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
@@ -44,7 +44,7 @@ api_error_type tdh_export_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
     // tdvps
     tdvps_t              *tdvps_p = NULL;      // Pinter to the tdvps structure
     pa_t                  tdvpr_pa;            // Physical address of the tdvpr page
-    pamt_block_t          tdvpr_pamt_block;    // tdvpr pamt block
+    pamt_walk_result_t    tdvpr_pamt_walk_result;
     bool_t                tdvpr_locked_flag = false;
 
     // TDR and TDCS
@@ -92,9 +92,8 @@ api_error_type tdh_export_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
     // By default, 0 pages are exported
     local_data_ptr->vmm_regs.rdx = 0ULL;
 
-    pamt_entry_t *tdvpr_pamt_p = NULL;    // Pinter to tdvpr pamt entry
     return_val = check_and_lock_explicit_4k_private_hpa(tdvpr_pa, OPERAND_ID_RCX, TDX_LOCK_EXCLUSIVE, PT_TDVPR,
-                                                        &tdvpr_pamt_block, &tdvpr_pamt_p, &tdvpr_locked_flag);
+                                                        &tdvpr_pamt_walk_result, &tdvpr_locked_flag);
 
     if (return_val != TDX_SUCCESS)
     {
@@ -103,7 +102,7 @@ api_error_type tdh_export_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
     }
 
     tdr_pa.raw = 0;
-    tdr_pa.page_4k_num = tdvpr_pamt_p->owner;
+    tdr_pa.page_4k_num = tdvpr_pamt_walk_result.pamt_entry_p->owner;
     bool_t is_tdr_locked = false;
     return_val = lock_and_map_implicit_tdr(tdr_pa, OPERAND_ID_TDR, TDX_RANGE_RO, TDX_LOCK_SHARED, &tdr_pamt_p, &is_tdr_locked, &tdr_p);
     if (return_val != TDX_SUCCESS)
@@ -224,7 +223,7 @@ api_error_type tdh_export_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
         if (aes_gcm_process_aad(&migsc_p->aes_gcm_context, (uint8_t*)&migsc_p->mbmd.vp_state,
                 MBMD_SIZE_NO_MAC(migsc_p->mbmd.vp_state)) != AES_GCM_NO_ERROR)
         {
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_141, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
         // Update the MBMD with values not included in the MAC calculation
@@ -344,7 +343,7 @@ api_error_type tdh_export_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
 
         if (aes_gcm_encrypt(&migsc_p->aes_gcm_context, (uint8_t*)&md_list, (uint8_t*)enc_md_list_hdr_p , _4KB  ) != AES_GCM_NO_ERROR)
         {
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_142, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
         page_list_i++;
@@ -383,7 +382,7 @@ api_error_type tdh_export_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
             // Write the MBMD's MAC field
             if (aes_gcm_finalize(&migsc_p->aes_gcm_context, migsc_p->mbmd.vp_state.mac) != AES_GCM_NO_ERROR)
             {
-                FATAL_ERROR();
+                fatal_error(FATAL_ERROR_ID_143, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             }
 
             // Write out the MBMD
@@ -471,7 +470,7 @@ EXIT:
 
     if (tdvpr_locked_flag)
     {
-        pamt_unwalk(tdvpr_pa, tdvpr_pamt_block, tdvpr_pamt_p, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&tdvpr_pamt_walk_result);
     }
 
     if (migsc_p)

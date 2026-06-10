@@ -122,9 +122,9 @@ EXIT:
     if (is_fatal_error)
     {
         basic_memset_to_zero(mac_ptr, MAC256_LEN);
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_74, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         // Unreachable code
-        tdx_sanity_check(0, SCEC_AEAD_CRYPTO_FUNCTION, 0);
+        tdx_sanity_check(0, FATAL_ERROR_ID_240, 0);
     }
 
     release_mutex_lock(&spdm_info_ptr->tx_lock);
@@ -139,7 +139,7 @@ api_error_type tdx_io_aead_decrypt(
     void *const sec_buff_ptr,
     uint64_t sec_buff_len)
 {
-    bool_t fatal_error = false;
+    bool_t fatal_error_flag = false;
     bool_t rx_is_locked = false;
     api_error_type return_val = UNINITIALIZE_ERROR;
     aes_gcm_api_error res;
@@ -218,7 +218,7 @@ api_error_type tdx_io_aead_decrypt(
     if (res != AES_GCM_NO_ERROR)
     {
         TDX_ERROR("Failed on aes_gcm_init\n");
-        fatal_error = true;
+        fatal_error_flag = true;
         goto EXIT;
     }
 
@@ -226,7 +226,7 @@ api_error_type tdx_io_aead_decrypt(
     if (res != AES_GCM_NO_ERROR)
     {
         TDX_ERROR("Failed on aes_gcm_process_aad\n");
-        fatal_error = true;
+        fatal_error_flag = true;
         goto EXIT;
     }
 
@@ -239,7 +239,7 @@ api_error_type tdx_io_aead_decrypt(
     if (res != AES_GCM_NO_ERROR)
     {
         TDX_ERROR("Failed on aes_gcm_decrypt\n");
-        fatal_error = true;
+        fatal_error_flag = true;
         goto EXIT;
     }
     is_msg_decrypted = true;
@@ -248,11 +248,11 @@ api_error_type tdx_io_aead_decrypt(
     if (res != AES_GCM_NO_ERROR)
     {
         TDX_ERROR("Failed on aes_gcm_finalize\n");
-        fatal_error = true;
+        fatal_error_flag = true;
         goto EXIT;
     }
 
-    if (!tdx_safe_memcmp(local_mac, mac, sizeof(local_mac)))
+    if (!tdx_memcmp_safe(local_mac, mac, sizeof(local_mac)))
     {
         TDX_ERROR("MAC mismatch\n");
         return_val = TDX_SDPM_INVALID_MESSAGE;
@@ -268,9 +268,9 @@ EXIT:
     basic_memset_to_zero(&ctx, sizeof(aes_gcm_ctx_t));
     basic_memset_to_zero(local_mac, sizeof(local_mac));
 
-    if (fatal_error)
+    if (fatal_error_flag)
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_75, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     if(is_msg_decrypted &&

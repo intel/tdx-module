@@ -39,8 +39,7 @@ api_error_type tdh_mmio_map(
 {
     // TDR related variables
     tdr_t *tdr_ptr = NULL;                   // Pointer to the TDR page (linear address)
-    pamt_block_t tdr_pamt_block;             // TDR PAMT block
-    pamt_entry_t *tdr_pamt_entry_ptr = NULL; // Pointer to the TDR PAMT entry
+    pamt_walk_result_t tdr_pamt_walk_result;
     bool_t is_tdr_locked = false;            // Indicate TDR is locked
     tdcs_t *tdcs_ptr = NULL;                 // Pointer to the TDCS structure (Multi-page)
     bool_t op_state_locked_flag = false;
@@ -83,8 +82,7 @@ api_error_type tdh_mmio_map(
         TDX_RANGE_RO,
         TDX_LOCK_SHARED,
         PT_TDR,
-        &tdr_pamt_block,
-        &tdr_pamt_entry_ptr,
+        &tdr_pamt_walk_result,
         &is_tdr_locked,
         &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -147,6 +145,7 @@ api_error_type tdh_mmio_map(
         tdcs_ptr,
         OPERAND_ID_RCX,
         page_gpa,
+        tdr_ptr->key_management_fields.hkid,
         TDX_LOCK_SHARED,
         &page_sept_entry_ptr,
         &page_level_entry,
@@ -316,7 +315,7 @@ EXIT:
         {
             free_la(tdr_ptr);
         }
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
     }
     return return_val;
 }

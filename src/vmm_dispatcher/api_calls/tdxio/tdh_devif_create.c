@@ -41,27 +41,23 @@ api_error_type tdh_devif_create(
 {
     // DEVIFCS related variables
     devifcs_t *devifcs_ptr = NULL;               // DEVIFCS pointer
-    pamt_block_t devifcs_pamt_block;             // PAMT of DEVICS root page
-    pamt_entry_t *devifcs_pamt_entry_ptr = NULL; // Pointer to the DEVIFCS PAMT entry
+    pamt_walk_result_t devifcs_pamt_walk_result;
     bool_t is_devifcs_locked = false;            // Flag indicating PAMT entry of DEVIFCS root is locked
 
     // TDR related variables
     tdr_t *tdr_ptr = NULL;                   // Pointer to the TDR page (linear address)
-    pamt_block_t tdr_pamt_block;             // TDR PAMT block
-    pamt_entry_t *tdr_pamt_entry_ptr = NULL; // Pointer to the TDR PAMT entry
+    pamt_walk_result_t tdr_pamt_walk_result;
     bool_t tdr_locked_flag = false;          // Indicate TDR is locked
     tdcs_t *tdcs_ptr = NULL;                 // Pointer to the TDCS structure (Multi-page)
 
     // TD TDISP buffer related variables
     void *td_tdisp_buff_ptr = NULL;                    // TDISP buffer pointer
-    pamt_block_t td_tdisp_buff_pamt_block;             // PAMT of DEVICS root page
-    pamt_entry_t *td_tdisp_buff_pamt_entry_ptr = NULL; // Pointer to the DEVIFCS PAMT entry
+    pamt_walk_result_t td_tdisp_buff_pamt_walk_result;
     bool_t is_td_tdisp_buff_locked = false;            // Flag indicating PAMT entry of DEVIFCS root is locked
 
     // VMM TDISP buffer related variables
     void *vmm_tdisp_buff_ptr = NULL;                    // TDISP buffer pointer
-    pamt_block_t vmm_tdisp_buff_pamt_block;             // PAMT of DEVICS root page
-    pamt_entry_t *vmm_tdisp_buff_pamt_entry_ptr = NULL; // Pointer to the DEVIFCS PAMT entry
+    pamt_walk_result_t vmm_tdisp_buff_pamt_walk_result;
     bool_t is_vmm_tdisp_buff_locked = false;            // Flag indicating PAMT entry of DEVIFCS root is locked
 
     // DEVIFMT parameters
@@ -90,8 +86,7 @@ api_error_type tdh_devif_create(
         OPERAND_ID_R8,
         TDX_LOCK_EXCLUSIVE,
         PT_NDA,
-        &devifcs_pamt_block,
-        &devifcs_pamt_entry_ptr,
+        &devifcs_pamt_walk_result,
         &is_devifcs_locked);
     if (return_val != TDX_SUCCESS)
     {
@@ -106,8 +101,7 @@ api_error_type tdh_devif_create(
         TDX_RANGE_RW,
         TDX_LOCK_SHARED,
         PT_TDR,
-        &tdr_pamt_block,
-        &tdr_pamt_entry_ptr,
+        &tdr_pamt_walk_result,
         &tdr_locked_flag,
         &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -132,8 +126,7 @@ api_error_type tdh_devif_create(
         OPERAND_ID_R9,
         TDX_LOCK_EXCLUSIVE,
         PT_NDA,
-        &td_tdisp_buff_pamt_block,
-        &td_tdisp_buff_pamt_entry_ptr,
+        &td_tdisp_buff_pamt_walk_result,
         &is_td_tdisp_buff_locked);
     if (return_val != TDX_SUCCESS)
     {
@@ -147,8 +140,7 @@ api_error_type tdh_devif_create(
         OPERAND_ID_R10,
         TDX_LOCK_EXCLUSIVE,
         PT_NDA,
-        &vmm_tdisp_buff_pamt_block,
-        &vmm_tdisp_buff_pamt_entry_ptr,
+        &vmm_tdisp_buff_pamt_walk_result,
         &is_vmm_tdisp_buff_locked);
     if (return_val != TDX_SUCCESS)
     {
@@ -264,7 +256,7 @@ api_error_type tdh_devif_create(
     devifcs_ptr->spdm_id = stream_exinfo_ptr->spdm_id;
     devifcs_ptr->tdisp_version = spdm_info_ptr->binding_info.tdisp_version;
 
-    devifcs_ptr->mmio_reporting_offset = tdr_ptr->tdx_io_fields.rnd_hpa_offset;
+    devifcs_ptr->mmio_reporting_offset = tdr_ptr->tdx_io_fields.rnd_hpa_offset_6b;
 
     devifcs_ptr->tdisp_sts = TDISP_STATE_CONFIG_UNLOCKED;
     devifcs_ptr->td_tdisp_req_sts = TDISP_REQ_AVAILABLE;
@@ -283,12 +275,12 @@ api_error_type tdh_devif_create(
     devifmt_leaf_entry_ptr->pa = devifcs_root_pa.page_4k_num;
 
     // Update PAMT of DEVIFCS root page
-    set_pamt_entry_owner(devifcs_pamt_entry_ptr, tdr_pa);
-    devifcs_pamt_entry_ptr->pt = PT_DEVIFCS_R;
+    set_pamt_entry_owner(devifcs_pamt_walk_result.pamt_entry_p, tdr_pa);
+    devifcs_pamt_walk_result.pamt_entry_p->pt = PT_DEVIFCS_R;
 
     // Update PAMT of TD TDISP buffer page
-    set_pamt_entry_owner(td_tdisp_buff_pamt_entry_ptr, tdr_pa);
-    td_tdisp_buff_pamt_entry_ptr->pt = PT_DEVIFCS_NR;
+    set_pamt_entry_owner(td_tdisp_buff_pamt_walk_result.pamt_entry_p, tdr_pa);
+    td_tdisp_buff_pamt_walk_result.pamt_entry_p->pt = PT_DEVIFCS_NR;
 
     // Map TD TDISP buffer page
     td_tdisp_buff_ptr = map_pa_with_global_hkid(
@@ -296,8 +288,8 @@ api_error_type tdh_devif_create(
         TDX_RANGE_RW);
 
     // Update PAMT of VMM TDISP buffer page
-    set_pamt_entry_owner(vmm_tdisp_buff_pamt_entry_ptr, tdr_pa);
-    vmm_tdisp_buff_pamt_entry_ptr->pt = PT_DEVIFCS_NR;
+    set_pamt_entry_owner(vmm_tdisp_buff_pamt_walk_result.pamt_entry_p, tdr_pa);
+    vmm_tdisp_buff_pamt_walk_result.pamt_entry_p->pt = PT_DEVIFCS_NR;
 
     // Map VMM TDISP buffer page
     vmm_tdisp_buff_ptr = map_pa_with_global_hkid(
@@ -356,12 +348,12 @@ EXIT:
 
     if (is_vmm_tdisp_buff_locked)
     {
-        pamt_unwalk(vmm_tdisp_msg_buffer_pa, vmm_tdisp_buff_pamt_block, vmm_tdisp_buff_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&vmm_tdisp_buff_pamt_walk_result);
     }
 
     if (is_td_tdisp_buff_locked)
     {
-        pamt_unwalk(td_tdisp_msg_buffer_pa, td_tdisp_buff_pamt_block, td_tdisp_buff_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&td_tdisp_buff_pamt_walk_result);
     }
 
     if (op_state_locked_flag)
@@ -380,12 +372,12 @@ EXIT:
         {
             free_la(tdr_ptr);
         }
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
     }
 
     if (is_devifcs_locked)
     {
-        pamt_unwalk(devifcs_root_pa, devifcs_pamt_block, devifcs_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&devifcs_pamt_walk_result);
     }
 
     return return_val;

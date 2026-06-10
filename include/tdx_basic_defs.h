@@ -28,6 +28,8 @@
 #ifndef SRC_COMMON_TDX_BASIC_DEFS_H_
 #define SRC_COMMON_TDX_BASIC_DEFS_H_
 
+#include "makefile_consts.h"
+
 #define _STATIC_INLINE_ static inline
 #define _ASM_VOLATILE_ __asm__ volatile
 #define _ASM_          __asm__
@@ -71,6 +73,8 @@
 #define COMMON_COND(cond)           __builtin_expect((cond), 1)
 #define IF_RARE(rare_condition)     if ( RARE_COND(rare_condition) )
 #define IF_COMMON(common_condition) if ( COMMON_COND(common_condition) )
+
+#define VAL_OR_ZERO(val, cond)      (cond ? val : 0)
 
 #define __STR(x)        #x
 #define STR(x)          __STR(x)

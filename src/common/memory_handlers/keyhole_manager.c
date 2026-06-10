@@ -231,31 +231,36 @@ static void lru_cache_add_head_entry(uint16_t keyhole_idx)
 
 void init_keyhole_state(void)
 {
-    keyhole_state_t* keyhole_state = &get_local_data()->keyhole_state;
-    // At init state - free keyhole entries will be linked in the LRU list
-    // So that as long as there are any free entries left, they will be used before
-    // cached entries will be reused.
-
-    for (uint16_t i = 0; i < MAX_KEYHOLE_PER_LP; i++)
+    tdx_module_local_t* local_data = get_local_data();
+    if (!local_data->keyhole_state_initialized)
     {
-        keyhole_state->keyhole_array[i].state = (uint8_t)KH_ENTRY_FREE;
-        keyhole_state->keyhole_array[i].lru_prev = i - 1;
-        keyhole_state->keyhole_array[i].lru_next = i + 1;
-        keyhole_state->keyhole_array[i].hash_list_next = (uint16_t)UNDEFINED_IDX;
-        keyhole_state->keyhole_array[i].mapped_pa = 0;
-        keyhole_state->keyhole_array[i].is_writable = 0;
-        keyhole_state->keyhole_array[i].ref_count = 0;
+        keyhole_state_t* keyhole_state = &local_data->keyhole_state;
+        // At init state - free keyhole entries will be linked in the LRU list
+        // So that as long as there are any free entries left, they will be used before
+        // cached entries will be reused.
 
-        keyhole_state->hash_table[i] = (uint16_t)UNDEFINED_IDX;
+        for (uint16_t i = 0; i < MAX_KEYHOLE_PER_LP; i++)
+        {
+            keyhole_state->keyhole_array[i].state = (uint8_t)KH_ENTRY_FREE;
+            keyhole_state->keyhole_array[i].lru_prev = i - 1;
+            keyhole_state->keyhole_array[i].lru_next = i + 1;
+            keyhole_state->keyhole_array[i].hash_list_next = (uint16_t)UNDEFINED_IDX;
+            keyhole_state->keyhole_array[i].mapped_pa = 0;
+            keyhole_state->keyhole_array[i].is_writable = 0;
+            keyhole_state->keyhole_array[i].ref_count = 0;
+
+            keyhole_state->hash_table[i] = (uint16_t)UNDEFINED_IDX;
+        }
+
+        keyhole_state->keyhole_array[0].lru_prev = (uint16_t)UNDEFINED_IDX;
+        keyhole_state->keyhole_array[MAX_CACHEABLE_KEYHOLES - 1].lru_next = (uint16_t)UNDEFINED_IDX;
+
+        keyhole_state->lru_head = MAX_CACHEABLE_KEYHOLES - 1;
+        keyhole_state->lru_tail = 0;
+
+        keyhole_state->total_ref_count = 0;
+        local_data->keyhole_state_initialized = true;
     }
-
-    keyhole_state->keyhole_array[0].lru_prev = (uint16_t)UNDEFINED_IDX;
-    keyhole_state->keyhole_array[MAX_CACHEABLE_KEYHOLES - 1].lru_next = (uint16_t)UNDEFINED_IDX;
-
-    keyhole_state->lru_head = MAX_CACHEABLE_KEYHOLES - 1;
-    keyhole_state->lru_tail = 0;
-
-    keyhole_state->total_ref_count = 0;
 }
 
 void* map_pa_with_memtype(void* pa, mapping_type_t mapping_type, bool_t is_wb_memtype)
@@ -268,7 +273,7 @@ void* map_pa_with_memtype(void* pa, mapping_type_t mapping_type, bool_t is_wb_me
 
     // Increment the total ref count and check for overflow
     keyhole_state->total_ref_count += 1;
-    tdx_sanity_check(keyhole_state->total_ref_count != 0, SCEC_KEYHOLE_MANAGER_SOURCE, 0);
+    tdx_sanity_check(keyhole_state->total_ref_count != 0, FATAL_ERROR_ID_208, 0);
 
     // Requested PA is already mapped/cached
     if (keyhole_idx != UNDEFINED_IDX)
@@ -284,7 +289,7 @@ void* map_pa_with_memtype(void* pa, mapping_type_t mapping_type, bool_t is_wb_me
         keyhole_state->keyhole_array[keyhole_idx].ref_count += 1;
 
         // Check ref count overflow
-        tdx_sanity_check(keyhole_state->keyhole_array[keyhole_idx].ref_count != 0, SCEC_KEYHOLE_MANAGER_SOURCE, 1);
+        tdx_sanity_check(keyhole_state->keyhole_array[keyhole_idx].ref_count != 0, FATAL_ERROR_ID_209, 1);
 
         // Protection against speculative attacks on sensitive physical addresses
         lfence();
@@ -298,7 +303,7 @@ void* map_pa_with_memtype(void* pa, mapping_type_t mapping_type, bool_t is_wb_me
     keyhole_idx = keyhole_state->lru_tail;
 
     // Check if there any available keyholes left, otherwise - kill the module
-    tdx_sanity_check(keyhole_idx != UNDEFINED_IDX, SCEC_KEYHOLE_MANAGER_SOURCE, 2);
+    tdx_sanity_check(keyhole_idx != UNDEFINED_IDX, FATAL_ERROR_ID_210, 2);
 
     keyhole_entry_t* target_keyhole = &keyhole_state->keyhole_array[keyhole_idx];
 
@@ -357,7 +362,7 @@ void free_la(void* la)
 
     tdx_sanity_check((keyhole_state->keyhole_array[keyhole_idx].state != KH_ENTRY_FREE) &&
                      (keyhole_state->keyhole_array[keyhole_idx].state != KH_ENTRY_CAN_BE_REMOVED),
-                     SCEC_KEYHOLE_MANAGER_SOURCE, 3);
+                     FATAL_ERROR_ID_211, 3);
 
     if (keyhole_idx >= MAX_CACHEABLE_KEYHOLES)
     {
@@ -365,7 +370,7 @@ void free_la(void* la)
     }
 
     tdx_sanity_check((keyhole_state->total_ref_count > 0) &&
-                     (keyhole_state->keyhole_array[keyhole_idx].ref_count > 0), SCEC_KEYHOLE_MANAGER_SOURCE, 4);
+                     (keyhole_state->keyhole_array[keyhole_idx].ref_count > 0), FATAL_ERROR_ID_212, 4);
 
     keyhole_state->total_ref_count -= 1;
     keyhole_state->keyhole_array[keyhole_idx].ref_count -= 1;

@@ -526,10 +526,12 @@ api_error_type tdh_sys_rdall(uint64_t md_list_hpa, md_field_id_t field_id);
  * @brief Globally initialize the TDX-SEAM module.
  *
  * @note
- *
+ * 
+ * @param version Version of the API
+ * 
  * @return Success or Error type
  */
-api_error_type tdh_sys_init(void);
+api_error_type tdh_sys_init(uint8_t version);
 
 
 /**
@@ -855,5 +857,10 @@ api_error_type tdh_sys_shutdown(uint64_t hv_input);
  */
 api_error_type tdh_sys_update(void);
 
+api_error_type tdh_phymem_pamt_add(page_size_api_input_t page_info,
+                                   uint64_t pamt_hpa0,
+                                   uint64_t pamt_hpa1);
+
+api_error_type tdh_phymem_pamt_remove(page_size_api_input_t page_info);
 
 #endif // __TDX_VMM_API_HANDLERS_H_INCLUDED__

@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/td_control_structures.h"
 #include "memory_handlers/keyhole_manager.h"
@@ -43,8 +43,7 @@ api_error_type tdh_mng_create(uint64_t target_tdr_pa, hkid_api_input_t hkid_info
     // TDR related variables
     pa_t                  tdr_pa;                   // TDR physical address
     tdr_t               * tdr_ptr;                  // Pointer to the TDR page (linear address)
-    pamt_block_t          tdr_pamt_block;           // TDR PAMT block
-    pamt_entry_t        * tdr_pamt_entry_ptr;       // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;  // Indicate TDR is locked
 
     uint16_t              td_hkid;
@@ -71,8 +70,7 @@ api_error_type tdh_mng_create(uint64_t target_tdr_pa, hkid_api_input_t hkid_info
                                                  TDX_RANGE_RW,
                                                  TDX_LOCK_EXCLUSIVE,
                                                  PT_NDA,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -118,13 +116,13 @@ api_error_type tdh_mng_create(uint64_t target_tdr_pa, hkid_api_input_t hkid_info
     }
 
     // Generate a random 64bit, 1GB aligned value, which won't cause an arithmetic overflow when added to a valid HPA
-    if (!generate_custom_random(&tdr_ptr->tdx_io_fields.rnd_hpa_offset, 1))
+    if (!generate_custom_random(&tdr_ptr->tdx_io_fields.rnd_hpa_offset_6b, 1))
     {
         TDX_ERROR("Failed to generate random for RND_HPA_OFFSET\n");
         return_val = TDX_RND_NO_ENTROPY;
         goto EXIT;
     }
-    tdr_ptr->tdx_io_fields.rnd_hpa_offset &= RND_HPA_OFFSET_MASK;
+    tdr_ptr->tdx_io_fields.rnd_hpa_offset_6b &= RND_HPA_OFFSET_MASK;
 
     // ALL_CHECKS_PASSED:  The function is guaranteed to succeed
 
@@ -144,8 +142,10 @@ api_error_type tdh_mng_create(uint64_t target_tdr_pa, hkid_api_input_t hkid_info
     tdr_ptr->td_preserving_fields.handoff_version = global_data->module_hv;
 
     // Set the new TDR page PAMT fields
-    tdr_pamt_entry_ptr->pt = PT_TDR;
-    tdr_pamt_entry_ptr->owner = 0;
+    tdr_pamt_walk_result.pamt_entry_p->pt = PT_TDR;
+    tdr_pamt_walk_result.pamt_entry_p->owner = 0;
+
+    pamt_inc_nl_page_count(tdr_pamt_walk_result.pamt_walk_path_nl[PT_2MB]);
 
 EXIT:
     // Release all acquired locks and free keyhole mappings
@@ -156,7 +156,7 @@ EXIT:
 
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_ptr);
     }
     return return_val;

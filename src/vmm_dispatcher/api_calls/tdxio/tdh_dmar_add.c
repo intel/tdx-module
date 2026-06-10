@@ -49,7 +49,7 @@ static api_error_type is_valid_dmar_add_entry(
         break;
     default:
         TDX_ERROR("Invalid dmar level %u\n", dmar_lvl);
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_117, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     for (uint8_t curr_q = start_q_idx; curr_q < sizeof(dmar_entry_t) / sizeof(uint64_t); curr_q++)
@@ -180,7 +180,7 @@ api_error_type tdh_dmar_add(
         break;
     default:
         TDX_ERROR("Invalid dmar level %u\n", dmar_state_info.level);
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_118, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
 EXIT:

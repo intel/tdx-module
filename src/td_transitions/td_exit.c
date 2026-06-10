@@ -51,7 +51,7 @@ static void load_xmms_by_mask(tdvps_t* tdvps_ptr, uint16_t xmm_select)
     {
         if (xmm_select & (uint16_t)BIT(i))
         {
-            xmms[i] = tdvps_ptr->guest_extension_state.xbuf.legacy_region.xmm[i];
+            xmms[i] = tdvps_ptr->guest_extension_state.xbuff.legacy_region.xmm[i];
         }
     }
 
@@ -138,28 +138,73 @@ static void load_vmm_state_before_td_exit(tdx_module_local_t* local_data_ptr)
     // Perfmon State
     if (local_data_ptr->vp_ctx.attributes.perfmon)
     {
-        for (uint8_t i = 0; i < global_data->num_fixed_ctrs; i++)
+        init_msr_opt(IA32_FIXED_CTR_CTRL_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_fixed_ctr_ctrl);
+        if (global_data->perfmon_new_msrs)
         {
-            if ((global_data->fc_bitmap & BIT(i)) != 0)
+            for (uint8_t i = 0; i < MAX_FIXED_CTR; i++)
             {
-                init_msr_opt(IA32_FIXED_CTR0_MSR_ADDR + i, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_fixed_ctr[i]);
+                if ((global_data->fc_bitmap & BIT(i)) != 0)
+                {
+                    init_msr_opt(IA32_FIXED_CTR_BASE + PERFMON_MSR_INDEX_DELTA * i + IA32_FIXED_CTR_OFFSET,
+                                local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_pmc_fx_ctrx[i]);
+                }
+            }
+
+            for (uint32_t i = 0; i < NUM_PMC; i++)
+            {
+                if ((global_data->pmc_bitmap & BIT(i)) != 0)
+                {
+                    init_msr_opt(IA32_A_PMC_BASE + PERFMON_MSR_INDEX_DELTA * i + IA32_A_PMC_OFFSET,
+                                local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_pmc_gp_ctrx[i]);
+                    init_msr_opt(IA32_A_PMC_BASE + PERFMON_MSR_INDEX_DELTA * i + IA32_PERFEVTSEL_OFFSET,
+                                local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_pmc_gp_cfg_ax[i]);
+
+                }
             }
         }
-
-        for (uint32_t i = 0; i < NUM_PMC; i++)
+        else
         {
-            init_msr_opt(IA32_A_PMC0_MSR_ADDR + i, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_a_pmc[i]);
+            for (uint8_t i = 0; i < MAX_FIXED_CTR; i++)
+            {
+                if ((global_data->fc_bitmap & BIT(i)) != 0)
+                {
+                    init_msr_opt(IA32_PMC_FX0_CTR_MSR_ADDR + i, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_pmc_fx_ctrx[i]);
+                }
+            }
+
+            for (uint32_t i = 0; i < NUM_PMC; i++)
+            {
+                if ((global_data->pmc_bitmap & BIT(i)) != 0)
+                {
+                    init_msr_opt(IA32_PMC_GP0_CTR_MSR_ADDR + i, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_pmc_gp_ctrx[i]);
+                    init_msr_opt(IA32_PERFEVTSEL0_MSR_ADDR + i, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_pmc_gp_cfg_ax[i]);
+
+                }
+            }
         }
 
         for (uint32_t i = 0; i < 2; i++)
         {
-            init_msr_opt(IA32_OFFCORE_RSPx_MSR_ADDR + i, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_offcore_rsp[i]);
+            init_msr_opt(IA32_OFFCORE_RSPx_MSR_ADDR + i, local_data_ptr->vp_ctx.tdvps->guest_msr_state.msr_offcore_rspx[i]);
         }
 
         ia32_wrmsr(IA32_PERF_GLOBAL_STATUS_RESET_MSR_ADDR, ia32_rdmsr(IA32_PERF_GLOBAL_STATUS_MSR_ADDR));
         if (1 == global_data->plt_common_config.ia32_perf_capabilities.perf_metrics_available)
         {
             init_msr_opt(IA32_PERF_METRICS_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_perf_metrics);
+        }
+
+        // Legacy PEBS MSRs
+        if (!global_data->plt_common_config.ia32_misc_enable.pebs_unavailable)
+        {
+            init_msr_opt(IA32_PEBS_ENABLE_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_pebs_enable);
+            init_msr_opt(IA32_PEBS_DATA_CFG_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.msr_pebs_data_cfg);
+            init_msr_opt(IA32_PEBS_LD_LAT_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.msr_pebs_ld_lat);
+            // MSR_PEBS_FRONTEND exists only in big cores
+            if (global_data->native_model_info.core_type == CORE_TYPE_BIGCORE)
+            {
+                init_msr_opt(IA32_PEBS_FRONTEND_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.msr_pebs_frontend);
+            }
         }
     }
     else
@@ -170,7 +215,7 @@ static void load_vmm_state_before_td_exit(tdx_module_local_t* local_data_ptr)
         }
 
         // restore VMM's FC0 value
-        ia32_wrmsr(IA32_FIXED_CTR0_MSR_ADDR, local_data_ptr->vmm_ia32_fixed_ctr0);
+        ia32_wrmsr(IA32_PMC_FX0_CTR_MSR_ADDR, local_data_ptr->vmm_ia32_fixed_ctr0);
 
         if (0 != local_data_ptr->vmm_ia32_perf_global_status)
         {
@@ -258,6 +303,7 @@ static void save_guest_td_state_before_td_exit(tdcs_t* tdcs_ptr, tdx_module_loca
     tdvps_ptr->guest_state.dr6 = ia32_store_dr6();
 
     tdvps_ptr->guest_msr_state.ia32_ds_area = ia32_rdmsr(IA32_DS_AREA_MSR_ADDR);
+
     if (((ia32_xcr0_t)tdcs_ptr->executions_ctl_fields.xfam).lbr)
     {
         tdvps_ptr->guest_msr_state.ia32_lbr_depth = ia32_rdmsr(IA32_LBR_DEPTH_MSR_ADDR);
@@ -266,31 +312,69 @@ static void save_guest_td_state_before_td_exit(tdcs_t* tdcs_ptr, tdx_module_loca
     // Perfmon State
     if (tdcs_ptr->executions_ctl_fields.attributes.perfmon)
     {
+        // Save fixed Perfmon counters control register
         tdvps_ptr->guest_msr_state.ia32_fixed_ctr_ctrl = ia32_rdmsr(IA32_FIXED_CTR_CTRL_MSR_ADDR);
-        for (uint8_t i = 0; i < global_data->num_fixed_ctrs; i++)
+
+        if (global_data->perfmon_new_msrs)
         {
-            if ((global_data->fc_bitmap & BIT(i)) != 0)
+            // The CPU supports the new Perfmon MSR range.  Use that.
+            // ------------------------------------------------------
+
+            /* Save fixed Perfmon counters
+            */
+            for (uint8_t i = 0; i < MAX_FIXED_CTR; i++)
             {
-                tdvps_ptr->guest_msr_state.ia32_fixed_ctr[i] = ia32_rdmsr(IA32_FIXED_CTR0_MSR_ADDR + i);
+                /* A fixed counter MSR exists only if its bit in the effective fixed counter bitmap is 1.
+                   For hybrid SOCs, PL.FC_BITMAP indicated counters that are available in all core types. */
+                if ((global_data->fc_bitmap & BIT(i)) != 0)
+                {
+                    tdvps_ptr->guest_msr_state.ia32_pmc_fx_ctrx[i] =
+                            ia32_rdmsr(IA32_FIXED_CTR_BASE + PERFMON_MSR_INDEX_DELTA * i + IA32_FIXED_CTR_OFFSET);
+                }
+            }
+            // Save programmable Perfmon counters and their control registers
+            for (uint32_t i = 0; i < NUM_PMC; i++)
+            {
+                if ((global_data->pmc_bitmap & BIT(i)) != 0)
+                {
+                    tdvps_ptr->guest_msr_state.ia32_pmc_gp_ctrx[i] =
+                            ia32_rdmsr(IA32_A_PMC_BASE + PERFMON_MSR_INDEX_DELTA * i + IA32_A_PMC_OFFSET);
+                    tdvps_ptr->guest_msr_state.ia32_pmc_gp_cfg_ax[i] =
+                            ia32_rdmsr(IA32_A_PMC_BASE + PERFMON_MSR_INDEX_DELTA * i + IA32_PERFEVTSEL_OFFSET);
+                    }
             }
         }
-
-        for (uint32_t i = 0; i < NUM_PMC; i++)
+        else
         {
-            tdvps_ptr->guest_msr_state.ia32_a_pmc[i] = ia32_rdmsr(IA32_A_PMC0_MSR_ADDR + i);
-
-            if (!tdcs_ptr->executions_ctl2_fields.event_filters_num)
+            for (uint8_t i = 0; i < MAX_FIXED_CTR; i++)
             {
-                /* IA32_PERFEVTSEL[i] values are only saved if event filtering is not enabled.
-                   If event filtering is enabled, TDVPS always holds the up-to-date value of
-                   each IA32_PERFEVTSEL[i]. */
-                tdvps_ptr->guest_msr_state.ia32_perfevtsel[i] = ia32_rdmsr(IA32_PERFEVTSEL0_MSR_ADDR + i);
+                if ((global_data->fc_bitmap & BIT(i)) != 0)
+                {
+                    tdvps_ptr->guest_msr_state.ia32_pmc_fx_ctrx[i] = ia32_rdmsr(IA32_PMC_FX0_CTR_MSR_ADDR + i);
+
+                }
+            }
+
+            for (uint32_t i = 0; i < NUM_PMC; i++)
+            {
+                if ((global_data->pmc_bitmap & BIT(i)) != 0)
+                {
+                    tdvps_ptr->guest_msr_state.ia32_pmc_gp_ctrx[i] = ia32_rdmsr(IA32_PMC_GP0_CTR_MSR_ADDR + i);
+
+                    if (!tdcs_ptr->executions_ctl2_fields.event_filters_num)
+                    {
+                        /* IA32_PERFEVTSEL[i] values are only saved if event filtering is not enabled.
+                           If event filtering is enabled, TDVPS always holds the up-to-date value of
+                           each IA32_PERFEVTSEL[i]. */
+                        tdvps_ptr->guest_msr_state.ia32_pmc_gp_cfg_ax[i] = ia32_rdmsr(IA32_PERFEVTSEL0_MSR_ADDR + i);
+                    }
+                }
             }
         }
 
         for (uint32_t i = 0; i < 2; i++)
         {
-            tdvps_ptr->guest_msr_state.ia32_offcore_rsp[i] = ia32_rdmsr(IA32_OFFCORE_RSPx_MSR_ADDR + i);
+            tdvps_ptr->guest_msr_state.msr_offcore_rspx[i] = ia32_rdmsr(IA32_OFFCORE_RSPx_MSR_ADDR + i);
         }
 
         tdvps_ptr->guest_msr_state.ia32_perf_global_status = ia32_rdmsr(IA32_PERF_GLOBAL_STATUS_MSR_ADDR);
@@ -298,13 +382,18 @@ static void save_guest_td_state_before_td_exit(tdcs_t* tdcs_ptr, tdx_module_loca
         {
             tdvps_ptr->guest_msr_state.ia32_perf_metrics = ia32_rdmsr(IA32_PERF_METRICS_MSR_ADDR);
         }
-        tdvps_ptr->guest_msr_state.ia32_pebs_enable = ia32_rdmsr(IA32_PEBS_ENABLE_MSR_ADDR);
-        tdvps_ptr->guest_msr_state.ia32_pebs_data_cfg = ia32_rdmsr(IA32_PEBS_DATA_CFG_MSR_ADDR);
-        tdvps_ptr->guest_msr_state.ia32_pebs_ld_lat = ia32_rdmsr(IA32_PEBS_LD_LAT_MSR_ADDR);
-        // MSR_PEBS_FRONTEND exists only in big cores
-        if (global_data->native_model_info.core_type == CORE_TYPE_BIGCORE)
+
+        // Legacy PEBS MSRs
+        if (!global_data->plt_common_config.ia32_misc_enable.pebs_unavailable)
         {
-            tdvps_ptr->guest_msr_state.ia32_pebs_frontend = ia32_rdmsr(IA32_PEBS_FRONTEND_MSR_ADDR);
+            tdvps_ptr->guest_msr_state.ia32_pebs_enable = ia32_rdmsr(IA32_PEBS_ENABLE_MSR_ADDR);
+            tdvps_ptr->guest_msr_state.msr_pebs_data_cfg = ia32_rdmsr(IA32_PEBS_DATA_CFG_MSR_ADDR);
+            tdvps_ptr->guest_msr_state.msr_pebs_ld_lat = ia32_rdmsr(IA32_PEBS_LD_LAT_MSR_ADDR);
+            // MSR_PEBS_FRONTEND exists only in big cores
+            if (global_data->native_model_info.core_type == CORE_TYPE_BIGCORE)
+            {
+                tdvps_ptr->guest_msr_state.msr_pebs_frontend = ia32_rdmsr(IA32_PEBS_FRONTEND_MSR_ADDR);
+            }
         }
     }
     if (tdcs_ptr->executions_ctl_fields.cpuid_flags.waitpkg_supported)
@@ -344,7 +433,7 @@ static void async_tdexit_internal(api_error_code_e tdexit_case,
 
     tdvps_t* tdvps_ptr = tdx_local_data_ptr->vp_ctx.tdvps;
     tdr_t* tdr_ptr = tdx_local_data_ptr->vp_ctx.tdr;
-    uint8_t vcpu_state = tdvps_ptr->management.state;
+    uint8_t vcpu_state = tdvps_ptr->management.vcpu_state;
     uint8_t last_td_exit = tdvps_ptr->management.last_td_exit;
     api_error_code_t error_code;
 
@@ -492,14 +581,12 @@ void td_vmexit_to_vmm(uint8_t vcpu_state, uint8_t last_td_exit, uint64_t scrub_m
     // The TD is dead, no need so save its state.
     if (!is_td_dead)
     {
-        restore_td_xcr0_if_required(tdx_local_data_ptr);
-
         // 1.  Save any guest state that it has not saved as part of the common guest-side operation, e.g.,
         //     the extended state per TDCS.XFAM
         save_guest_td_state_before_td_exit(tdcs_ptr, tdx_local_data_ptr);
 
         // 2.  Set TDVPS.STATE to one of the VCPU_READY sub states, as an indication to the next TD entry.
-        tdvps_ptr->management.state = vcpu_state;
+        tdvps_ptr->management.vcpu_state = vcpu_state;
         tdvps_ptr->management.last_td_exit = last_td_exit;
         // At this point the VCPU state will no longer be accessed
 
@@ -530,7 +617,7 @@ void td_vmexit_to_vmm(uint8_t vcpu_state, uint8_t last_td_exit, uint64_t scrub_m
     // 4.  At this point TDR, TDCS and TDVPS will no longer be used during the flow.
     //     Release the shared lock on those control structures, which was acquired by TDHVPENTER.
     pamt_implicit_release_lock(vp_ctx->tdr_pamt_entry, TDX_LOCK_SHARED);
-    pamt_unwalk(vp_ctx->tdvpr_pa, vp_ctx->tdvpr_pamt_block, vp_ctx->tdvpr_pamt_entry, TDX_LOCK_SHARED, PT_4KB);
+    pamt_unwalk(&vp_ctx->tdvpr_pamt_walk_result);
 
     // Load host VMM state:
     set_seam_vmcs_as_active();
@@ -558,7 +645,7 @@ void td_vmexit_to_vmm(uint8_t vcpu_state, uint8_t last_td_exit, uint64_t scrub_m
     tdx_vmm_post_dispatching();
 
     //unreachable Code. Panic
-    tdx_sanity_check(0, SCEC_TDEXIT_SOURCE, 0);
+    tdx_sanity_check(0, FATAL_ERROR_ID_282, 0);
 }
 
 static void td_l2_to_l1_exit_internal(api_error_code_e tdexit_case, vm_vmexit_exit_reason_t vm_exit_reason,
@@ -576,7 +663,7 @@ static void td_l2_to_l1_exit_internal(api_error_code_e tdexit_case, vm_vmexit_ex
     // If the TD is debuggable, the host VMM can request all L2->L1 exits to be converted to TD exits.
     if (tdvps_ptr->management.l2_debug_ctls[curr_vm].td_exit_on_l2_to_l1)
     {
-        tdx_sanity_check(ld_p->vp_ctx.tdcs->executions_ctl_fields.attributes.debug, SCEC_TDEXIT_SOURCE, 1);
+        tdx_sanity_check(ld_p->vp_ctx.tdcs->executions_ctl_fields.attributes.debug, FATAL_ERROR_ID_283, 1);
         async_tdexit_to_vmm(TDX_TD_EXIT_ON_L2_TO_L1, vm_exit_reason, vm_exit_qualification.raw, 0, 0, vm_exit_inter_info.raw);
     }
 
@@ -645,31 +732,52 @@ static void td_l2_to_l1_exit_internal(api_error_code_e tdexit_case, vm_vmexit_ex
     }
 
     // Flow should never reach here
-    tdx_sanity_check(0, SCEC_TDEXIT_SOURCE, 2);
+    tdx_sanity_check(0, FATAL_ERROR_ID_284, 2);
 }
 
 void td_l2_to_l1_exit_with_exit_case(api_error_code_e tdexit_case, vm_vmexit_exit_reason_t vm_exit_reason,
                                      vmx_exit_qualification_t vm_exit_qualification, uint64_t extended_exit_qualification,
-                                     vmx_exit_inter_info_t vm_exit_inter_info)
+                                     vmx_exit_inter_info_t vm_exit_inter_info, bool_t emulate_termination)
 {
-    uint64_t inter_error, gla, gpa, idt_vectoring_info, idt_vectoring_err, instr_info, instr_length;
+    uint64_t inter_error = 0, gla = 0, gpa = 0, idt_vectoring_info = 0, idt_vectoring_err = 0, instr_info = 0, instr_length = 0;
 
-    ia32_vmread(VMX_VM_EXIT_EXCEPTION_ERRORCODE_ENCODE, &inter_error);
-    ia32_vmread(VMX_VM_EXIT_GUEST_LINEAR_ADDRESS_ENCODE, &gla);
-    ia32_vmread(VMX_GUEST_PHYSICAL_ADDRESS_INFO_FULL_ENCODE, &gpa);
-    ia32_vmread(VMX_VM_EXIT_IDT_VECTOR_FIELD_ENCODE, &idt_vectoring_info);
-    ia32_vmread(VMX_VM_EXIT_IDT_VECTOR_ERRORCODE_ENCODE, &idt_vectoring_err);
-    ia32_vmread(VMX_VM_EXIT_INSTRUCTION_INFO_ENCODE, &instr_info);
-    ia32_vmread(VMX_VM_EXIT_INSTRUCTION_LENGTH_ENCODE, &instr_length);
+    if (!emulate_termination)
+    {
+        ia32_vmread(VMX_VM_EXIT_EXCEPTION_ERRORCODE_ENCODE, &inter_error);
+        ia32_vmread(VMX_VM_EXIT_GUEST_LINEAR_ADDRESS_ENCODE, &gla);
+        ia32_vmread(VMX_GUEST_PHYSICAL_ADDRESS_INFO_FULL_ENCODE, &gpa);
+        ia32_vmread(VMX_VM_EXIT_IDT_VECTOR_FIELD_ENCODE, &idt_vectoring_info);
+        ia32_vmread(VMX_VM_EXIT_IDT_VECTOR_ERRORCODE_ENCODE, &idt_vectoring_err);
+        ia32_vmread(VMX_VM_EXIT_INSTRUCTION_INFO_ENCODE, &instr_info);
+        ia32_vmread(VMX_VM_EXIT_INSTRUCTION_LENGTH_ENCODE, &instr_length);
+    }
 
     td_l2_to_l1_exit_internal(tdexit_case, vm_exit_reason, vm_exit_qualification, extended_exit_qualification,
                               vm_exit_inter_info, (uint32_t)inter_error, gla, gpa, (uint32_t)idt_vectoring_info,
                               (uint32_t)idt_vectoring_err, (uint32_t)instr_info, (uint32_t)instr_length);
 }
 
-void td_l2_to_l1_exit(vm_vmexit_exit_reason_t vm_exit_reason, vmx_exit_qualification_t vm_exit_qualification,
-                      uint64_t extended_exit_qualification, vmx_exit_inter_info_t vm_exit_inter_info)
+void td_l2_to_l1_exit_with_error_code(api_error_code_e error_code, vm_vmexit_exit_reason_t vm_exit_reason, vmx_exit_qualification_t vm_exit_qualification,
+                                      uint64_t extended_exit_qualification, vmx_exit_inter_info_t vm_exit_inter_info, bool_t emulate_termination)
 {
-    td_l2_to_l1_exit_with_exit_case(TDX_SUCCESS, vm_exit_reason, vm_exit_qualification,
-                                    extended_exit_qualification, vm_exit_inter_info);
+    td_l2_to_l1_exit_with_exit_case(error_code, vm_exit_reason, vm_exit_qualification, extended_exit_qualification, vm_exit_inter_info, emulate_termination);
+}
+
+void td_l2_to_l1_exit(vm_vmexit_exit_reason_t vm_exit_reason, vmx_exit_qualification_t vm_exit_qualification,
+                      uint64_t extended_exit_qualification, vmx_exit_inter_info_t vm_exit_inter_info, bool_t emulate_termination)
+{
+    td_l2_to_l1_exit_with_error_code(TDX_SUCCESS, vm_exit_reason, vm_exit_qualification, extended_exit_qualification, vm_exit_inter_info, emulate_termination);
+}
+
+void resume_l1_and_emulate_termination(l2_failure_flow_e info)
+{
+    vm_vmexit_exit_reason_t vm_exit_reason = { .raw = 0 };
+    vm_exit_reason.vmenter_fail = 1;
+    vm_exit_reason.basic_reason = 0xFFFF;
+    vmx_exit_qualification_t exit_qual = { .raw = 0 };
+    vmx_exit_inter_info_t exit_inter_info = { .raw = 0 };
+    vmx_extended_exit_qualification_t extended_exit_qualification = { .raw = 0 };
+    extended_exit_qualification.type = VM_ENTRY_FAILURE;
+    extended_exit_qualification.info = (uint32_t)info;
+    td_l2_to_l1_exit_with_error_code(TDX_L2_VM_ENTRY_FAILED, vm_exit_reason, exit_qual, extended_exit_qualification.raw, exit_inter_info, true);
 }

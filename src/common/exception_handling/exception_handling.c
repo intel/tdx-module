@@ -25,6 +25,7 @@
  */
 
 #include "exception_handling.h"
+#include "helpers/error_reporting.h"
 
 #include "accessors/ia32_accessors.h"
 
@@ -35,7 +36,6 @@ const idt_and_gdt_tables_t tdx_idt_and_gdt =
 {
     .idt_table =
     {
-#ifdef DEBUGFEATURE_TDX_DBG_TRACE
         [0] =  {
                   .selector = TDX_MODULE_CS_SELECTOR, .gate_type = IA32_IDT_GATE_TYPE_INTERRUPT_32,
                   .present = 1
@@ -68,10 +68,12 @@ const idt_and_gdt_tables_t tdx_idt_and_gdt =
                   .selector = TDX_MODULE_CS_SELECTOR, .gate_type = IA32_IDT_GATE_TYPE_INTERRUPT_32,
                   .present = 1
                },
+#ifdef DEBUGFEATURE_TDX_DBG_TRACE
         [8] =  {
                   .selector = TDX_MODULE_CS_SELECTOR, .gate_type = IA32_IDT_GATE_TYPE_INTERRUPT_32,
                   .present = 1
                },
+#endif // DEBUGFEATURE_TDX_DBG_TRACE
         [9] =  {
                   .selector = TDX_MODULE_CS_SELECTOR, .gate_type = IA32_IDT_GATE_TYPE_INTERRUPT_32,
                   .present = 1
@@ -88,7 +90,6 @@ const idt_and_gdt_tables_t tdx_idt_and_gdt =
                   .selector = TDX_MODULE_CS_SELECTOR, .gate_type = IA32_IDT_GATE_TYPE_INTERRUPT_32,
                   .present = 1
                },
-#endif // DEBUGFEATURE_TDX_DBG_TRACE
         // #GP handler - the only exception currently supported
         [13] = {
                   .selector = TDX_MODULE_CS_SELECTOR, .gate_type = IA32_IDT_GATE_TYPE_INTERRUPT_32,
@@ -100,6 +101,7 @@ const idt_and_gdt_tables_t tdx_idt_and_gdt =
                   .selector = TDX_MODULE_CS_SELECTOR, .gate_type = IA32_IDT_GATE_TYPE_INTERRUPT_32,
                   .present = 1
                },
+#endif // DEBUGFEATURE_TDX_DBG_TRACE
         [15] = {
                   .selector = TDX_MODULE_CS_SELECTOR, .gate_type = IA32_IDT_GATE_TYPE_INTERRUPT_32,
                   .present = 1
@@ -168,8 +170,6 @@ const idt_and_gdt_tables_t tdx_idt_and_gdt =
                   .selector = TDX_MODULE_CS_SELECTOR, .gate_type = IA32_IDT_GATE_TYPE_INTERRUPT_32,
                   .present = 1
                }
-#endif // DEBUGFEATURE_TDX_DBG_TRACE
-
         // All other entries and bits are filled with zeroes by default
     },
 
@@ -183,9 +183,10 @@ const idt_and_gdt_tables_t tdx_idt_and_gdt =
     }
 };
 
-#ifdef DEBUGFEATURE_TDX_DBG_TRACE
-void tdx_debug_exception_handler(uint64_t vector, uint64_t errc, uint64_t faulting_rip)
+
+void tdx_exception_handler(uint64_t vector, uint64_t errc, uint64_t faulting_rip)
 {
+#ifdef DEBUGFEATURE_TDX_DBG_TRACE
     TDX_ERROR("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 
     TDX_ERROR("Exception %d occurred at RIP - 0x%llx (error code - 0x%llx)\n", vector, faulting_rip, errc);
@@ -198,7 +199,9 @@ void tdx_debug_exception_handler(uint64_t vector, uint64_t errc, uint64_t faulti
     TDX_ERROR("Stopping the module and entering infinite loop\n");
 
     TDX_ERROR("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-
-    while(1) {};
-}
 #endif // DEBUGFEATURE_TDX_DBG_TRACE
+    UNUSED(errc);
+    UNUSED(faulting_rip);
+    extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_unexpected_exception((uint8_t)vector);
+    fatal_error(FATAL_ERROR_ID_0, FATAL_INFO_FORMAT_UNEXPECTED_EXCEPTION_INFO, &extended_fatal_info);
+}

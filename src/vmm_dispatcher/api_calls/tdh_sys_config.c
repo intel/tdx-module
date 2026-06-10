@@ -29,14 +29,14 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_vmm_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/tdx_global_data.h"
 #include "memory_handlers/pamt_manager.h"
 #include "data_structures/loader_data.h"
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
 #include "memory_handlers/keyhole_manager.h"
-#include "auto_gen/cpuid_configurations.h"
+#include CPUID_CONFIGURATIONS_HEADER
 
 typedef struct pamt_data_s
 {
@@ -184,6 +184,11 @@ static bool_t check_pamt_addresses_and_size(uint64_t pamt_base, uint64_t pamt_si
 
     uint64_t required_size = ((tdmr_size / entry_size) * sizeof(pamt_entry_t));
 
+    if ((get_global_data()->dynamic_pamt_enabled) && (entry_size == _4KB))
+    {
+        // Calculate required size for a bitmap, as 4K PAMT area serves as a bitmap instead
+        required_size = (tdmr_size / _4KB) / 8;
+    }
 
     // The size of each PAMT region must be large enough to contain the PAMT for its associated TDMR.
     if (pamt_size < required_size)
@@ -811,6 +816,18 @@ api_error_type tdh_sys_config(uint64_t tdmr_info_array_pa,
     tdx_global_data_ptr->kot.entries[hkid].state = KOT_STATE_HKID_RESERVED;
     tdx_global_data_ptr->hkid = hkid;
 
+    tdx_global_data_ptr->dynamic_pamt_enabled = sysconfig_options.dynamic_pamt;
+
+    if (tdx_global_data_ptr->dynamic_pamt_enabled)
+    {
+        if (tdx_global_data_ptr->hkid_start_bit > MAX_DYNAMIC_PAMT_HKID_START_BIT)
+        {
+            TDX_ERROR("HKID start bit %d is not allowed for Dynamic PAMT config\n",
+                    tdx_global_data_ptr->hkid_start_bit);
+            retval = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
+            goto EXIT;
+        }
+    }
 
     tdmr_pa_array = map_pa(tdmr_info_pa.raw_void, TDX_RANGE_RO);
     tdmr_info_p_init = true;

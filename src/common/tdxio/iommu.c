@@ -375,7 +375,7 @@ api_error_type clear_iommu(
         if (iommu_config_ptr->clear_in_progress) // Case 3 is an invalid state
         {
             TDX_ERROR("IOMMU can't be in an INIT and clear_in_progress state\n");
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_85, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
         // Verify IOMMU state or fail with TDX_IOMMU_INVALID_STATE

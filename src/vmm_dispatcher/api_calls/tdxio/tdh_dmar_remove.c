@@ -148,7 +148,7 @@ api_error_type tdh_dmar_remove(dmar_idx_t dmar_idx)
             tdcs_ptr);
         break;
     default:
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_119, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
 EXIT_SUCCESS:

@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "memory_handlers/keyhole_manager.h"
 #include "memory_handlers/pamt_manager.h"
@@ -40,10 +40,10 @@ api_error_type tdh_phymem_page_wbinvd(uint64_t tdmr_page_pa)
     // Page to WBINVD variables
     pa_t                  page_wbinvd_pa = {.raw = tdmr_page_pa}; // Physical address of the page to be wbinvd
     void                * page_wbinvd_ptr = NULL;                 // Pointer to linear address of page
-    pamt_block_t          page_wbinvd_pamt_block;                 // Page PAMT block
-    pamt_entry_t        * page_wbinvd_pamt_entry_ptr = NULL;      // Pointer to the page PAMT entry
+    pamt_walk_result_t    page_wbinvd_pamt_walk_result;
     bool_t                page_wbinvd_locked_flag = false;        // Indicate PAMT of page is locked
     uint16_t              curr_hkid;                              // HKID taken from the page physical address
+    pamt_block_t          page_wbinvd_pamt_block;
 
     api_error_type        return_val = UNINITIALIZE_ERROR;
 
@@ -52,13 +52,16 @@ api_error_type tdh_phymem_page_wbinvd(uint64_t tdmr_page_pa)
     page_wbinvd_pa.raw &= ~(get_global_data()->hkid_mask);
 
     // Check and lock the page
-    return_val = check_and_lock_explicit_4k_private_hpa(page_wbinvd_pa,
-                                                         OPERAND_ID_RCX,
-                                                         TDX_LOCK_SHARED,
-                                                         PT_NDA,
-                                                         &page_wbinvd_pamt_block,
-                                                         &page_wbinvd_pamt_entry_ptr,
-                                                         &page_wbinvd_locked_flag);
+    return_val = check_and_lock_explicit_private_hpa(page_wbinvd_pa,
+                                                     OPERAND_ID_RCX,
+                                                     _4KB,
+                                                     TDX_LOCK_SHARED,
+                                                     PT_NDA,
+                                                     PT_4KB,
+                                                     false,
+                                                     &page_wbinvd_pamt_block,
+                                                     &page_wbinvd_pamt_walk_result,
+                                                     &page_wbinvd_locked_flag);
 
     if (return_val != TDX_SUCCESS)
     {
@@ -78,11 +81,8 @@ EXIT:
     // Release all acquired locks and free keyhole mappings
     if (page_wbinvd_locked_flag)
     {
-        pamt_unwalk(page_wbinvd_pa,
-                    page_wbinvd_pamt_block,
-                    page_wbinvd_pamt_entry_ptr,
-                    TDX_LOCK_SHARED,
-                    PT_4KB);
+        pamt_unwalk(&page_wbinvd_pamt_walk_result);
+
         if (page_wbinvd_ptr != NULL)
         {
             free_la(page_wbinvd_ptr);

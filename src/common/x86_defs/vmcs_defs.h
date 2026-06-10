@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -286,6 +286,16 @@ typedef union vmx_exit_qualification_s {
 
     struct
     {
+        uint16_t source_identification;  // Bits 15:0
+        uint16_t reserved_31_16;         // Bits 31_16
+        uint8_t event_vector;            // Bits 39:32
+        uint8_t reserved_47_40;          // Bits 47:40
+        uint16_t encode_event_type : 3;  // Bits 50:48
+        uint16_t reserved_63_51    : 13; // Bits 63:51
+    } nmi;
+
+    struct
+    {
         uint64_t cr_num         : 4;  // Bits 0-3
         uint64_t access_type    : 2;  // Bits 4-5
         uint64_t lmsw_op_type   : 1;  // Bit 6
@@ -309,6 +319,18 @@ typedef union vmx_exit_qualification_s {
 } vmx_exit_qualification_t;
 tdx_static_assert(sizeof(vmx_exit_qualification_t) == 8, vmx_exit_qualification_t);
 
+typedef union vmx_extended_exit_qualification_s {
+    struct
+    {
+        uint64_t type      :  4;  // Bits 0 - 3
+        uint64_t reserved3 : 28;  // Bits 4 - 31
+        uint64_t info      : 32;  // Bits 32 - 63
+    };
+
+    uint64_t  raw;
+} vmx_extended_exit_qualification_t;
+tdx_static_assert(sizeof(vmx_extended_exit_qualification_t) == 8, vmx_extended_exit_qualification_t);
+
 #define VMEXIT_CR_ACCESS_MOV_TO_CR          0
 #define VMEXIT_CR_ACCESS_MOV_FROM_CR        1
 #define VMEXIT_CR_ACCESS_CLTS               2
@@ -322,7 +344,8 @@ typedef enum vmx_eeq_type_e
     VMX_EEQ_TD_ENTRY_MSR_LOAD_FAILURE    = 3,
     VMX_EEQ_TD_ENTRY_XSTATE_LOAD_FAILURE = 4,
     VMX_EEQ_ATTR_WR                      = 5,
-    VMX_EEQ_PENDING_EPT_VIOLATION        = 6
+    VMX_EEQ_PENDING_EPT_VIOLATION        = 6,
+    VM_ENTRY_FAILURE                     = 7
 } vmx_eeq_type_t;
 
 typedef union vmx_ext_exit_qual_u
@@ -531,6 +554,36 @@ typedef union
     uint64_t raw;
 } vmx_procbased_ctls3_t;
 tdx_static_assert(sizeof(vmx_procbased_ctls3_t) == 8, vmx_procbased_ctls3_t);
+
+typedef union vmx_vm_entry_ctls_u
+{
+    struct
+    {
+        uint32_t reserved_0                : 2;  // Bits 0:1
+        uint32_t load_debug_ctls           : 1;  // Bit  2
+        uint32_t reserved_1                : 6;  // Bits 3:8
+        uint32_t ia32e_mode_guest          : 1;  // Bit  9
+        uint32_t entry_to_smm              : 1;  // Bit  10
+        uint32_t deact_dual_monitor_treat  : 1;  // Bit  11
+        uint32_t reserved_2                : 1;  // Bit  12
+        uint32_t load_ia32_perf_global_ctrl: 1;  // Bit  13
+        uint32_t load_ia32_pat             : 1;  // Bit  14
+        uint32_t load_ia32_efer            : 1;  // Bit  15
+        uint32_t load_ia32_bndcfgs         : 1;  // Bit  16
+        uint32_t conceal_vmx_from_pt       : 1;  // Bit  17
+        uint32_t load_ia32_rtit_ctl        : 1;  // Bit  18
+        uint32_t load_uinv                 : 1;  // Bit  19
+        uint32_t load_cet_state            : 1;  // Bit  20
+        uint32_t load_guest_ia32_lbr_ctl   : 1;  // Bit  21
+        uint32_t load_pkrs                 : 1;  // Bit  22
+        uint32_t load_fred                 : 1;  // Bit  23
+        uint32_t reserved_3                : 1;  // Bit  24
+        uint32_t td_telemetry              : 1;  // Bit  25
+        uint32_t reserved_4                : 6;  // Bits 26:31
+    };
+    uint32_t raw;
+} vmx_vm_entry_ctls_t;
+tdx_static_assert(sizeof(vmx_vm_entry_ctls_t) == 4, vmx_vm_entry_ctls_t);
 
 typedef union vmx_guest_inter_state_u
 {

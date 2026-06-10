@@ -66,7 +66,7 @@ _STATIC_INLINE_ mmiomt_node_t *mmiomt_get_node_from_q_node(const mmiomt_walk_res
     case MMIOMT_L1:
         return &mmiomt_walk_res->mmiomt_path_arr[mmiomt_idx.level]->qnode[mmiomt_idx.l1_q_idx];
     default:
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_89, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
     return NULL;
 }

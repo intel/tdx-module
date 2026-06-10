@@ -35,8 +35,7 @@ api_error_type tdh_devif_mt_add(
 
     // PAMT related variables
     void *devifmt_entry_ptr = NULL;
-    pamt_block_t devifmt_pamt_block;
-    pamt_entry_t *devifmt_pamt_entry_ptr = NULL;
+    pamt_walk_result_t devif_pamt_walk_result;
     bool_t is_devifmt_pamt_locked = false;
 
     // devifmt_walk parameters
@@ -58,8 +57,7 @@ api_error_type tdh_devif_mt_add(
         OPERAND_ID_RDX,
         TDX_LOCK_EXCLUSIVE,
         PT_NDA,
-        &devifmt_pamt_block,
-        &devifmt_pamt_entry_ptr,
+        &devif_pamt_walk_result,
         &is_devifmt_pamt_locked);
     if (return_val != TDX_SUCCESS)
     {
@@ -96,7 +94,7 @@ api_error_type tdh_devif_mt_add(
     zero_area_cacheline(devifmt_entry_ptr, TDX_PAGE_SIZE_IN_BYTES);
 
     // Update the new MMIOMT page PAMT entry
-    devifmt_pamt_entry_ptr->pt = PT_DEVIF_MT;
+    devif_pamt_walk_result.pamt_entry_p->pt = PT_DEVIF_MT;
 
 EXIT:
     if (devifmt_entry_ptr != NULL)
@@ -111,7 +109,7 @@ EXIT:
 
     if (is_devifmt_pamt_locked)
     {
-        pamt_unwalk(devifmt_pa, devifmt_pamt_block, devifmt_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&devif_pamt_walk_result);
     }
     return return_val;
 }

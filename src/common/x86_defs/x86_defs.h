@@ -507,29 +507,29 @@ typedef union ia32e_sept_u {
     } fields_2m;
     struct {
         uint64_t
-            r          :   1,  // 0
-            w          :   1,  // 1
-            x          :   1,  // 2
-            mt         :   3,  // 3-5 - Set to MEM type
-            ipat_tdmem :   1,  // 6 - Set to 1
-            leaf       :   1,  // 7 - Non-Leaf(0) / Leaf(1), always 1 for 4KB (level 0)
-            a          :   1,  // 8 - Accessed
-            d          :   1,  // 9 - Dirty, set and cleared by the TDX module in all the *EXPORTED_* states
-            ignored_0  :   1,  // 10 -
-            reserved_0 :   1,  // 11 - Reserved for IOMMU SNP
-            base       :   40, // 12-51
-            hp         :   1,  // 52 - Host Priority, used together with TDEL
-            tdex       :   1,  // 53 - Exported
-            tdbw       :   1,  // 54 - Blocked for Writing
-            tdb        :   1,  // 55 - Blocked
-            tdp        :   1,  // 56 - Pending
-            tdal1      :   1,  // 57 - Alias flag for L2 VM #1 (indicating a non-FREE L2 entry)
-            tdal2      :   1,  // 58 - Alias flag for L2 VM #2 (indicating a non-FREE L2 entry)
-            tdel       :   1,  // 59 - Entry Lock
-            tdal3      :   1,  // 60 - Alias flag for L2 VM #3 (indicating a non-FREE L2 entry)
-            reserved_1 :   1,  // 61 - Reserved for IOMMU
-            reserved_2 :   1,  // 62 - Reserved for IOMMU (BlockDMA)
-            supp_ve    :   1;  // 63
+            r          :  1, // 0
+            w          :  1, // 1
+            x          :  1, // 2
+            mt         :  3, // 3-5 - Set to MEM type
+            ipat_tdmem :  1, // 6 - Set to 1
+            leaf       :  1, // 7 - Non-Leaf(0) / Leaf(1), always 1 for 4KB (level 0)
+            a          :  1, // 8 - Accessed
+            d          :  1, // 9 - Dirty, set and cleared by the TDX module in all the *EXPORTED_* states
+            ignored_0  :  1, // 10 -
+            reserved_0 :  1, // 11 - Reserved for IOMMU SNP
+            base       : 40, // 12-51
+            hp         :  1, // 52 - Host Priority, used together with TDEL
+            tdex       :  1, // 53 - Exported
+            tdbw       :  1, // 54 - Blocked for Writing
+            tdb        :  1, // 55 - Blocked
+            tdp        :  1, // 56 - Pending
+            tdal1      :  1, // 57 - Alias flag for L2 VM #1 (indicating a non-FREE L2 entry)
+            tdal2      :  1, // 58 - Alias flag for L2 VM #2 (indicating a non-FREE L2 entry)
+            tdel       :  1, // 59 - Entry Lock
+            tdal3      :  1, // 60 - Alias flag for L2 VM #3 (indicating a non-FREE L2 entry)
+            reserved_1 :  1, // 61 - Reserved for IOMMU
+            reserved_2 :  1, // 62 - Reserved for IOMMU (BlockDMA)
+            supp_ve    :  1; // 63
     };
     struct {
         uint64_t
@@ -538,8 +538,6 @@ typedef union ia32e_sept_u {
         mt1  : 1,  // 4 - Set to IPAT value
         mt2  : 1;  // 5 - Set to IPAT value
     };
-
-    uint64_t raw;
     struct {
         uint64_t
             rwx          :   3,   // 0-2
@@ -597,6 +595,7 @@ typedef union ia32e_sept_u {
             iw          : 1,  // Bit 62 : IOMMU Write
             sve         : 1;  // Bit 63 : Suppress #VE
     } l2_encoding;
+    uint64_t raw;
 } ia32e_sept_t;
 tdx_static_assert(sizeof(ia32e_sept_t) == 8, ia32e_sept_t);
 
@@ -781,9 +780,10 @@ typedef struct
  * Exception Handling - Interrupt information vectors
  */
 //Following definitions reflect values of structure vmx_entry_inter_info_t
-#define DF_INTERRUPTION_INFO            0x80000B08ULL //Vector=E_DF, Interruption_type=HARDWARE, Deliver error code = True
-#define PF_INTERRUPTION_INFO            0x80000B0EULL //Vector=E_PF, Interruption_type=HARDWARE, Deliver error code = True
-#define GP_INTERRUPTION_INFO            0x80000B0DULL //Vector=E_GP, Interruption_type=HARDWARE, Deliver error code = True
+#define DELIVER_ERROR_CODE_OFFSET       11
+#define DF_INTERRUPTION_INFO            0x80000308ULL //Vector=E_DF, Interruption_type=HARDWARE, Deliver error code = False
+#define PF_INTERRUPTION_INFO            0x8000030EULL //Vector=E_PF, Interruption_type=HARDWARE, Deliver error code = False
+#define GP_INTERRUPTION_INFO            0x8000030DULL //Vector=E_GP, Interruption_type=HARDWARE, Deliver error code = False
 #define VE_INTERRUPTION_INFO            0x80000314ULL //Vector=E_VE, Interruption_type=HARDWARE
 #define UD_INTERRUPTION_INFO            0x80000306ULL //Vector=E_UD, Interruption_type=HARDWARE
 
@@ -853,49 +853,49 @@ tdx_static_assert(sizeof(loadiwkey_ctl_t) == 4, loadiwkey_ctl_t);
 #define CPUID_EXT_FEATURES_SUBLEAF  0
 #define CPUID_EXT_FEATURES2_SUBLEAF 1
 
-#define CPUID_PERFMON_LEAF              0xA
-#define CPUID_PERFMON_MIN_SUPPORTED_VER   5
-#define CPUID_PERFMON_EAX_MASK_LOW          0xF
-#define CPUID_PERFMON_EAX_MASK_HIGH         0x0
-#define CPUID_PERFMON_EAX_EXPECTED_LOW      0x5
-#define CPUID_PERFMON_EAX_EXPECTED_HIGH     0x0
+#define CPUID_PERFMON_LEAF                   0xA
+#define CPUID_PERFMON_MIN_SUPPORTED_VER      5
+#define CPUID_PERFMON_EAX_MASK_LOW           0xF
+#define CPUID_PERFMON_EAX_MASK_HIGH          0x0
+#define CPUID_PERFMON_EAX_EXPECTED_LOW       0x5
+#define CPUID_PERFMON_EAX_EXPECTED_HIGH      0x0
 
-#define CPUID_PERFMON_EDX_MASK_LOW          0x0
-#define CPUID_PERFMON_EDX_MASK_HIGH         (0x1FULL << 32ULL)
-#define CPUID_PERFMON_EDX_EXPECTED_LOW      0x0
-#define CPUID_PERFMON_EDX_EXPECTED_HIGH     (MAX_FIXED_CTR << 32ULL)
+#define CPUID_PERFMON_EDX_MASK_LOW           0x0
+#define CPUID_PERFMON_EDX_EXPECTED_LOW       0x0
+#define CPUID_PERFMON_ECX_EDX_MASK_HIGH      0x1FFFFFFFFFULL
+#define CPUID_PERFMON_ECX_EDX_EXPECTED_HIGH  ((MAX_FIXED_CTR << 32ULL) | ((1 << MAX_FIXED_CTR) - 1))
 
-#define CPUID_MAXPA_EAX_MASK_LOW            0xFF00
-#define CPUID_MAXPA_EAX_MASK_HIGH           0x0
-#define CPUID_MAXPA_EAX_EXPECTED_LOW_57     0x3900
-#define CPUID_MAXPA_EAX_EXPECTED_LOW_48     0x3000
-#define CPUID_MAXPA_EAX_EXPECTED_HIGH       0x0
+#define CPUID_MAXPA_EAX_MASK_LOW             0xFF00
+#define CPUID_MAXPA_EAX_MASK_HIGH            0x0
+#define CPUID_MAXPA_EAX_EXPECTED_LOW_57      0x3900
+#define CPUID_MAXPA_EAX_EXPECTED_LOW_48      0x3000
+#define CPUID_MAXPA_EAX_EXPECTED_HIGH        0x0
 
-#define CPUID_EXT_STATE_ENUM_LEAF       0xD
-#define CPUID_EXT_STATE_ENUM_MAIN_SUBLEAF 0
-#define CPUID_EXT_STATE_ENUM_XSAVES_SUBLEAF 1
+#define CPUID_EXT_STATE_ENUM_LEAF            0xD
+#define CPUID_EXT_STATE_ENUM_MAIN_SUBLEAF    0
+#define CPUID_EXT_STATE_ENUM_XSAVES_SUBLEAF  1
 
-#define CPUID_TSC_ATTRIBUTES_LEAF       0x15
+#define CPUID_TSC_ATTRIBUTES_LEAF            0x15
 #define PROCESSOR_FREQUENCY_INFORMATION_LEAF 0x16
 
-#define CPUID_KEYLOCKER_ATTRIBUTES_LEAF 0x19
+#define CPUID_KEYLOCKER_ATTRIBUTES_LEAF      0x19
 
-#define CPUID_LBR_CAPABILITIES_LEAF 0x1C
+#define CPUID_LBR_CAPABILITIES_LEAF          0x1C
 
-#define CPUID_GET_TOPOLOGY_LEAF 0x1F
-#define CPUID_GET_TOPOLOGY_INVALID_SUBLEAF 0
+#define CPUID_GET_TOPOLOGY_LEAF              0x1F
+#define CPUID_GET_TOPOLOGY_INVALID_SUBLEAF   0
 
-#define CPUID_RESERVED_START 0x40000000
-#define CPUID_RESERVED_END   0x4FFFFFFF
+#define CPUID_RESERVED_START                 0x40000000
+#define CPUID_RESERVED_END                   0x4FFFFFFF
 
-#define CPUID_MAX_EXTENDED_VAL_LEAF 0x80000000 // Extended start
-#define CPUID_GET_MAX_PA_LEAF 0x80000008
+#define CPUID_MAX_EXTENDED_VAL_LEAF          0x80000000 // Extended start
+#define CPUID_GET_MAX_PA_LEAF                0x80000008
 #define CPUID_MAX_PA_BITS BITS(7,0)
 
-#define CPUID_MIN_LAST_CPU_BASE_LEAF     0x1F        // Minimal last value of Intel CPUID range supported by the CPU
-#define CPUID_LAST_BASE_LEAF             0x23        // Last value of virtualized Intel CPUID range
-#define CPUID_FIRST_EXTENDED_LEAF        0x80000000  // AMD CPUID range first leaf value
-#define CPUID_LAST_EXTENDED_LEAF         0x80000008  // AMD CPUID range last leaf value
+#define CPUID_MIN_LAST_CPU_BASE_LEAF         0x1F        // Minimal last value of Intel CPUID range supported by the CPU
+#define CPUID_LAST_BASE_LEAF                 0x23        // Last value of virtualized Intel CPUID range
+#define CPUID_FIRST_EXTENDED_LEAF            0x80000000  // AMD CPUID range first leaf value
+#define CPUID_LAST_EXTENDED_LEAF             0x80000008  // AMD CPUID range last leaf value
 
 // Bitmap of CPUID leaves whose virtual value is fixed-0
 typedef union cpuid_fixed0_bitmap_u
@@ -1317,7 +1317,9 @@ typedef union cpuid_07_01_eax_u
         uint32_t lass              : 1; // Bit 6
         uint32_t unspecified_7     : 1;
         uint32_t perfmon_ext_leaf  : 1; // Bit 8
-        uint32_t unspecified_25_9  : 17;
+        uint32_t unspecified_19_9  : 11;
+        uint32_t nmi_source_ident  : 1; // Bit 20
+        uint32_t unspecified_25_21 : 5;
         uint32_t lam               : 1;  // Bit 26
         uint32_t unspecified_31_27 : 5;
     };
@@ -1373,6 +1375,23 @@ typedef union cpuid_80000008_eax_u
     };
     uint32_t raw;
 } cpuid_80000008_eax_t;
+
+typedef union
+{
+    struct
+    {
+        uint32_t leaf_0_supported : 1;
+        uint32_t leaf_1_supported : 1;
+        uint32_t leaf_2_supported : 1;
+        uint32_t leaf_3_supported : 1;
+        uint32_t leaf_4_supported : 1;
+        uint32_t leaf_5_supported : 1;
+        uint32_t leaf_6_supported : 1;
+        uint32_t reserved         : 25;
+    };
+    uint32_t raw;
+} cpuid_23_0_eax_t;
+tdx_static_assert(sizeof(cpuid_23_0_eax_t) == 4, cpuid_23_0_eax_t);
 
 typedef union
 {
@@ -1487,7 +1506,7 @@ typedef union ia32_apic_icr_u
     struct
     {
         uint32_t raw_low;
-        uint32_t raw_high;
+        uint32_t raw_high; // destination
     };
 } ia32_apic_icr_t;
 tdx_static_assert(sizeof(ia32_apic_icr_t) == 8, ia32_apic_icr_t);

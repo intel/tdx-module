@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/td_control_structures.h"
 #include "memory_handlers/keyhole_manager.h"
@@ -36,7 +36,7 @@
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
 
-static void block_sept_entry(ia32e_sept_t* sept_entry, ept_level_t level)
+static void block_sept_entry(ia32e_sept_t* sept_entry, ept_level_t level, pa_t page_gpa, uint64_t target_tdr_pa)
 {
     sept_cleanup_if_pending(sept_entry, level);
     switch (sept_entry->raw & SEPT_STATE_ENCODING_MASK)
@@ -60,7 +60,10 @@ static void block_sept_entry(ia32e_sept_t* sept_entry, ept_level_t level)
             sept_update_state(sept_entry, SEPT_STATE_PEND_BLOCKED_MASK);
             break;
         default:
-            FATAL_ERROR();
+        {
+            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, 0, level, page_gpa.raw, *sept_entry);
+            fatal_error(FATAL_ERROR_ID_12, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
+        }
     }
 }
 
@@ -69,17 +72,18 @@ static void block_l2_sept_entry(ia32e_sept_t* l2_sept_entry_ptr, bool_t is_l1_bl
     ia32e_sept_t tmp_ept_entry = { .raw = l2_sept_entry_ptr->raw };
 
     // Block the L2 Secure EPT entry
-    // If leaf:
-    //      If is_blockedw, save the RXsXu bits to TDR, TDXS and TDXU
-    //      Else, save the RWXsXu bits to TDR, TDW, TDXS and TDXU
-    // Clear RXsXu bits to 0
-    // Set the state to L2_BLOCKED (if leaf) or L2_NL_BLOCKED (if non-leaf)
+    // 1. Set the state to L2_BLOCKED(if leaf) or L2_NL_BLOCKED(if non - leaf)
+    // 2. If leaf :
+    //     2.1.If is_blockedw, save the R, Xs and Xu bits to TDRD, TDXS and TDXU
+    //     2.2.Else, save the R, W, Xs, Xu and PWA bits to TDRD, TDWR, TDXS, TDXU and TDPWA
+    // 3. Clear R, W, Xs, Xu and PWA bits bits to 0
 
     if (is_secure_ept_leaf_entry(&tmp_ept_entry))
     {
         if (!is_l1_blockedw)
         {
             tmp_ept_entry.l2_encoding.tdwr = tmp_ept_entry.l2_encoding.w;
+            tmp_ept_entry.l2_encoding.tdpwa = tmp_ept_entry.l2_encoding.pwa;
         }
 
         tmp_ept_entry.l2_encoding.mt0_tdrd = tmp_ept_entry.l2_encoding.r;
@@ -93,10 +97,11 @@ static void block_l2_sept_entry(ia32e_sept_t* l2_sept_entry_ptr, bool_t is_l1_bl
         sept_l2_update_state(&tmp_ept_entry, SEPT_STATE_L2_NL_BLOCKED_MASK);
     }
 
-    tmp_ept_entry.l2_encoding.r  = 0;
-    tmp_ept_entry.l2_encoding.w  = 0;
-    tmp_ept_entry.l2_encoding.x  = 0;
+    tmp_ept_entry.l2_encoding.r = 0;
+    tmp_ept_entry.l2_encoding.w = 0;
+    tmp_ept_entry.l2_encoding.x = 0;
     tmp_ept_entry.l2_encoding.xu = 0;
+    tmp_ept_entry.l2_encoding.pwa = 0;
 
     atomic_mem_write_64b(&l2_sept_entry_ptr->raw, tmp_ept_entry.raw);
 }
@@ -109,8 +114,7 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
     tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
-    pamt_block_t          tdr_pamt_block;            // TDR PAMT block
-    pamt_entry_t        * tdr_pamt_entry_ptr;        // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
     tdcs_t              * tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
@@ -143,8 +147,7 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
                                                  TDX_RANGE_RO,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_ptr);
 
@@ -177,6 +180,7 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
     return_val = lock_sept_check_and_walk_private_gpa(tdcs_ptr,
                                                       OPERAND_ID_RCX,
                                                       page_gpa,
+                                                      tdr_ptr->key_management_fields.hkid,
                                                       TDX_LOCK_EXCLUSIVE,
                                                       &page_sept_entry_ptr,
                                                       &page_level_entry,
@@ -229,7 +233,7 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
     ia32e_sept_t new_septe_val;
     new_septe_val.raw = page_sept_entry_copy.raw;
 
-    block_sept_entry(&new_septe_val, sept_level_and_gpa.level);
+    block_sept_entry(&new_septe_val, sept_level_and_gpa.level, page_gpa, target_tdr_pa);
 
     // Update the SEPT entry in memory
     atomic_mem_write_64b(&page_sept_entry_ptr->raw, new_septe_val.raw);
@@ -248,7 +252,9 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
         return_val = l2_sept_walk(tdr_ptr, tdcs_ptr, vm_id, page_gpa, &page_level_entry, &l2_sept_entry_ptr);
         if (return_val != TDX_SUCCESS)
         {
-            FATAL_ERROR(); // Should not happen - no need to free the L2 SEPT PTR's
+            // Should not happen - no need to free the L2 SEPT PTR's
+            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, vm_id, page_level_entry, page_gpa.raw, *l2_sept_entry_ptr);
+            fatal_error(FATAL_ERROR_ID_11, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
         }
 
         block_l2_sept_entry(l2_sept_entry_ptr, sept_state_is_any_blockedw(page_sept_entry_copy));
@@ -266,6 +272,7 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
     // Note that the order is important: we sample TD_EPOCH after we block the page.
     td_page_pa.raw = 0;
     td_page_pa.page_4k_num = page_sept_entry_copy.base;
+    td_page_pa = set_hkid_to_pa(td_page_pa, tdr_ptr->key_management_fields.hkid);
 
     if (is_secure_ept_leaf_entry(&page_sept_entry_copy))
     {
@@ -308,7 +315,7 @@ EXIT:
 
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_ptr);
     }
 

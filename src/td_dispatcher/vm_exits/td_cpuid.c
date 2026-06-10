@@ -35,12 +35,12 @@
 #include "x86_defs/x86_defs.h"
 #include "data_structures/tdx_local_data.h"
 #include "tdx_td_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "vmm_dispatcher/tdx_vmm_dispatcher.h"
 #include "helpers/helpers.h"
 #include "td_dispatcher/vm_exits/td_vmexit.h"
 #include "td_transitions/td_exit.h"
-#include "auto_gen/cpuid_configurations.h"
+#include CPUID_CONFIGURATIONS_HEADER
 
 void td_cpuid_exit(void)
 {
@@ -162,7 +162,7 @@ void td_cpuid_exit(void)
         }
 
         // Get the CPUID value calculated by TDH_MNG_INIT from TDCS
-        return_values = vp_ctx->tdcs->cpuid_config_vals[index];
+        return_values = vp_ctx->tdcs->cpuid_values[index];
     }
 
     if (no_special_handling)

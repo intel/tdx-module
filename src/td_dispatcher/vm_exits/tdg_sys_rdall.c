@@ -25,14 +25,14 @@
  */
 #include "tdx_td_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "x86_defs/vmcs_defs.h"
 #include "data_structures/tdx_local_data.h"
 #include "memory_handlers/keyhole_manager.h"
 #include "helpers/helpers.h"
 #include "accessors/data_accessors.h"
-#include "auto_gen/global_sys_fields_lookup.h"
+#include GLOBAL_SYS_FIELDS_LOOKUP_HEADER
 #include "metadata_handlers/metadata_generic.h"
 
 api_error_type tdg_sys_rdall(uint64_t md_list_gpa, md_field_id_t field_id)
@@ -50,9 +50,9 @@ api_error_type tdg_sys_rdall(uint64_t md_list_gpa, md_field_id_t field_id)
     tdcs_t* tdcs_p   = local_data_ptr->vp_ctx.tdcs;
     tdvps_t* tdvps_p = local_data_ptr->vp_ctx.tdvps;
 
-    tdx_sanity_check(tdr_p != NULL, SCEC_TDCALL_SOURCE(TDG_SYS_RDALL_LEAF), 0);
-    tdx_sanity_check(tdcs_p != NULL, SCEC_TDCALL_SOURCE(TDG_SYS_RDALL_LEAF), 1);
-    tdx_sanity_check(tdvps_p != NULL, SCEC_TDCALL_SOURCE(TDG_SYS_RDALL_LEAF), 2);
+    tdx_sanity_check(tdr_p != NULL, FATAL_ERROR_ID_271, 0);
+    tdx_sanity_check(tdcs_p != NULL, FATAL_ERROR_ID_272, 1);
+    tdx_sanity_check(tdvps_p != NULL, FATAL_ERROR_ID_273, 2);
 
     // Default output register operands
     local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r8 = MD_FIELD_ID_NA;

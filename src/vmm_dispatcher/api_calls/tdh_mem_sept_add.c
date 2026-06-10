@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/td_control_structures.h"
 #include "memory_handlers/keyhole_manager.h"
@@ -37,7 +37,7 @@
 #include "accessors/data_accessors.h"
 
 static void init_new_sept_page(tdr_t* tdr_ptr, pa_t tdr_pa, pa_t sept_page_pa,
-                               pamt_entry_t* sept_page_pamt_entry_ptr, uint64_t sept_page_init_val)
+                               pamt_walk_result_t* sept_page_pamt_walk_result, uint64_t sept_page_init_val)
 {
     void* sept_page_ptr;
 
@@ -48,9 +48,11 @@ static void init_new_sept_page(tdr_t* tdr_ptr, pa_t tdr_pa, pa_t sept_page_pa,
     fill_area_cacheline(sept_page_ptr, TDX_PAGE_SIZE_IN_BYTES, sept_page_init_val);
 
     // Update the new Secure EPT page’s PAMT entry
-    sept_page_pamt_entry_ptr->pt = PT_EPT;
-    set_pamt_entry_owner(sept_page_pamt_entry_ptr, tdr_pa);
-    sept_page_pamt_entry_ptr->bepoch.raw = 0;
+    sept_page_pamt_walk_result->pamt_entry_p->pt = PT_EPT;
+    set_pamt_entry_owner(sept_page_pamt_walk_result->pamt_entry_p, tdr_pa);
+    sept_page_pamt_walk_result->pamt_entry_p->bepoch.raw = 0;
+
+    pamt_inc_nl_page_count(sept_page_pamt_walk_result->pamt_walk_path_nl[PT_2MB]);
 
     // Increment TDR child count, use an atomic operation since we have SHARED lock on TDR
     (void)_lock_xadd_64b(&(tdr_ptr->management_fields.chldcnt), 1);
@@ -61,7 +63,7 @@ static void init_new_sept_page(tdr_t* tdr_ptr, pa_t tdr_pa, pa_t sept_page_pa,
 static api_error_type process_l1_page(tdx_module_local_t* local_data_ptr, uint64_t version,
                                       pa_t sept_page_pa[MAX_VMS], pa_t flagged_sept_page_pa[MAX_VMS],
                                       ept_level_t page_level_entry, ia32e_sept_t page_sept_entry_copy,
-                                      pamt_block_t sept_page_pamt_block[MAX_VMS], pamt_entry_t* sept_page_pamt_entry_ptr[MAX_VMS],
+                                      pamt_walk_result_t sept_page_pamt_walk_result[MAX_VMS],
                                       bool_t sept_page_locked_flag[MAX_VMS], bool_t allow_existing)
 {
     api_error_type return_val;
@@ -94,8 +96,7 @@ static api_error_type process_l1_page(tdx_module_local_t* local_data_ptr, uint64
                                                                 OPERAND_ID_R8,
                                                                 TDX_LOCK_EXCLUSIVE,
                                                                 PT_NDA,
-                                                                &sept_page_pamt_block[0],
-                                                                &sept_page_pamt_entry_ptr[0],
+                                                                &sept_page_pamt_walk_result[0],
                                                                 &sept_page_locked_flag[0]);
 
             if (return_val != TDX_SUCCESS)
@@ -127,7 +128,7 @@ static api_error_type process_l1_page(tdx_module_local_t* local_data_ptr, uint64
 static api_error_type process_l2_pages(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, pa_t sept_page_pa[MAX_VMS],
                                        pa_t flagged_sept_page_pa[MAX_VMS],
                                        pa_t page_gpa, ept_level_t page_level_entry,
-                                       pamt_block_t sept_page_pamt_block[MAX_VMS], pamt_entry_t* sept_page_pamt_entry_ptr[MAX_VMS],
+                                       pamt_walk_result_t sept_page_pamt_walk_result[MAX_VMS],
                                        bool_t sept_page_locked_flag[MAX_VMS], ia32e_sept_t* page_sept_entry_ptr[MAX_VMS],
                                        bool_t allow_existing)
 {
@@ -164,8 +165,7 @@ static api_error_type process_l2_pages(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, pa_t se
                                                                 OPERAND_ID_R8 + vm_id,
                                                                 TDX_LOCK_EXCLUSIVE,
                                                                 PT_NDA,
-                                                                &sept_page_pamt_block[vm_id],
-                                                                &sept_page_pamt_entry_ptr[vm_id],
+                                                                &sept_page_pamt_walk_result[vm_id],
                                                                 &sept_page_locked_flag[vm_id]);
 
             if (return_val != TDX_SUCCESS)
@@ -197,7 +197,7 @@ static api_error_type process_l2_pages(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, pa_t se
 
 static api_error_type add_l1_and_l2_pages(uint64_t version, tdr_t* tdr_ptr, pa_t tdr_pa, pa_t sept_page_pa[MAX_VMS],
                                           pa_t flagged_sept_page_pa[MAX_VMS],
-                                          pamt_entry_t* sept_page_pamt_entry_ptr[MAX_VMS],
+                                          pamt_walk_result_t sept_page_pamt_walk_result[MAX_VMS],
                                           ia32e_sept_t* page_sept_entry_ptr[MAX_VMS],
                                           uint64_t original_rcx,
                                           uint64_t original_rdx)
@@ -210,7 +210,7 @@ static api_error_type add_l1_and_l2_pages(uint64_t version, tdr_t* tdr_ptr, pa_t
     if (!(flagged_sept_page_pa[0].raw & BIT(63)))
     {
         // There's a new SEPT page (non-NULL and not pre-existing)
-        init_new_sept_page(tdr_ptr, tdr_pa, sept_page_pa[0], sept_page_pamt_entry_ptr[0], SEPTE_INIT_VALUE);
+        init_new_sept_page(tdr_ptr, tdr_pa, sept_page_pa[0], &sept_page_pamt_walk_result[0], SEPTE_INIT_VALUE);
 
         // Update the L1 SEPT entry in memory with the new Secure EPT page HPA and NL_MAPPED state.
         // Keep the L1 SEPT entry locked.
@@ -242,7 +242,8 @@ static api_error_type add_l1_and_l2_pages(uint64_t version, tdr_t* tdr_ptr, pa_t
                     return TDX_INTERRUPTED_RESUMABLE;
                 }
 
-                init_new_sept_page(tdr_ptr, tdr_pa, sept_page_pa[vm_id], sept_page_pamt_entry_ptr[vm_id], SEPTE_L2_INIT_VALUE);
+                init_new_sept_page(tdr_ptr, tdr_pa, sept_page_pa[vm_id],
+                        &sept_page_pamt_walk_result[vm_id], SEPTE_L2_INIT_VALUE);
 
                 // Set the alias indication in the L1 SEPT entry
                 sept_set_aliased(page_sept_entry_ptr[0], vm_id);
@@ -274,8 +275,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
     // TDR related variables
     pa_t                  tdr_pa = { .raw = 0 };     // TDR physical address
     tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
-    pamt_block_t          tdr_pamt_block;            // TDR PAMT block
-    pamt_entry_t        * tdr_pamt_entry_ptr;        // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
     tdcs_t              * tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
@@ -292,8 +292,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
     // New SEPT EPT page variables
     pa_t                  flagged_sept_page_pa[MAX_VMS] = { 0 };     // Physical address of the new Secure-EPT page
     pa_t                  sept_page_pa[MAX_VMS] = { 0 };             // Physical address of the new Secure-EPT page - can be modified
-    pamt_block_t          sept_page_pamt_block[MAX_VMS] = { 0 };     // New Secure-EPT page PAMT block
-    pamt_entry_t        * sept_page_pamt_entry_ptr[MAX_VMS] = { 0 }; // Pointer to the Secure-EPT PAMT entry
+    pamt_walk_result_t    sept_page_pamt_walk_result[MAX_VMS];
     bool_t                sept_page_locked_flag[MAX_VMS] = { 0 };    // Indicate SEPT EPT page PAMT entry is locked
 
     api_error_type        return_val = UNINITIALIZE_ERROR;
@@ -350,8 +349,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
                                                  TDX_RANGE_RW,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -386,6 +384,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
     return_val = lock_sept_check_and_walk_private_gpa(tdcs_ptr,
                                                       OPERAND_ID_RCX,
                                                       page_gpa,
+                                                      tdr_ptr->key_management_fields.hkid,
                                                       TDX_LOCK_SHARED,
                                                       &page_sept_entry_ptr[0],
                                                       &page_level_entry,
@@ -432,7 +431,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
     // Process the L1 SEPT page. Either add a new page or make sure it exists.
     return_val = process_l1_page(local_data_ptr, version, sept_page_pa, flagged_sept_page_pa,
                                  page_level_entry, page_sept_entry_copy,
-                                 sept_page_pamt_block, sept_page_pamt_entry_ptr, sept_page_locked_flag,
+                                 sept_page_pamt_walk_result, sept_page_locked_flag,
                                  target_tdr_and_flags.allow_existing);
 
     if (return_val != TDX_SUCCESS)
@@ -444,7 +443,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
     if (version > 0)
     {
         return_val = process_l2_pages(tdr_ptr, tdcs_ptr, sept_page_pa, flagged_sept_page_pa, page_gpa, page_level_entry,
-                                      sept_page_pamt_block, sept_page_pamt_entry_ptr, sept_page_locked_flag,
+                                      sept_page_pamt_walk_result, sept_page_locked_flag,
                                       page_sept_entry_ptr, target_tdr_and_flags.allow_existing);
 
         if (return_val != TDX_SUCCESS)
@@ -456,7 +455,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
     // Step #3:
     // Add the new L1 and L2 SEPT pages
     return_val = add_l1_and_l2_pages(version, tdr_ptr, tdr_pa, sept_page_pa, flagged_sept_page_pa,
-                                     sept_page_pamt_entry_ptr, page_sept_entry_ptr, original_rcx, original_rdx);
+                                     sept_page_pamt_walk_result, page_sept_entry_ptr, original_rcx, original_rdx);
 
     if (return_val != TDX_SUCCESS)
     {
@@ -488,8 +487,7 @@ EXIT_NO_GPR_CHANGE:
     {
         if (sept_page_locked_flag[vm_id])
         {
-            pamt_unwalk(sept_page_pa[vm_id], sept_page_pamt_block[vm_id], sept_page_pamt_entry_ptr[vm_id],
-                        TDX_LOCK_EXCLUSIVE, PT_4KB);
+            pamt_unwalk(&sept_page_pamt_walk_result[vm_id]);
         }
 
         if (page_sept_entry_ptr[vm_id] != NULL)
@@ -511,7 +509,7 @@ EXIT_NO_GPR_CHANGE:
 
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_ptr);
     }
 

@@ -60,7 +60,7 @@ static uint16_t find_table_start(void)
     }
 
     // Should never happen
-    FATAL_ERROR();
+    fatal_error(FATAL_ERROR_ID_32, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
 
     return 0;
 }

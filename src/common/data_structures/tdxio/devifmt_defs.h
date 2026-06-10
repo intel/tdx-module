@@ -94,8 +94,7 @@ typedef struct
 	devifmt_idx_t devifmt_idx;							   // See devifmt_idx_t
 	bool_t is_entry_locked;								   // Indicating if the last entry visited is locked
 	devifmt_entry_t *devifmt_path_arr[DEVIFMT_ROOT_L + 1]; // Array of pointers to all DEVIFMT entries visited per DEVIFMT walk
-	pamt_entry_t *pamt_path_arr[DEVIFMT_ROOT_L];		   // Array of pointers to PAMT entries visited and locked per DEVIFMT walk
-	pamt_block_t pamt_block_arr[DEVIFMT_ROOT_L];		   // Array of PAMT blocks visited per DEVIFMT walk
+	pamt_walk_result_t pamt_walk_result_arr[DEVIFMT_ROOT_L]; // Array of results for PAMT walks per DEVIFMT walk
 } devifmt_walk_res_t;
 
 #endif // DEVIFMT_DEFS_H_

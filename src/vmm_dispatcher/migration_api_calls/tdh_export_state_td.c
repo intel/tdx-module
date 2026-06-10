@@ -25,8 +25,8 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/op_state_lookup.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include OP_STATE_LOOKUP_HEADER
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
@@ -44,8 +44,7 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
     // TDR and TDCS
     tdr_t             *tdr_p = NULL;         // Pointer to the owner TDR page
     pa_t               tdr_pa;               // Physical address of the owner TDR page
-    pamt_block_t       tdr_pamt_block;       // TDR PAMT block
-    pamt_entry_t      *tdr_pamt_entry_ptr = NULL;
+    pamt_walk_result_t tdr_pamt_walk_result;
     tdcs_t            *tdcs_p = NULL;        // Pointer to the TDCS structure
     bool_t             tdr_locked_flag = false;
 
@@ -93,8 +92,7 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
                                                  TDX_RANGE_RO,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_p);
 
@@ -183,7 +181,7 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
         if (aes_gcm_process_aad(&migsc_p->aes_gcm_context, (uint8_t*)&migsc_p->mbmd.td_state,
                 MBMD_SIZE_NO_MAC(migsc_p->mbmd.td_state)) != AES_GCM_NO_ERROR)
         {
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_138, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
         // Update the MBMD with values not included in the MAC calculation
@@ -291,7 +289,7 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
 
         if (aes_gcm_encrypt(&migsc_p->aes_gcm_context, (uint8_t*)&md_list, (uint8_t*)enc_md_list_hdr_p , _4KB  ) != AES_GCM_NO_ERROR)
         {
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_139, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
         page_list_i++;
@@ -327,7 +325,7 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
             // Write the MBMD's MAC field
             if (aes_gcm_finalize(&migsc_p->aes_gcm_context, migsc_p->mbmd.td_state.mac) != AES_GCM_NO_ERROR)
             {
-                FATAL_ERROR();
+                fatal_error(FATAL_ERROR_ID_140, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             }
 
             // Write out the MBMD
@@ -390,7 +388,7 @@ EXIT:
 
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_p);
     }
 

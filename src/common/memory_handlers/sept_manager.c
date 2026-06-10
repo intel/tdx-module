@@ -59,7 +59,7 @@ _STATIC_INLINE_ uint64_t get_ept_entry_idx(pa_t gpa, ept_level_t lvl)
             idx = gpa.fields_4k.pt_index;
             break;
         default:
-            tdx_sanity_check(0, SCEC_SEPT_MANAGER_SOURCE, 0);
+            tdx_sanity_check(0, FATAL_ERROR_ID_225, 0);
             break;
     }
 
@@ -297,7 +297,8 @@ ept_walk_result_t gpa_translate(ia32e_eptp_t eptp, pa_t gpa, bool_t private_gpa,
         // Misconfigurations on Secure EPT are not expected and considered to be fatal errors
         IF_RARE (private_gpa && is_secure_ept_entry_misconfigured((ia32e_sept_t*)cached_ept_entry, current_lvl))
         {
-            FATAL_ERROR();
+            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_eptp(eptp.raw, (uint8_t)current_lvl, gpa.raw, *(ia32e_sept_t*)cached_ept_entry);
+            fatal_error(FATAL_ERROR_ID_17, FATAL_INFO_FORMAT_SEPT_EPTP_INFO, &extended_fatal_info);
         }
 
         // Check violation conditions
@@ -325,7 +326,7 @@ ept_walk_result_t gpa_translate(ia32e_eptp_t eptp, pa_t gpa, bool_t private_gpa,
         // Cannot continue to next level, this should be the last one
         IF_RARE (current_lvl == LVL_PT)
         {
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_44, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
         pt_pa.raw = cached_ept_entry->raw & IA32E_PAGING_STRUCT_ADDR_MASK;
@@ -343,27 +344,28 @@ ept_walk_result_t gpa_translate(ia32e_eptp_t eptp, pa_t gpa, bool_t private_gpa,
     return EPT_WALK_SUCCESS;
 }
 
-ia32e_sept_t* secure_ept_walk(ia32e_eptp_t septp, pa_t gpa,
+ia32e_sept_t* secure_ept_walk(ia32e_eptp_t septp, pa_t gpa, uint16_t private_hkid,
                               ept_level_t* level, ia32e_sept_t* cached_sept_entry,
                               bool_t l2_sept_guest_side_walk)
 {
     ia32e_paging_table_t *pt;
     ia32e_sept_t *pte;
-    pa_t pt_pa_with_hkid;
+    pa_t pt_pa;
 
     ept_level_t requested_level = *level;
     ept_level_t current_lvl;
 
-    tdx_sanity_check(requested_level <= LVL_PML5, SCEC_SEPT_MANAGER_SOURCE, 1);
+    tdx_sanity_check(requested_level <= LVL_PML5, FATAL_ERROR_ID_226, 1);
 
     // Get root PML EPT page address
-    pt_pa_with_hkid.raw = septp.raw & IA32E_PAGING_STRUCT_ADDR_MASK;
+    pt_pa.raw = septp.raw & IA32E_PAGING_STRUCT_ADDR_MASK;
     current_lvl = septp.fields.ept_pwl;
     // No need to check the HPA of PML5 in Shared EPTP, it is checked during TDHVPWR
 
     for (;current_lvl >= LVL_PT; current_lvl--)
     {
-        pt = map_pa((void*)(pt_pa_with_hkid.full_pa), TDX_RANGE_RW);
+        pt_pa = set_hkid_to_pa(pt_pa, private_hkid);
+        pt = map_pa((void*)(pt_pa.full_pa), TDX_RANGE_RW);
         pte = &(pt->sept[get_ept_entry_idx(gpa, current_lvl)]);
 
         // Update the output data - note the we read only from the cached entry
@@ -378,7 +380,9 @@ ia32e_sept_t* secure_ept_walk(ia32e_eptp_t septp, pa_t gpa,
 
         IF_RARE (is_secure_ept_entry_misconfigured(cached_sept_entry, current_lvl))
         {
-            FATAL_ERROR();
+            tdx_module_local_t* local_data = get_local_data();
+            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(local_data->vp_ctx.tdr_pa.raw, local_data->current_td_vm_id, current_lvl, gpa.raw, *cached_sept_entry);
+            fatal_error(FATAL_ERROR_ID_18, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
         }
 
         // Check if entry not present, or a leaf - so can't walk any further.
@@ -394,11 +398,11 @@ ia32e_sept_t* secure_ept_walk(ia32e_eptp_t septp, pa_t gpa,
         // Cannot continue to next level, this should be the last one
         IF_RARE (current_lvl == LVL_PT)
         {
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_45, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
         // Continue to next level in the walk
-        pt_pa_with_hkid.raw = cached_sept_entry->raw & IA32E_PAGING_STRUCT_ADDR_MASK;
+        pt_pa.raw = cached_sept_entry->raw & IA32E_PAGING_STRUCT_ADDR_MASK;
         free_la(pt); // Not needed at that point
     }
 
@@ -451,7 +455,7 @@ void sept_set_leaf_and_keep_lock_given_hpa_and_hkid(ia32e_sept_t * ept_entry, ui
                                                     uint16_t hkid, uint64_t state_encoding)
 {
     // Sanity check, entry should already be locked
-    tdx_sanity_check(ept_entry->tdel, SCEC_SEPT_MANAGER_SOURCE, 3);
+    tdx_sanity_check(ept_entry->tdel, FATAL_ERROR_ID_227, 3);
 
     sept_set_leaf_no_lock_internal_given_hpa_and_hkid(ept_entry, attributes, page_pa, hkid, state_encoding, true);
 }
@@ -460,7 +464,7 @@ void sept_set_leaf_and_keep_lock_given_hpa_with_hkid(ia32e_sept_t * ept_entry, u
                                                     pa_t page_pa, uint64_t state_encoding)
 {
     // Sanity check, entry should already be locked
-    tdx_sanity_check(ept_entry->tdel, SCEC_SEPT_MANAGER_SOURCE, 3);
+    tdx_sanity_check(ept_entry->tdel, FATAL_ERROR_ID_228, 3);
 
     sept_set_leaf_no_lock_internal_given_hpa_with_hkid(ept_entry, attributes, page_pa, state_encoding, true);
 }
@@ -469,7 +473,7 @@ void sept_set_leaf_unlocked_entry_given_hpa_and_hkid(ia32e_sept_t * ept_entry, u
                                                      uint16_t hkid, uint64_t state_encoding)
 {
     // Sanity check: SEPT entry must be unlocked
-    tdx_sanity_check(ept_entry->tdel == 0, SCEC_SEPT_MANAGER_SOURCE, 4);
+    tdx_sanity_check(ept_entry->tdel == 0, FATAL_ERROR_ID_229, 4);
 
     sept_set_leaf_no_lock_internal_given_hpa_and_hkid(ept_entry, attributes, page_pa, hkid, state_encoding, false);
 }
@@ -504,19 +508,20 @@ void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t
  *            false      true            L2_BLOCKED
  *            true       false           L2_MMIO_MAPPED
  *            true       true            L2_MMIO_BLOCKED
- *          - State is set to L2_MAPPED or L2_BLOCKED based on the is_l2_blocked flag.
- *          - If is_l2_blocked is 1, then R, W, Xs and Xu are set to 0, and the values
- *            specified by in the provided attributes are saved in TDRR, TDWR, TDXS and TDXU.
- *            Else, TDRD, TDWR, TDXS and TDXU are set to their proper values:  TDRD, TDXS and TDXU are
- *            part of MT (see above) and TDWR is set to 0.
+ *          - If is_l2_blocked is 1, then R, W, Xs, Xu and PWA are set to 0, and the values
+ *            specified in the provided attributes are saved in TDRR, TDWR, TDXS, TDXU and TDPWA.
+ *            Else, TDRD, TDWR, TDXS, TDXU and TDPWA are set to their proper values:  TDRD, TDXS and TDXU are
+ *            part of MT (see above) and the TDWR and TDPWA bits are set to 0.
+ *          - If is_mmio is set, bits Xs, Xu, VGP, PWA, SSS must be 0
  *
  * @param l2_sept_entry_ptr
  * @param gpa_attr_single_vm
  * @param pa
  * @param is_l2_blocked
  */
-void sept_l2_set_leaf_given_hpa_with_hkid(ia32e_sept_t* l2_sept_entry_ptr, gpa_attr_single_vm_t gpa_attr_single_vm,
-                                            pa_t pa, bool_t is_l2_blocked, bool_t is_mmio)
+void sept_l2_set_leaf_given_hpa_with_hkid(ia32e_sept_t* l2_sept_entry_ptr, gpa_attr_single_vm_t gpa_attr_single_vm, pa_t pa, bool_t is_l2_blocked
+                                          , bool_t is_mmio
+)
 {
     ia32e_sept_t tmp_sept = *l2_sept_entry_ptr;
     tmp_sept.l2_encoding.r = gpa_attr_single_vm.r;
@@ -534,7 +539,7 @@ void sept_l2_set_leaf_given_hpa_with_hkid(ia32e_sept_t* l2_sept_entry_ptr, gpa_a
     tmp_sept.l2_encoding.ipat_tdmem = !is_mmio;
 
     tmp_sept.l2_encoding.tdwr = 0;
-
+    tmp_sept.l2_encoding.tdpwa = 0;
 
     if (is_l2_blocked)
     {
@@ -546,25 +551,33 @@ void sept_l2_set_leaf_given_hpa_with_hkid(ia32e_sept_t* l2_sept_entry_ptr, gpa_a
         tmp_sept.l2_encoding.x = 0;
         tmp_sept.l2_encoding.mt2_tdxu = gpa_attr_single_vm.xu;
         tmp_sept.l2_encoding.xu = 0;
+        tmp_sept.l2_encoding.tdpwa = gpa_attr_single_vm.pwa;
+        tmp_sept.l2_encoding.pwa = 0;
     }
 
     sept_state_mask_t sept_state_mask;
 
-    if (!is_mmio && !is_l2_blocked)
+    if (is_mmio)
     {
-        sept_state_mask = SEPT_STATE_L2_MAPPED_MASK;
+        if (is_l2_blocked)
+        {
+            sept_state_mask = SEPT_STATE_L2_MMIO_BLOCKED_MASK;
+        }
+        else // !is_l2_blocked
+        {
+            sept_state_mask = SEPT_STATE_L2_MMIO_MAPPED_MASK;
+        }
     }
-    else if (!is_mmio && is_l2_blocked)
+    else // !is_mmio
     {
-        sept_state_mask = SEPT_STATE_L2_BLOCKED_MASK;
-    }
-    else if (is_mmio && !is_l2_blocked)
-    {
-        sept_state_mask = SEPT_STATE_L2_MMIO_MAPPED_MASK;
-    }
-    else// is_mmio && is_l2_blocked
-    {
-        sept_state_mask = SEPT_STATE_L2_MMIO_BLOCKED_MASK;
+        if (is_l2_blocked)
+        {
+            sept_state_mask = SEPT_STATE_L2_BLOCKED_MASK; 
+        }
+        else // !is_l2_blocked
+        {
+            sept_state_mask = SEPT_STATE_L2_MAPPED_MASK;
+        }
     }
 
     sept_l2_update_state(&tmp_sept, sept_state_mask);

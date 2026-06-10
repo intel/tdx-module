@@ -27,9 +27,29 @@ include compiler_defs.mk
 
 MSG := echo -e
 
+# List of clean targets
+CLEAN_TARGETS := clean cleanall
+
 TARGET = $(RELEASE_TARGET)
 TARGET_DIR = $(RELEASE_DIR)
 OBJS_DIR = $(RELEASE_DIR)/$(OBJ_DIR_NAME)
+
+ORIG_TARGET := $(TARGET_DIR)/libtdx.so.unstripped
+
+# Check if the current target is a clean target
+ifneq ($(filter $(MAKECMDGOALS), $(CLEAN_TARGETS)),)
+
+# Define clean targets
+clean:
+	rm -rf $(DEBUG_DIR)/$(OBJ_DIR_NAME)
+	rm -rf $(RELEASE_DIR)/$(OBJ_DIR_NAME)
+	rm -f $(RELEASE_TARGET)
+	rm -f $(ORIG_TARGET)
+
+cleanall: clean
+	rm -rf $(CRYPTO_LIB_MAIN_DIR)/_build
+
+else
 
 C_OBJECTS = $(foreach obj,$(__C_OBJECTS),$(OBJS_DIR)/$(obj))
 ASM_OBJECTS = $(foreach obj,$(__ASM_OBJECTS),$(OBJS_DIR)/$(obj))
@@ -66,8 +86,6 @@ $(ASM_OBJECTS): $(OBJS_DIR)/%.o: %.S
 
 .PRECIOUS: $(TARGET) $(OBJECTS)
 
-ORIG_TARGET := $(TARGET_DIR)/libtdx.so.unstripped
-
 $(TARGET): $(CRYPTO_OBJECTS) $(OBJECTS)
 	$(CC) $(OBJECTS) $(LDFLAGS) -L$(CRYPTO_LIB_PATH) $(CRYPTO_LIB) -o $@
 	cp $(TARGET) $(ORIG_TARGET)
@@ -79,16 +97,6 @@ postBuildScripts: $(TARGET)
 	$(MSG) "Padding Binary to page size granularity"
 	python3 $(PAD_BINARY_PY) $<
 
-clean:
-	rm -rf $(DEBUG_DIR)/$(OBJ_DIR_NAME)
-	rm -rf $(RELEASE_DIR)/$(OBJ_DIR_NAME)
-	rm -f $(RELEASE_TARGET)
-	rm -f $(ORIG_TARGET)
-
-cleanall:
-	rm -rf $(CRYPTO_LIB_MAIN_DIR)/_build
-	make clean
-
 help:
 	@echo "\nTDX Module Makefile - available build flag options (use with regular 'make' command):"
 	@echo "\tRELEASE=1                  - builds a release flavor of the library."
@@ -98,3 +106,5 @@ help:
 	@echo "\tmake cleanall              - cleans everything including the crypto library."
 
 -include $(DEPS) $(CPP_DEPS)
+
+endif

@@ -35,7 +35,7 @@
 #include "ia32_accessors.h"
 #include "helpers/error_reporting.h"
 #include "tdx_api_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 
 typedef uint64_t vmcs_ptr_t;
@@ -117,7 +117,7 @@ _STATIC_INLINE_ void ia32_vmread(uint64_t encoding, uint64_t *value) {
 			:"r"(encoding)
 			:"memory", "cc");
 
-	tdx_sanity_check((rflags.cf == 0 && rflags.zf == 0), SCEC_VT_ACCESSORS_SOURCE, (uint32_t)encoding);
+	tdx_sanity_check((rflags.cf == 0 && rflags.zf == 0), FATAL_ERROR_ID_115, (uint32_t)encoding);
 }
 
 /**
@@ -141,7 +141,7 @@ _STATIC_INLINE_ void ia32_vmwrite(uint64_t encoding, uint64_t value)
             :"r"(value), "r"(encoding)
             : "cc");
 
-	tdx_sanity_check((rflags.cf == 0 && rflags.zf == 0), SCEC_VT_ACCESSORS_SOURCE, (uint32_t)encoding);
+	tdx_sanity_check((rflags.cf == 0 && rflags.zf == 0), FATAL_ERROR_ID_116, (uint32_t)encoding);
 }
 
 /**
@@ -179,7 +179,7 @@ _STATIC_INLINE_ void ia32_vmptrld(vmcs_ptr_t *vmcs_p) {
 	                :"m"(vmcs_p):"memory" , "cc");
 
 	// Runtime assert - VMPTRLD should always succeed
-	tdx_sanity_check((rflags.cf == 0 && rflags.zf == 0), SCEC_VT_ACCESSORS_SOURCE, 2);
+	tdx_sanity_check((rflags.cf == 0 && rflags.zf == 0), FATAL_ERROR_ID_172, 2);
 }
 
 /**
@@ -210,7 +210,7 @@ _STATIC_INLINE_ void ia32_invept(const ept_descriptor_t * ept_descriptor, uint64
             : "m"(*ept_descriptor), "r"(instruction)
             :"memory", "cc");
 
-    tdx_sanity_check((rflags.cf == 0 && rflags.zf == 0), SCEC_VT_ACCESSORS_SOURCE, 3);
+    tdx_sanity_check((rflags.cf == 0 && rflags.zf == 0), FATAL_ERROR_ID_173, 3);
 }
 
 /**
@@ -237,7 +237,7 @@ _STATIC_INLINE_ bool_t ia32_invvpid(const invvpid_descriptor_t * invvpid_descrip
     bool_t is_success = (rflags.cf == 0 && rflags.zf == 0);
     bool_t vmfail_valid = (rflags.cf == 0 && rflags.zf == 1);
 
-    tdx_sanity_check((is_success || vmfail_valid), SCEC_VT_ACCESSORS_SOURCE, 3);
+    tdx_sanity_check((is_success || vmfail_valid), FATAL_ERROR_ID_174, 3);
 
     return is_success;
 }

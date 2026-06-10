@@ -30,7 +30,7 @@
 #include "tdx_basic_types.h"
 #include "tdx_api_defs.h"
 #include "helpers/helpers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/tdx_global_data.h"
 #include "accessors/ia32_accessors.h"
 #include "common/accessors/data_accessors.h"
@@ -94,8 +94,11 @@ api_error_type tdg_mr_verifyreport(uint64_t reportmacstruct_gpa)
         return_val = TDX_INVALID_REPORTMACSTRUCT;
         break;
     default:
-        FATAL_ERROR();
+    {
+        extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_td_handle(local_data_ptr->vp_ctx.tdr_pa.raw);
+        fatal_error(FATAL_ERROR_ID_23, FATAL_INFO_FORMAT_TD_HANDLE_INFO, &extended_fatal_info);
         break;
+    }
     }
 
 EXIT:

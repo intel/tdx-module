@@ -30,7 +30,7 @@
 #include "tdx_basic_types.h"
 #include "tdx_api_defs.h"
 
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/tdx_local_data.h"
 #include "accessors/data_accessors.h"
 #include "tdx_td_api_handlers.h"

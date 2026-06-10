@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -28,13 +28,13 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_vmm_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 #include "data_structures/tdx_global_data.h"
 #include "helpers/helpers.h"
 #include "memory_handlers/keyhole_manager.h"
 #include "accessors/data_accessors.h"
-#include "auto_gen/cpuid_configurations.h"
+#include CPUID_CONFIGURATIONS_HEADER
 
 #define MAX_TDMRS 64
 
@@ -106,10 +106,10 @@ api_error_type tdh_sys_info(uint64_t tdhsysinfo_output_pa,
      */
     tdhsysinfo_output_la->attributes.raw = (uint32_t)0;
     tdhsysinfo_output_la->vendor_id = 0x8086;
-    tdhsysinfo_output_la->build_date = TDX_MODULE_BUILD_DATE;
-    tdhsysinfo_output_la->build_num = TDX_MODULE_BUILD_NUM;
-    tdhsysinfo_output_la->minor_version = TDX_MODULE_MINOR_VER;
-    tdhsysinfo_output_la->major_version = TDX_MODULE_MAJOR_VER;
+    tdhsysinfo_output_la->build_date = (uint32_t)GLOBAL_TDX_MODULE_BUILD_DATE;
+    tdhsysinfo_output_la->build_num = (uint16_t)GLOBAL_TDX_MODULE_BUILD_NUM;
+    tdhsysinfo_output_la->minor_version = (uint16_t)GLOBAL_TDX_MODULE_MINOR_VER;
+    tdhsysinfo_output_la->major_version = (uint16_t)GLOBAL_TDX_MODULE_MAJOR_VER;
     tdhsysinfo_output_la->sys_rd = true; // Indicate that TDH.SYS.RD* should be used
     tdhsysinfo_output_la->max_tdmrs = MAX_TDMRS;
     tdhsysinfo_output_la->max_reserved_per_tdmr = MAX_RESERVED_AREAS; //MAX_RESERVED_PER_TDMR;

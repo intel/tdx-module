@@ -26,7 +26,7 @@
 
 #include "tdxio/tdxio_td_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/tdx_global_data.h"
 #include "data_structures/tdx_local_data.h"
 #include "helpers/helpers.h"

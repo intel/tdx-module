@@ -571,7 +571,7 @@ void cfg_rc_ide_keys(
     }
     else
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_80, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     // Replace the SLOT_ID for the specified SUB_STREAM
@@ -590,7 +590,7 @@ void cfg_rc_ide_keys(
     }
     else
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_81, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
     vol_write_reg32(keyset_slot_id_ptr, stream_keyset_slot_id.raw);
 }
@@ -615,7 +615,7 @@ void prime_rc_ide_keys(
     }
     else
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_82, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
     vol_write_reg32(ctrl_reg_ptr, stream_txrx_control.raw);
 }
@@ -643,7 +643,7 @@ bool_t is_ide_ks_ready(
     }
     else
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_83, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     return (rx_ks_status > 0) && (tx_ks_status > 0);
@@ -667,7 +667,7 @@ void set_rc_tx_ide_key_set(
     }
     else
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_84, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
     vol_write_reg32(&stream_cfg_reg_block->tx_ctrl, stream_txrx_control.raw);
 }
@@ -863,7 +863,8 @@ bool_t is_ide_disabled(
     uint8_t num_lnk_ide = ide_cap.lnk_ide_supported ? ide_cap.num_lnk_ide + 1 : 0;
     uint8_t num_sel_ide = ide_cap.sel_ide_supported ? ide_cap.num_sel_ide + 1 : 0;
     // Check the numbers of link and selective streams are as expected
-    if ((is_not_gnr_a0_stepping()) &&
+    if (
+        is_not_gnr_a0_stepping() &&
         (num_lnk_ide != socket_io_info_ptr->ide_ecap_num_lnk_ide_regs ||
          num_sel_ide > socket_io_info_ptr->ide_ecap_num_sel_ide_regs))
     {

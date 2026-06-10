@@ -34,21 +34,21 @@
 #include "x86_defs/vmcs_defs.h"
 #include "data_structures/tdx_local_data.h"
 #include "tdx_td_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "helpers/helpers.h"
 #include "td_dispatcher/vm_exits/td_vmexit.h"
 #include "td_transitions/td_exit.h"
 #include "td_transitions/td_exit_stepping.h"
+#include "x86_defs/x86_defs.h"
 
 //TDX-IO
 #include "tdxio/tdxio_td_api_handlers.h"
 #include "data_structures/tdxio/devif_defs.h"
 #include "data_structures/tdxio/tdisp_defs.h"
-#include "x86_defs/x86_defs.h"
 
-#ifdef DEBUGFEATURE_TDX_DBG_TRACE
 void tdx_failed_vmentry(void)
 {
+#ifdef DEBUGFEATURE_TDX_DBG_TRACE
     uint64_t error_code = 0;
 
     ia32_vmread(VMX_VM_INSTRUCTION_ERRORCODE_ENCODE, &error_code);
@@ -57,6 +57,7 @@ void tdx_failed_vmentry(void)
 
     uint64_t val;
     platform_common_config_t* msrs = &get_global_data()->plt_common_config;
+    UNUSED(msrs);
 
     ia32_vmread(VMX_VM_EXIT_CONTROL_ENCODE, &val);
     TDX_ERROR("VM_EXIT_CONTROL = 0x%llx, VMX_MSR = 0x%llx\n",
@@ -120,10 +121,16 @@ void tdx_failed_vmentry(void)
             TDX_ERROR("THIS CONDITION IS NOT MET: If IA32_VMX_BASIC[48] is read as 1, this address must not set any bits in the range 63:32; see Appendix A.1\n");
         }
     }
-
-    tdx_arch_fatal_error();
-}
 #endif // DEBUGFEATURE_TDX_DBG_TRACE
+    tdx_module_local_t* local_data = get_local_data();
+
+    // L2 vm entry failure should result in resuming L1 and emulating the termination with additional information
+    if (local_data->current_td_vm_id == 0)
+    {
+        extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_td_handle(get_local_data()->vp_ctx.tdr_pa.raw);
+        fatal_error(FATAL_ERROR_ID_19, FATAL_INFO_FORMAT_TD_HANDLE_INFO, &extended_fatal_info);
+    }
+}
 
 void tdx_return_to_td(bool_t launch_state, bool_t called_from_tdenter, gprs_state_t* gpr_state)
 {
@@ -142,8 +149,8 @@ void tdx_return_to_td(bool_t launch_state, bool_t called_from_tdenter, gprs_stat
 
 
     // Check that we have no mapped keyholes left, beside the 2 that we store for TDR/TDVPR PAMT entries
-    tdx_sanity_check(local_data_ptr->keyhole_state.total_ref_count == NUM_OF_PRESERVED_KEYHOLES,
-                     SCEC_KEYHOLE_MANAGER_SOURCE, 30);
+    tdx_sanity_check(local_data_ptr->keyhole_state.total_ref_count - local_data_ptr->fatal_error_mem_mapped == NUM_OF_PRESERVED_KEYHOLES,
+                     FATAL_ERROR_ID_250, 30);
 
     local_data_ptr->current_td_vm_id = local_data_ptr->vp_ctx.tdvps->management.curr_vm;
 
@@ -268,8 +275,6 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
         goto EXIT;
     }
 
-    save_td_xcr0_and_set_tdx_xcr0(tdx_local_data_ptr);
-
     switch (leaf_opcode.leaf)
     {
         case TDG_MEM_PAGE_ACCEPT_LEAF:
@@ -371,10 +376,16 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
                     tdx_local_data_ptr->td_regs.r15);
             break;
         }
+        case TDG_MMIO_ACCEPT_LEAF:
+        {
+            retval = tdg_mmio_accept((page_info_api_input_t)tdx_local_data_ptr->td_regs.rcx,
+                tdx_local_data_ptr->td_regs.rdx);
+            break;
+        }
         case TDG_IQ_INV_REQUEST_LEAF:
         {
             retval = tdg_iq_inv_request(tdx_local_data_ptr->td_regs.rcx,
-                    (pa_t)tdx_local_data_ptr->td_regs.rdx);
+                (pa_t)tdx_local_data_ptr->td_regs.rdx);
             break;
         }
         case TDG_VM_RD_LEAF:
@@ -415,12 +426,6 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
             retval = tdg_vp_wr(tdx_local_data_ptr->td_regs.rdx,
                                tdx_local_data_ptr->td_regs.r8,
                                tdx_local_data_ptr->td_regs.r9);
-            break;
-        }
-        case TDG_MMIO_ACCEPT_LEAF:
-        {
-            retval = tdg_mmio_accept((page_info_api_input_t)tdx_local_data_ptr->td_regs.rcx,
-                    tdx_local_data_ptr->td_regs.rdx);
             break;
         }
         case TDG_SERVTD_RD_LEAF:
@@ -481,11 +486,9 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
         }
     }
 
-    restore_td_xcr0_if_required(tdx_local_data_ptr);
-
 EXIT:
 
-    tdx_sanity_check(retval != UNINITIALIZE_ERROR, SCEC_TD_DISPATCHER_SOURCE, 1);
+    tdx_sanity_check(retval != UNINITIALIZE_ERROR, FATAL_ERROR_ID_251, 1);
 
     // Handling of stuck host-priority locks
     api_error_code_t error_code = { .raw = retval };
@@ -539,7 +542,7 @@ EXIT:
 
         if (!tdx_local_data_ptr->vp_ctx.tdcs->executions_ctl_fields.attributes.perfmon)
         {
-            ia32_wrmsr(IA32_FIXED_CTR0_MSR_ADDR, ia32_rdmsr(IA32_FIXED_CTR0_MSR_ADDR) + 2);
+            ia32_wrmsr(IA32_PMC_FX0_CTR_MSR_ADDR, ia32_rdmsr(IA32_PMC_FX0_CTR_MSR_ADDR) + 2);
         }
     }
 }
@@ -568,11 +571,17 @@ static void handle_vm_entry_failures(tdx_module_local_t* tdx_local_data_ptr,
                 }
                 break;
             case VMEXIT_REASON_FAILED_VMENTER_MSR:
+            {
                 // VM entry failure due to VM_ENTRY_FAILURE_MSR_LOADING is only applicable for MSR load lists.
                 // We don't use them so this is unexpected and should be a fatal error.
                 TDX_ERROR("VM entry failure due to VM_ENTRY_FAILURE_MSR_LOADING is not expected\n");
-                FATAL_ERROR();
+                extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_unexpected_vm_exit(tdx_local_data_ptr->vp_ctx.tdr_pa.raw,
+                                                                                                           tdx_local_data_ptr->current_td_vm_id,
+                                                                                                           (uint32_t)vm_exit_reason.basic_reason,
+                                                                                                           0);
+                fatal_error(FATAL_ERROR_ID_92, FATAL_INFO_FORMAT_UNEXPECTED_VM_EXIT_INFO, &extended_fatal_info);
                 break;
+            }
             case VMEXIT_REASON_FAILED_VMENTER_MC:
                 // This VM entry failure was due to a #MC, disable the TD
                     async_tdexit_to_vmm(TDX_NON_RECOVERABLE_TD_NON_ACCESSIBLE, vm_exit_reason,
@@ -580,14 +589,20 @@ static void handle_vm_entry_failures(tdx_module_local_t* tdx_local_data_ptr,
                 break;
                 // No other exit reasons should happen on VM entry failure
             default:
+            {
                 TDX_ERROR("Unexpected VMENTRY failure: Exit reason = %d, Exit qualification = %d\n",
                         vm_exit_reason.basic_reason, vm_exit_qualification.raw);
 
-                FATAL_ERROR();
+                extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_unexpected_vm_exit(tdx_local_data_ptr->vp_ctx.tdr_pa.raw,
+                                                                                                           tdx_local_data_ptr->current_td_vm_id,
+                                                                                                           (uint32_t)vm_exit_reason.basic_reason,
+                                                                                                           0);
+                fatal_error(FATAL_ERROR_ID_93, FATAL_INFO_FORMAT_UNEXPECTED_VM_EXIT_INFO, &extended_fatal_info);
                 break;
+            }
         }
         // Flow should never reach here
-        tdx_sanity_check(0, SCEC_TD_DISPATCHER_SOURCE, 2);
+        tdx_sanity_check(0, FATAL_ERROR_ID_252, 2);
     }
 }
 
@@ -612,7 +627,11 @@ static void handle_idt_vectoring(tdx_module_local_t* tdx_local_data_ptr, vm_vmex
         {
             // otherwise, only the above exit reasons are expected to happen during IDT vectoring
             TDX_ERROR("Fatal error, IDT vectoring corrupted\n");
-            FATAL_ERROR();
+            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_unexpected_vm_exit(tdx_local_data_ptr->vp_ctx.tdr_pa.raw,
+                                                                                                       tdx_local_data_ptr->current_td_vm_id,
+                                                                                                       (uint32_t)vm_exit_reason.basic_reason,
+                                                                                                       (uint32_t)idt_vectoring_info.raw);
+            fatal_error(FATAL_ERROR_ID_20, FATAL_INFO_FORMAT_UNEXPECTED_VM_EXIT_INFO,&extended_fatal_info);
         }
 
     }
@@ -716,7 +735,7 @@ stepping_filter_e tdx_td_l1_l2_dispatcher_common_prologue(tdx_module_local_t* lo
         TDX_ERROR("Interruptibility state = 0x%llx, Entry intr info = 0x%llx\n",
                 interruptibility, entry_int);
 #endif // DEBUGFEATURE_TDX_DBG_TRACE
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_94, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE
@@ -759,6 +778,11 @@ stepping_filter_e tdx_td_l1_l2_dispatcher_common_prologue(tdx_module_local_t* lo
     ------------------------------*/
     stepping_filter_e vmexit_stepping_result = vmexit_stepping_filter(*vm_exit_reason, *vm_exit_qualification, *vm_exit_inter_info,
                                                                       (bool_t)local_data->vp_ctx.tdcs->executions_ctl_fields.attributes.perfmon);
+    if (vmexit_stepping_result == FILTER_FAIL_TDEXIT_RDRAND)
+    {
+        fatal_error(FATAL_ERROR_ID_178, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
+    }
+    
     // if stepping cannot be done safely, kill the TD and exit
     if (vmexit_stepping_result == FILTER_FAIL_TDEXIT_WRONG_APIC_MODE)
     {
@@ -809,8 +833,7 @@ void tdx_td_dispatcher(void)
 
     uint16_t vm_id = tdx_local_data_ptr->vp_ctx.tdvps->management.curr_vm;
 
-    tdx_sanity_check((vm_id == tdx_local_data_ptr->current_td_vm_id) && (vm_id == 0),
-                     SCEC_TD_DISPATCHER_SOURCE, 35);
+    tdx_sanity_check((vm_id == tdx_local_data_ptr->current_td_vm_id) && (vm_id == 0), FATAL_ERROR_ID_253, 35);
 
     bhb_drain_sequence(get_global_data());
 
@@ -951,7 +974,7 @@ void tdx_td_dispatcher(void)
                 }
                 else
                 {
-                    tdx_sanity_check((status == TD_MSR_ACCESS_MSR_NON_ARCH_EXCEPTION), SCEC_TD_DISPATCHER_SOURCE, 3);
+                    tdx_sanity_check((status == TD_MSR_ACCESS_MSR_NON_ARCH_EXCEPTION), FATAL_ERROR_ID_254, 3);
                     td_generic_ve_exit(vm_exit_reason, 0, status_category);
                 }
             }
@@ -965,14 +988,20 @@ void tdx_td_dispatcher(void)
             td_nmi_exit(tdx_local_data_ptr);
             break;
         case VMEXIT_REASON_EPT_PML_FULL:
+        {
             // PML is only allowed for debuggable TDs
             if (attr.debug)
             {
                 async_tdexit_to_vmm(TDX_SUCCESS, vm_exit_reason, vm_exit_qualification.raw, 0, 0, 0);
             }
             // otherwise, others are not expected
-            FATAL_ERROR();
+            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_unexpected_vm_exit(tdx_local_data_ptr->vp_ctx.tdr_pa.raw,
+                                                                                                       tdx_local_data_ptr->current_td_vm_id,
+                                                                                                       (uint32_t)vm_exit_reason.basic_reason,
+                                                                                                       0);
+            fatal_error(FATAL_ERROR_ID_95, FATAL_INFO_FORMAT_UNEXPECTED_VM_EXIT_INFO, &extended_fatal_info);
             break;
+        }
         case VMEXIT_REASON_LOADIWK_INSTRUCTION:
         case VMEXIT_REASON_RDTSC_INSTRUCTION:
         case VMEXIT_REASON_DR_ACCESS:
@@ -993,6 +1022,7 @@ void tdx_td_dispatcher(void)
         case VMEXIT_REASON_INVPCID_INSTRUCTION:
             // Fatal error
         default:
+        {
             // If the TD is debuggable then other exit reasons are expected
             if (tdx_local_data_ptr->vp_ctx.attributes.debug)
             {
@@ -1005,9 +1035,14 @@ void tdx_td_dispatcher(void)
 
             // Otherwise, other exit reasons are not expected
             TDX_ERROR("Fatal/unknown exit reason %d \n", vm_exit_reason.basic_reason);
-            FATAL_ERROR();
+            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_unexpected_vm_exit(tdx_local_data_ptr->vp_ctx.tdr_pa.raw,
+                                                                                                       tdx_local_data_ptr->current_td_vm_id,
+                                                                                                       (uint32_t)vm_exit_reason.basic_reason,
+                                                                                                       0);
+            fatal_error(FATAL_ERROR_ID_21, FATAL_INFO_FORMAT_UNEXPECTED_VM_EXIT_INFO, &extended_fatal_info);
 
             break;
+        }
     }
 
     // Make sure the active VMCS is set to the current VM's VMCS.
@@ -1046,5 +1081,5 @@ EXIT:
     tdx_return_to_td(true, false, &tdx_local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state);
 
     //Unreachable code. panic
-    tdx_sanity_check(0, SCEC_TD_DISPATCHER_SOURCE, 0);
+    tdx_sanity_check(0, FATAL_ERROR_ID_255, 0);
 }

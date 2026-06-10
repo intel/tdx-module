@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "x86_defs/vmcs_defs.h"
 #include "data_structures/tdx_global_data.h"
@@ -96,8 +96,7 @@ api_error_type tdh_vp_init(uint64_t target_tdvpr_pa, uint64_t td_vcpu_rcx)
     // TDVPS related variables
     pa_t                  tdvpr_pa = {.raw = target_tdvpr_pa};  // TDVPR physical address
     tdvps_t             * tdvps_ptr = NULL;                     // Pointer to the TDVPS structure ((Multi-page linear address)
-    pamt_block_t          tdvpr_pamt_block;                     // TDVPR PAMT block
-    pamt_entry_t        * tdvpr_pamt_entry_ptr;                 // Pointer to the TDVPR PAMT entry
+    pamt_walk_result_t    tdvpr_pamt_walk_result;
     bool_t                tdvpr_locked_flag = false;            // Indicate TDVPR is locked
 
     // TDR related variables
@@ -139,8 +138,7 @@ api_error_type tdh_vp_init(uint64_t target_tdvpr_pa, uint64_t td_vcpu_rcx)
                                                          OPERAND_ID_RCX,
                                                          TDX_LOCK_EXCLUSIVE,
                                                          PT_TDVPR,
-                                                         &tdvpr_pamt_block,
-                                                         &tdvpr_pamt_entry_ptr,
+                                                         &tdvpr_pamt_walk_result,
                                                          &tdvpr_locked_flag);
     if (return_val != TDX_SUCCESS)
     {
@@ -151,7 +149,7 @@ api_error_type tdh_vp_init(uint64_t target_tdvpr_pa, uint64_t td_vcpu_rcx)
     lock_type_t tdr_lock_type = (leaf_opcode.version > 0) ? TDX_LOCK_EXCLUSIVE : TDX_LOCK_SHARED;
 
     // Lock and map the TDR page
-    return_val = lock_and_map_implicit_tdr(get_pamt_entry_owner(tdvpr_pamt_entry_ptr),
+    return_val = lock_and_map_implicit_tdr(get_pamt_entry_owner(tdvpr_pamt_walk_result.pamt_entry_p),
                                            OPERAND_ID_TDR,
                                            TDX_RANGE_RO,
                                            tdr_lock_type,
@@ -188,10 +186,10 @@ api_error_type tdh_vp_init(uint64_t target_tdvpr_pa, uint64_t td_vcpu_rcx)
     }
 
     // Check the VCPU state
-    if (tdvps_ptr->management.state != VCPU_UNINITIALIZED)
+    if (tdvps_ptr->management.vcpu_state != VCPU_UNINITIALIZED)
     {
         TDX_ERROR("TDVPS is already initialized\n");
-        return_val = TDX_VCPU_STATE_INCORRECT;
+        return_val = api_error_with_operand_id(TDX_VCPU_STATE_INCORRECT, tdvps_ptr->management.vcpu_state);
         goto EXIT;
     }
 
@@ -243,7 +241,6 @@ api_error_type tdh_vp_init(uint64_t target_tdvpr_pa, uint64_t td_vcpu_rcx)
     // Read TSC and store as the initial value of LAST_EXIT_TSC
     tdvps_ptr->management.last_exit_tsc = ia32_rdtsc();
 
-
     // ALL_CHECKS_PASSED:  The function is guaranteed to succeed
 
     /**
@@ -265,7 +262,7 @@ api_error_type tdh_vp_init(uint64_t target_tdvpr_pa, uint64_t td_vcpu_rcx)
 
     // Bit 63 of XCOMP_BV should be set to 1, to indicate compact format.
     // Otherwise XSAVES and XRSTORS won't work
-    tdvps_ptr->guest_extension_state.xbuf.xsave_header.xcomp_bv = BIT(63);
+    tdvps_ptr->guest_extension_state.xbuff.xsave_header.xcomp_bv = BIT(63);
 
     // Initialize TDVPS.LBR_DEPTH to MAX_LBR_DEPTH supported on the core
     if (((ia32_xcr0_t)tdcs_ptr->executions_ctl_fields.xfam).lbr)
@@ -280,7 +277,7 @@ api_error_type tdh_vp_init(uint64_t target_tdvpr_pa, uint64_t td_vcpu_rcx)
      */
 
     // Mark the VCPU as initialized and ready
-    tdvps_ptr->management.state = VCPU_READY;
+    tdvps_ptr->management.vcpu_state = VCPU_READY;
     tdvps_ptr->management.last_td_exit = LAST_EXIT_ASYNC_FAULT;
 
     init_tdvps_fields(tdcs_ptr, tdvps_ptr);
@@ -320,7 +317,7 @@ EXIT:
     }
     if (tdvpr_locked_flag)
     {
-        pamt_unwalk(tdvpr_pa, tdvpr_pamt_block, tdvpr_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&tdvpr_pamt_walk_result);
         if (tdvps_ptr != NULL)
         {
             free_la(tdvps_ptr);

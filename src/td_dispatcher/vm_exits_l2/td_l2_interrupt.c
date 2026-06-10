@@ -34,7 +34,7 @@
 #include "x86_defs/vmcs_defs.h"
 #include "data_structures/tdx_local_data.h"
 #include "tdx_td_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "vmm_dispatcher/tdx_vmm_dispatcher.h"
 #include "helpers/helpers.h"
 #include "memory_handlers/sept_manager.h"
@@ -59,7 +59,7 @@ static l2_exit_route_t handle_l2_posted_interrupt(tdvps_t* tdvps_p, uint16_t vm_
     // Merge L1PID.PIR into L1 VMM's VAPIC.VIRR and calculate highest requested posted interrupt vector.
     // Remember that VIRR is composed of 8 32-bit fields, thus it is processed 32 bits at a time.
     uint8_t rvi = 0;
-    volatile ia32_apic_register_t* vapic_irr = (ia32_apic_register_t*)&tdvps_p->vapic.apic[APIC_MMIO_IRR_OFFSET];
+    volatile ia32_apic_register_t* vapic_irr = (ia32_apic_register_t*)&tdvps_p->vapic.vapic[APIC_MMIO_IRR_OFFSET];
 
     for (uint32_t i = 0; i < PID_PIR_DWORDS; i++)
     {
@@ -104,7 +104,7 @@ static l2_exit_route_t handle_l2_posted_interrupt(tdvps_t* tdvps_p, uint16_t vm_
     // If RVI priority (bits 7:4) is not higher than current L1 VMM's VAPIC.VPPR priority,
     // virtual interrupt can't be injected to L1 VMM right now.
     // Resume L2 VM; the CPU will use the updated RVI later, on L2->L1 exit, when L1 is entered.
-    volatile uint32_t ppr = *(uint32_t*)&tdvps_p->vapic.apic[APIC_MMIO_PPR_OFFSET];
+    volatile uint32_t ppr = *(uint32_t*)&tdvps_p->vapic.vapic[APIC_MMIO_PPR_OFFSET];
 
     if ((inter_status.rvi & 0xF0) <= (ppr & 0xF0))
     {

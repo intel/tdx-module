@@ -28,7 +28,7 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_vmm_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 #include "data_structures/tdx_global_data.h"
 #include "helpers/tdx_locks.h"
@@ -79,7 +79,7 @@ api_error_type tdh_sys_update(void)
                          - sizeof(handoff_data_header_t);
     uint32_t size = handoff_data_hdr->size;
 
-    tdx_sanity_check((size > 0) && (size <= buff_size), SCEC_SEAMCALL_SOURCE(TDH_SYS_UPDATE_LEAF), 0);
+    tdx_sanity_check((size > 0) && (size <= buff_size), FATAL_ERROR_ID_304, 0);
 
     uint8_t* handoff_data_bytes = (uint8_t*)(sysinfo_table->data_rgn_base + sizeof(handoff_data_header_t));
 

@@ -25,9 +25,9 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/op_state_lookup.h"
-#include "auto_gen/sept_state_lookup.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include OP_STATE_LOOKUP_HEADER
+#include SEPT_STATE_LOOKUP_HEADER
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
@@ -44,8 +44,7 @@ api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_
     // TDR and TDCS
     tdr_t                  *tdr_p = NULL;         // Pointer to the owner TDR page
     pa_t                    tdr_pa;               // Physical address of the owner TDR page
-    pamt_block_t            tdr_pamt_block;       // TDR PAMT block
-    pamt_entry_t           *tdr_pamt_entry_ptr = NULL; // Pointer to the TDR PAMT entry
+    pamt_walk_result_t      tdr_pamt_walk_result;
     tdcs_t                 *tdcs_p = NULL;        // Pointer to the TDCS structure
     bool_t                  tdr_locked_flag = false; // Indicate TDR is locked
 
@@ -75,8 +74,7 @@ api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_
                                                  TDX_RANGE_RO,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_p);
 
@@ -156,7 +154,8 @@ api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_
 
             sept_entry_level = LVL_PT;
             // Walk the Secure-EPT to locate the parent entry for the new TD page
-            return_val = walk_private_gpa(tdcs_p, gpa, &sept_entry_ptr, &sept_entry_level, &sept_entry_copy);
+            return_val = walk_private_gpa(tdcs_p, gpa, tdr_p->key_management_fields.hkid,
+                                          &sept_entry_ptr, &sept_entry_level, &sept_entry_copy);
 
             if (return_val != TDX_SUCCESS)
             {
@@ -206,12 +205,41 @@ api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_
                     sept_update_state(&new_sept_entry, SEPT_STATE_PEND_EXP_DIRTY_BLOCKEDW_MASK);
                     break;
                 default:
-                    FATAL_ERROR();
+                {
+                    extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, 0, LVL_PT, gpa.raw, new_sept_entry);
+                    fatal_error(FATAL_ERROR_ID_5, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
+                }
             }
 
             // Update the SEPT entry in memory
             atomic_mem_write_64b(&sept_entry_ptr->raw, new_sept_entry.raw);
 
+            // If the page is guest accessible (MAPPED or EXPORTED_DIRTY),
+            // then block any L2 aliases for writing.
+            // Otherwise, L2 aliases are already blocked.
+            if (sept_state_is_guest_accessible_leaf(sept_entry_copy))
+            {
+                // Block any L2 aliases for writing
+                for (uint16_t vm_id = 1; vm_id <= tdcs_p->management_fields.num_l2_vms; vm_id++)
+                {
+                    if (sept_state_is_aliased(sept_entry_copy, vm_id))
+                    {
+                        ia32e_sept_t* l2_septe_ptr = NULL;
+                        // Walk the L2 SEPT to locate the entry
+                        return_val = l2_sept_walk(tdr_p, tdcs_p, vm_id, gpa, &sept_entry_level,
+                                                  &l2_septe_ptr);
+
+                        if (return_val != TDX_SUCCESS)
+                        {
+                            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, vm_id, sept_entry_level, gpa.raw, *l2_septe_ptr);
+                            fatal_error(FATAL_ERROR_ID_4, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
+                        }
+
+                        sept_l2_blockw(l2_septe_ptr);
+                        free_la(l2_septe_ptr);
+                    }
+                }
+            }
 
             // Update the TD's BW_EPOCH
             tdcs_p->migration_fields.bw_epoch.raw = tdcs_p->epoch_tracking.epoch_and_refcount.td_epoch;
@@ -296,7 +324,7 @@ EXIT:
 
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_p);
     }
 

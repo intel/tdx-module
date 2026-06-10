@@ -34,7 +34,7 @@
 #include "x86_defs/vmcs_defs.h"
 #include "data_structures/tdx_local_data.h"
 #include "tdx_td_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "vmm_dispatcher/tdx_vmm_dispatcher.h"
 #include "helpers/helpers.h"
 #include "memory_handlers/sept_manager.h"
@@ -60,16 +60,20 @@ void td_rdpmc_exit(vm_vmexit_exit_reason_t vm_exit_reason, uint64_t  vm_exit_qua
     else
     {
         // If ATTRIBUTES.PERFMON is set, there shouldn't be a VM exit
-        FATAL_ERROR();
+        extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_unexpected_vm_exit(tdx_local_data_ptr->vp_ctx.tdr_pa.raw,
+                                                                                                   tdx_local_data_ptr->current_td_vm_id,
+                                                                                                   (uint32_t)vm_exit_reason.basic_reason,
+                                                                                                   0);
+        fatal_error(FATAL_ERROR_ID_105, FATAL_INFO_FORMAT_UNEXPECTED_VM_EXIT_INFO, &extended_fatal_info);
     }
 
 }
 
 void td_ept_misconfiguration_exit(vm_vmexit_exit_reason_t vm_exit_reason)
 {
-    tdx_module_local_t* tdx_local_data_ptr = get_local_data();
+    tdx_module_local_t* local_data = get_local_data();
 
-    tdcs_t* tdcs_p = tdx_local_data_ptr->vp_ctx.tdcs;
+    tdcs_t* tdcs_p = local_data->vp_ctx.tdcs;
 
     bool_t gpaw = tdcs_p->executions_ctl_fields.gpaw;
     pa_t gpa;
@@ -87,7 +91,8 @@ void td_ept_misconfiguration_exit(vm_vmexit_exit_reason_t vm_exit_reason)
     else
     {
         // Fatal error - EPT misconfiguration is not expected for private GPA
-        FATAL_ERROR();
+        extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_td_handle(local_data->vp_ctx.tdr_pa.raw);
+        fatal_error(FATAL_ERROR_ID_106, FATAL_INFO_FORMAT_TD_HANDLE_INFO, &extended_fatal_info);
     }
 }
 
@@ -131,7 +136,8 @@ bool_t td_cr_access_exit(vmx_exit_qualification_t vm_exit_qualification)
                     // MOV to CR4
                     // All valid cases of accessing CR4 are controlled by the CR4 guest/host mask
                     // and CR4 read shadow fields of the TD VMCS, and do not cause a VM exit.
-                    status = (uint16_t)write_guest_cr4(value, tdcs_p);
+                    status = (uint16_t)write_guest_cr4(value, tdcs_p
+                                             );
                     break;
 
                 default:
@@ -167,7 +173,7 @@ bool_t td_cr_access_exit(vmx_exit_qualification_t vm_exit_qualification)
             ia32_vmread(VMX_GUEST_CR0_ENCODE, &cr0.raw);
 
             // L1 is assumed to never run in real mode
-            tdx_sanity_check(cr0.pe == 1, SCEC_TDEXIT_SOURCE, 3);
+            tdx_sanity_check(cr0.pe == 1, FATAL_ERROR_ID_280, 3);
 
             ia32_vmwrite(VMX_GUEST_CR0_ENCODE, (value & CR0_L1_LMSW_MASK) | (cr0.raw & ~CR0_L1_LMSW_MASK));
 
@@ -187,6 +193,9 @@ void td_exception_or_nmi_exit(vm_vmexit_exit_reason_t vm_exit_reason,
 {
     if (vm_exit_inter_info.interruption_type == VMEXIT_INTER_INFO_TYPE_NMI)
     {
+        tdx_module_local_t* tdx_module_local_ptr = get_local_data();
+        vm_exit_qualification.nmi.source_identification |= tdx_module_local_ptr->single_step_def_state.nmisrc;
+        tdx_module_local_ptr->single_step_def_state.nmisrc = 0;
         // This exit was due to an NMI
         async_tdexit_to_vmm(TDX_SUCCESS, vm_exit_reason,
                             vm_exit_qualification.raw, 0, 0, vm_exit_inter_info.raw);
@@ -207,7 +216,7 @@ void td_exception_or_nmi_exit(vm_vmexit_exit_reason_t vm_exit_reason,
     {
         // Currently we don't expect exits due to other exceptions
         // Fatal error
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_107, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
 }
@@ -253,7 +262,9 @@ void tdx_inject_ve(uint64_t vm_exit_reason, uint64_t exit_qualification,
 
     // Before we inject a #VE, reinject IDT vectoring events that happened during VM exit, if any
     tdx_debug_assert(tdvps_p->management.curr_vm == 0);
-    ve_info_p = &tdvps_p->ve_info;
+    {
+        ve_info_p = &tdvps_p->ve_info;
+    }
 
     // TDX-SEAM first checks VE_INFO.VALID to make sure VE_INFO does not contain information that
     // hasn’t been read yet using TDGVPVEINFOGET.
@@ -277,7 +288,7 @@ void tdx_inject_ve(uint64_t vm_exit_reason, uint64_t exit_qualification,
         ve_info_p->eptp_index = (uint16_t)eptp_index;
         ve_info_p->ve_category = (uint8_t)category;
         ve_info_p->instruction_length = (uint32_t)length;
-        ve_info_p->instruction_info = (uint32_t)info;
+        ve_info_p->instruction_information = (uint32_t)info;
 
         ve_info_p->valid = (uint32_t)VE_INFO_CONTENTS_VALID;
 

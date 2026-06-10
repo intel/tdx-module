@@ -51,7 +51,6 @@
 #define CWF_NATIVE_FMS                  0xD06D0
 #define CWF_LATEST_STEPPING             0x1
 
-
 #define TOTAL_KNOWN_FMS                 6
 
 extern const fms_info_t allowed_fms[TOTAL_KNOWN_FMS];

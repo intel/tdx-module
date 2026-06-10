@@ -41,8 +41,8 @@ static void clean_ctx(aes_gcm_ctx_t *ctx)
 aes_gcm_api_error aes_gcm_init(const key256_t *key, aes_gcm_ctx_t *ctx, const migs_iv_t *iv)
 {
     tdx_debug_assert(ctx);
-
-    get_local_data()->reset_avx_state = true;
+    
+    prepare_state_for_avx_usage();
 
     IppsAES_GCMState *pState = (IppsAES_GCMState*) &ctx->state;
 
@@ -90,7 +90,7 @@ aes_gcm_api_error aes_gcm_refresh_context(aes_gcm_ctx_t *ctx)
 {
     tdx_debug_assert(ctx);
 
-    get_local_data()->reset_avx_state = true;
+    prepare_state_for_avx_usage();
 
     IppsAES_GCMState *pState = (IppsAES_GCMState*) &ctx->state;
 
@@ -116,7 +116,7 @@ aes_gcm_api_error aes_gcm_reset(aes_gcm_ctx_t *ctx, const migs_iv_t *iv)
 {
     tdx_debug_assert(ctx);
 
-    get_local_data()->reset_avx_state = true;
+    prepare_state_for_avx_usage();
 
     IppsAES_GCMState *pState = (IppsAES_GCMState*) &ctx->state;
 
@@ -144,8 +144,8 @@ EXIT:
 aes_gcm_api_error aes_gcm_process_aad(aes_gcm_ctx_t *ctx, const uint8_t *p_aad, int32_t size_aad)
 {
     tdx_debug_assert(ctx);
-
-    get_local_data()->reset_avx_state = true;
+    
+    prepare_state_for_avx_usage();
 
     IppsAES_GCMState *pState = (IppsAES_GCMState*) &ctx->state;
 
@@ -162,7 +162,7 @@ aes_gcm_api_error aes_gcm_encrypt(aes_gcm_ctx_t *ctx, const uint8_t *src, uint8_
 {
     tdx_debug_assert(ctx);
 
-    get_local_data()->reset_avx_state = true;
+    prepare_state_for_avx_usage();
 
     IppsAES_GCMState *pState = (IppsAES_GCMState*) &ctx->state;
 
@@ -179,7 +179,7 @@ aes_gcm_api_error aes_gcm_decrypt(aes_gcm_ctx_t *ctx, const uint8_t *src, uint8_
 {
     tdx_debug_assert(ctx);
 
-    get_local_data()->reset_avx_state = true;
+    prepare_state_for_avx_usage();
 
     IppsAES_GCMState *pState = (IppsAES_GCMState*) &ctx->state;
 
@@ -211,7 +211,7 @@ aes_gcm_api_error aes_gcm_finalize(aes_gcm_ctx_t *ctx, uint8_t *mac)
 {
     tdx_debug_assert(ctx);
 
-    get_local_data()->reset_avx_state = true;
+    prepare_state_for_avx_usage();
 
     IppsAES_GCMState *pState = (IppsAES_GCMState*) &ctx->state;
 

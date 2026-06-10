@@ -30,7 +30,7 @@
 #include "tdx_basic_types.h"
 #include "tdx_api_defs.h"
 
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/tdx_local_data.h"
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
@@ -60,9 +60,9 @@ api_error_type tdg_mr_rtmr_extend(uint64_t extension_data_gpa, uint64_t index)
     tdcs_t* tdcs_p = tdx_local_data_ptr->vp_ctx.tdcs;
     tdvps_t* tdvps_p = tdx_local_data_ptr->vp_ctx.tdvps;
 
-    tdx_sanity_check(tdr_p != NULL, SCEC_TDCALL_SOURCE(TDG_MR_RTMR_EXTEND_LEAF), 0);
-    tdx_sanity_check(tdcs_p != NULL, SCEC_TDCALL_SOURCE(TDG_MR_RTMR_EXTEND_LEAF), 1);
-    tdx_sanity_check(tdvps_p != NULL, SCEC_TDCALL_SOURCE(TDG_MR_RTMR_EXTEND_LEAF), 2);
+    tdx_sanity_check(tdr_p != NULL, FATAL_ERROR_ID_268, 0);
+    tdx_sanity_check(tdcs_p != NULL, FATAL_ERROR_ID_269, 1);
+    tdx_sanity_check(tdvps_p != NULL, FATAL_ERROR_ID_270, 2);
 
     // Translation may implicitly mutate into a TD exit or throw a #VE
     // on EPT violation/misconfiguration. Implicitly throws an error if GPA is not specified correctly.
@@ -97,6 +97,8 @@ api_error_type tdg_mr_rtmr_extend(uint64_t extension_data_gpa, uint64_t index)
         goto EXIT;
     }
 
+    lfence();
+
     // Acquire exclusive access to TDCS.RTMR
     if ((retval = acquire_sharex_lock_hp_ex(&tdcs_p->measurement_fields.rtmr_lock, true)) != TDX_SUCCESS)
     {
@@ -115,6 +117,8 @@ api_error_type tdg_mr_rtmr_extend(uint64_t extension_data_gpa, uint64_t index)
 
     // Calculate hash from 2 concatenated hashes (current rtmr[i] || new extended value)
 
+    save_td_xcr0_and_set_tdx_xcr0(tdx_local_data_ptr);
+
     store_ymms_in_buffer(ymms);
 
     sha_error_code = sha384_generate_hash((const uint8_t*)cat_extended_mr,
@@ -124,11 +128,13 @@ api_error_type tdg_mr_rtmr_extend(uint64_t extension_data_gpa, uint64_t index)
     load_ymms_from_buffer(ymms);
     basic_memset_to_zero(ymms, sizeof(ymms));
 
+    restore_td_xcr0_if_required(tdx_local_data_ptr);
+
     if (sha_error_code != 0)
     {
         // Unexpected error - Fatal Error
         TDX_ERROR("Unexpected error in SHA384 - error = %d\n", sha_error_code);
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_101, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     // Since an RTMR is updated, mark the last calculated TEEINFOHASH as invalid

@@ -29,7 +29,7 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_vmm_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 #include "data_structures/tdx_global_data.h"
 #include "data_structures/tdx_local_data.h"
@@ -117,7 +117,8 @@ api_error_type tdh_sys_tdmr_init(uint64_t tdmr_pa)
     pamt_block.pamt_4kb_p = (pamt_entry_t*) (tdmr_entry->pamt_4k_base
             + ((tdmr_entry->last_initialized - tdmr_entry->base) / _4KB * sizeof(pamt_entry_t)));
 
-    uint64_t tdmr_4k_pamt_init_count = TDMR_4K_PAMT_INIT_COUNT;
+    uint64_t tdmr_4k_pamt_init_count = tdx_global_data_ptr->dynamic_pamt_enabled ?
+                                            TDMR_4K_DYNAMIC_PAMT_INIT_COUNT : TDMR_4K_PAMT_INIT_COUNT;
 
     pamt_init(&pamt_block, tdmr_4k_pamt_init_count, tdmr_entry);
 

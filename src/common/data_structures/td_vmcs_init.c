@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -156,14 +156,14 @@ void init_guest_td_address_fields(tdr_t* tdr_ptr, tdvps_t* tdvps_ptr, uint16_t c
     if (vm_id > 0)
     {
         ia32_vmwrite(VMX_VIRTUAL_APIC_PAGE_ADDRESS_FULL_ENCODE, NULL_PA);
-        ia32_vmwrite(VMX_MSR_BITMAP_PHYPTR_FULL_ENCODE, tdvps_ptr->management.tdvps_pa[get_tdvps_msr_bitmap_index(vm_id)]);
+        ia32_vmwrite(VMX_MSR_BITMAP_PHYPTR_FULL_ENCODE, tdvps_ptr->management.tdvps_page_pa[get_tdvps_msr_bitmap_index(vm_id)]);
         ia32_vmwrite(VMX_VIRTUAL_EXCEPTION_INFO_ADDRESS_FULL_ENCODE, NULL_PA);
     }
     else // L1 VMCS init
     {
-        ia32_vmwrite(VMX_VIRTUAL_APIC_PAGE_ADDRESS_FULL_ENCODE, tdvps_ptr->management.tdvps_pa[TDVPS_VAPIC_PAGE_INDEX]);
+        ia32_vmwrite(VMX_VIRTUAL_APIC_PAGE_ADDRESS_FULL_ENCODE, tdvps_ptr->management.tdvps_page_pa[TDVPS_VAPIC_PAGE_INDEX]);
         ia32_vmwrite(VMX_MSR_BITMAP_PHYPTR_FULL_ENCODE, tdr_ptr->management_fields.tdcx_pa[MSR_BITMAPS_PAGE_INDEX]);
-        ia32_vmwrite(VMX_VIRTUAL_EXCEPTION_INFO_ADDRESS_FULL_ENCODE, tdvps_ptr->management.tdvps_pa[TDVPS_VE_INFO_PAGE_INDEX]);
+        ia32_vmwrite(VMX_VIRTUAL_EXCEPTION_INFO_ADDRESS_FULL_ENCODE, tdvps_ptr->management.tdvps_page_pa[TDVPS_VE_INFO_PAGE_INDEX]);
     }
 
     // Set all to TDCS Zero Page
@@ -180,7 +180,7 @@ static void init_td_vmcs_exec_control_field(tdcs_t * tdcs_ptr, uint16_t vm_id)
                                                    &get_global_data()->td_vmcs_values;
 
     uint32_t vmexit_controls_vector = td_vmcs_values_ptr->exit_ctls;
-    uint32_t vmentry_controls_vector = td_vmcs_values_ptr->entry_ctls;
+    vmx_vm_entry_ctls_t vmentry_controls = {.raw = td_vmcs_values_ptr->entry_ctls};
     uint32_t pin_based_execution_controls = td_vmcs_values_ptr->pinbased_ctls;
     vmx_procbased_ctls_t processor_based_execution_controls = { .raw = td_vmcs_values_ptr->procbased_ctls };
     vmx_procbased_ctls2_t sec_proc_based_execution_controls = { .raw = td_vmcs_values_ptr->procbased_ctls2 };
@@ -199,11 +199,20 @@ static void init_td_vmcs_exec_control_field(tdcs_t * tdcs_ptr, uint16_t vm_id)
 
     if (tdcs_ptr->executions_ctl_fields.attributes.pks || tdcs_ptr->executions_ctl_fields.attributes.debug)
     {
-        vmentry_controls_vector |= (uint32_t) 1 << VMCS_ENTRY_LOAD_PKRS_BIT_LOCATION;
+        vmentry_controls.load_pkrs = 1;
     }
     else
     {
-        vmentry_controls_vector &= ~((uint32_t) 1 << VMCS_ENTRY_LOAD_PKRS_BIT_LOCATION);
+        vmentry_controls.load_pkrs = 0;
+    }
+
+    if (tdcs_ptr->executions_ctl_fields.attributes.pmt_prof && (get_global_data()->plt_common_config.ia32_vmx_true_entry_ctls.allowed1 & BIT(25)))
+    {
+        vmentry_controls.td_telemetry = 1;
+    }
+    else
+    {
+        vmentry_controls.td_telemetry = 0;
     }
 
     processor_based_execution_controls.mwait_exiting = ~tdcs_ptr->executions_ctl_fields.cpuid_flags.monitor_mwait_supported;
@@ -220,7 +229,7 @@ static void init_td_vmcs_exec_control_field(tdcs_t * tdcs_ptr, uint16_t vm_id)
     }
 
     ia32_vmwrite(VMX_VM_EXIT_CONTROL_ENCODE, vmexit_controls_vector);
-    ia32_vmwrite(VMX_VM_ENTRY_CONTROL_ENCODE, vmentry_controls_vector);
+    ia32_vmwrite(VMX_VM_ENTRY_CONTROL_ENCODE, vmentry_controls.raw);
     ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_PIN_BASED_ENCODE, pin_based_execution_controls);
     ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_PROC_BASED_ENCODE, processor_based_execution_controls.raw);
     ia32_vmwrite(VMX_VM_EXECUTION_CONTROL_SECONDARY_PROC_BASED_ENCODE, sec_proc_based_execution_controls.raw);
@@ -436,9 +445,23 @@ void init_td_vmcs(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, tdvps_t* tdvps_ptr, bool_t i
         if (td_vmcs_non_migrated_state_init_map[index].encoding != VMX_ENCLV_EXIT_CONTROL_FULL_ENCODE ||
             procbased_ctls2.en_enclv_exiting == 1)
         {
-            ia32_vmwrite(td_vmcs_non_migrated_state_init_map[index].encoding, td_vmcs_non_migrated_state_init_map[index].value);
+            if(!(((VMX_GUEST_PDPTR0_FULL_ENCODE == td_vmcs_non_migrated_state_init_map[index].encoding) ||
+                  (VMX_GUEST_PDPTR1_FULL_ENCODE == td_vmcs_non_migrated_state_init_map[index].encoding) ||
+                  (VMX_GUEST_PDPTR2_FULL_ENCODE == td_vmcs_non_migrated_state_init_map[index].encoding) ||
+                  (VMX_GUEST_PDPTR3_FULL_ENCODE == td_vmcs_non_migrated_state_init_map[index].encoding)) &&
+                  (init_on_import && vm_id > 0)))
+            {
+                ia32_vmwrite(td_vmcs_non_migrated_state_init_map[index].encoding, td_vmcs_non_migrated_state_init_map[index].value);
+            }
         }
         index++;
+    }
+
+    // handle special fields
+    if (init_on_import && vm_id > 0)
+    {
+        // IA32_EFER is ME on L1 import but IESME on L2 import
+        ia32_vmwrite(VMX_GUEST_IA32_EFER_FULL_ENCODE, 0x901ULL);
     }
 
     /**

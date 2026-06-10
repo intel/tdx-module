@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "x86_defs/vmcs_defs.h"
 #include "data_structures/tdx_local_data.h"
@@ -36,7 +36,7 @@
 #include "helpers/helpers.h"
 #include "accessors/data_accessors.h"
 #include "accessors/vt_accessors.h"
-#include "auto_gen/tdvps_fields_lookup.h"
+#include TDVPS_FIELDS_LOOKUP_HEADER
 
 static api_error_type tdh_mng_rdwr(uint64_t target_tdr_pa, uint64_t requested_field_code, bool_t write,
                             uint64_t wr_data, uint64_t wr_mask, uint64_t version)
@@ -46,8 +46,7 @@ static api_error_type tdh_mng_rdwr(uint64_t target_tdr_pa, uint64_t requested_fi
     // TDR related variables
     pa_t                  tdr_pa;
     tdr_t               * tdr_ptr = NULL;                       // Pointer to the TDR page (linear address)
-    pamt_block_t          tdr_pamt_block;                       // TDR PAMT block
-    pamt_entry_t        * tdr_pamt_entry_ptr;                   // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;              // Indicate TDR is locked
 
     tdcs_t              * tdcs_ptr = NULL;                      // Pointer to the TDCS structure (Multi-page)
@@ -82,8 +81,7 @@ static api_error_type tdh_mng_rdwr(uint64_t target_tdr_pa, uint64_t requested_fi
                                                  write ? TDX_RANGE_RW : TDX_RANGE_RO,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -137,7 +135,7 @@ static api_error_type tdh_mng_rdwr(uint64_t target_tdr_pa, uint64_t requested_fi
     if (write)
     {
         return_val = md_write_element(MD_CTX_TD, field_id, access_type, access_qual,
-                                      md_ctx, wr_data, wr_mask, &rd_value);
+                                      md_ctx, wr_data, wr_mask, &rd_value, true);
     }
     else
     {
@@ -171,7 +169,7 @@ EXIT:
 
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_ptr);
     }
 

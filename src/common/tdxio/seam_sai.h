@@ -46,7 +46,7 @@ _STATIC_INLINE_ uint16_t get_sai_reg_offset(
     case HIOP_WAC:
         return socket_info_ptr->hiop_seam_os_w_pg_wac_offset;
     default:
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_90, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 }
 

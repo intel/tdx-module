@@ -50,3 +50,4 @@ void ide_kdf_hmac_sha256(uint8_t* key_derivation_key, uint8_t stream_id, uint8_t
     hmac_sha256(msg, key_derivation_key, key);
 
 }
+

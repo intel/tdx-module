@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/td_control_structures.h"
 #include "memory_handlers/keyhole_manager.h"
@@ -41,8 +41,7 @@ api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
     tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
-    pamt_block_t          tdr_pamt_block;            // TDR PAMT block
-    pamt_entry_t        * tdr_pamt_entry_ptr;        // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
     tdcs_t              * tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
@@ -59,8 +58,7 @@ api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
                                                  TDX_RANGE_RO,
                                                  TDX_LOCK_EXCLUSIVE,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -95,20 +93,27 @@ api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
      *  of the hashed message into the output SHA384 digest.
      */
 
+     // preserve VMM's XCR0 state
+    get_local_data()->vmm_xcr0_state = ia32_xgetbv(0);
+    ia32_xsetbv(0, TDX_MODULE_XCR0_WITH_AVX);
+
     store_ymms_in_buffer(ymms);
 
     if ((sha_error_code = sha384_finalize(&(tdcs_ptr->measurement_fields.td_sha_ctx),
-                                            tdcs_ptr->measurement_fields.mr_td.qwords)) != 0)
+                                            tdcs_ptr->measurement_fields.mrtd.qwords)) != 0)
     {
         // Unexpected error - Fatal Error
         TDX_ERROR("Unexpected error in SHA384 - error = %d\n", sha_error_code);
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_113, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
-    calculate_servtd_hash(tdcs_ptr, false);
+    calculate_servtd_hash(tdcs_ptr);
 
     load_ymms_from_buffer(ymms);
     basic_memset_to_zero(ymms, sizeof(ymms));
+
+    // restore VMM's XCR0 state
+    ia32_xsetbv(0, get_local_data()->vmm_xcr0_state);
 
     tdcs_ptr->management_fields.op_state = OP_STATE_RUNNABLE;
 
@@ -117,7 +122,7 @@ EXIT:
     // Release all acquired locks and free keyhole mappings
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_ptr);
     }
     if (tdcs_ptr != NULL)

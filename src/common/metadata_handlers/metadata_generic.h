@@ -30,7 +30,7 @@
 #include "tdx_basic_types.h"
 #include "tdx_basic_defs.h"
 #include "tdx_api_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/td_control_structures.h"
 #include "data_structures/tdx_tdvps.h"
 
@@ -63,6 +63,7 @@ typedef enum mig_type_e
     MIG_IE,
     MIG_IES,
     MIG_IEME,
+    MIG_IEMEO,
     MIG_IESME,
     MIG_IESMEO,
     MIG_IB,
@@ -324,9 +325,9 @@ api_error_code_e md_read_element(md_context_code_e ctx_code, md_field_id_t field
  * If the resulting write mask is 0 return a TDX_FIELD_NOT_WRITABLE status.
  * Mask the written value with the derived write mask.
  */
-api_error_code_e md_write_element(md_context_code_e ctx_code, md_field_id_t field_id,
-         md_access_t access_type, md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx,
-         uint64_t value, uint64_t wr_mask, uint64_t* old_value);
+api_error_code_e md_write_element(md_context_code_e ctx_code, md_field_id_t field_id, md_access_t access_type,
+                                  md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx,
+                                  uint64_t value, uint64_t wr_mask, uint64_t* old_value, bool_t wr_mask_valid);
 
 /**
  * @brief Dump a metadata list, containing a header and multiple metadata sequences, into a buffer.

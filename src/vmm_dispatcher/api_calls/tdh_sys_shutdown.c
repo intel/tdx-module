@@ -28,7 +28,7 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_vmm_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 #include "data_structures/tdx_global_data.h"
 #include "helpers/tdx_locks.h"
@@ -66,7 +66,7 @@ api_error_type tdh_sys_shutdown(uint64_t hv_input)
     global_locked_flag = true;
 
     // This is checked by the VMM dispatcher
-    tdx_sanity_check(global_data->global_state.sys_state == SYS_READY, SCEC_SEAMCALL_SOURCE(TDH_SYS_SHUTDOWN_LEAF), 0);
+    tdx_sanity_check(global_data->global_state.sys_state == SYS_READY, FATAL_ERROR_ID_301, 0);
 
     // Mark the TDX-SEAM module as being shut down
     global_data->global_state.sys_state = SYS_SHUTDOWN;
@@ -85,7 +85,7 @@ api_error_type tdh_sys_shutdown(uint64_t hv_input)
         }
     }
 
-    tdx_sanity_check(num_busy > 0, SCEC_SEAMCALL_SOURCE(TDH_SYS_SHUTDOWN_LEAF), 1);
+    tdx_sanity_check(num_busy > 0, FATAL_ERROR_ID_302, 1);
 
     if (num_busy > 1) // another LP is in SEAM mode
     {
@@ -102,7 +102,7 @@ api_error_type tdh_sys_shutdown(uint64_t hv_input)
 
     uint32_t size = prepare_handoff_data(handoff_version, buff_size, handoff_data_bytes);
 
-    tdx_sanity_check((size > 0) && (size <= buff_size), SCEC_SEAMCALL_SOURCE(TDH_SYS_SHUTDOWN_LEAF), 1);
+    tdx_sanity_check((size > 0) && (size <= buff_size), FATAL_ERROR_ID_303, 1);
 
     handoff_data_hdr->valid = true;
     handoff_data_hdr->hv    = handoff_version;

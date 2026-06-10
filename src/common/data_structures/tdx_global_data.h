@@ -36,10 +36,9 @@
 #include "x86_defs/msr_defs.h"
 #include "x86_defs/vmcs_defs.h"
 #include "x86_defs/x86_defs.h"
-#include "auto_gen/cpuid_configurations_defines.h"
+#include CPUID_CONFIGURATIONS_DEFINES_HEADER
 #include "crypto/sha384.h"
 #include "data_structures/tdxio/iommu_defs.h"
-
 
 
 #define AES_XTS_128                BIT(0)
@@ -359,6 +358,12 @@ typedef struct tdx_module_global_s
     uint8_t          num_fixed_ctrs;
     uint32_t         fc_bitmap;
 
+    uint32_t         pmc_bitmap;
+
+    bool_t is_arch_pebs_supported;
+    bool_t is_nmi_source_supported;
+    bool_t perfmon_new_msrs; // Indicates CPU support for the new MSR range starting @ x1900
+
     // ATTRIBUTES fixed bits masks
     uint64_t     attributes_fixed0;   // Bit value of 0 means ATTRIBUTES bit must be 0
     uint64_t     attributes_fixed1;   // Bit value of 1 means ATTRIBUTES bit must be 1
@@ -381,6 +386,14 @@ typedef struct tdx_module_global_s
 
     fms_info_t      platform_fms;
     cpuid_1a_eax_t  native_model_info;
+
+    // fatal error diagnostics
+    uint64_t* fatal_info_p;
+    uint64_t fatal_info_config_hpa;
+    sharex_lock_t fatal_info_lock;
+    uint64_t fatal_info_icr;
+
+    bool_t          dynamic_pamt_enabled;
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE
     debug_control_t debug_control;
@@ -432,6 +445,9 @@ tdx_static_assert((offsetof(tdx_module_global_t, tdmr_info_copy) + offsetof(tdmr
 tdx_static_assert((offsetof(tdx_module_global_t, tdmr_info_copy) + offsetof(tdmr_info_entry_t, pamt_4k_size)) % sizeof_field(tdmr_info_entry_t, pamt_4k_size) == 0, tdmr_info_entry_t);
 tdx_static_assert((offsetof(tdx_module_global_t, tdmr_info_copy) + offsetof(tdmr_info_entry_t, rsvd_areas)) % sizeof(uint64_t) == 0, tdmr_info_entry_t);
 
+#define SIZE_OF_CONNECT_FIELDS sizeof_field(tdx_module_global_t, iommu_configs) + \
+                               sizeof_field(tdx_module_global_t, mmiomt_root_node) + \
+                               sizeof_field(tdx_module_global_t, devifmt_root_node)
 
 // // !!! IMPORTANT !!!
 // // ALL HANDED-OFF STRUCTURES NEEDS TO BE PACKED TO ELIMINATE POSSIBLE COMPILER BUILD DIFFS
@@ -441,9 +457,7 @@ tdx_static_assert((offsetof(tdx_module_global_t, tdmr_info_copy) + offsetof(tdmr
                                sizeof_field(tdx_module_global_t, num_of_tdmr_entries) + \
                                sizeof_field(tdx_module_global_t, hkid) + \
                                sizeof_field(tdx_module_global_t, pkg_config_bitmap) +\
-                               sizeof_field(tdx_module_global_t, iommu_configs) + \
-                               sizeof_field(tdx_module_global_t, mmiomt_root_node) + \
-                               sizeof_field(tdx_module_global_t, devifmt_root_node)
+                               SIZE_OF_CONNECT_FIELDS
 
 #define TDX_MIN_HANDOFF_PAGES  ((ROUND_UP(TDX_MIN_HANDOFF_SIZE, _4KB)) / _4KB)
 

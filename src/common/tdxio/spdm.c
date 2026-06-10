@@ -135,7 +135,7 @@ _STATIC_INLINE_ void get_tpa_info_hash(measurement_t *const tpa_info_hash)
 _STATIC_INLINE_ api_error_type is_valid_tpa_td(void)
 {
     tdcs_t *tdcs_ptr = get_local_data()->vp_ctx.tdcs;
-    tdx_sanity_check(tdcs_ptr != NULL, SCEC_TDCALL_SOURCE(SCEC_SPDM_SOURCE), 1);
+    tdx_sanity_check(tdcs_ptr != NULL, FATAL_ERROR_ID_248, 1);
 
     ALIGN(64)
     measurement_t tee_info_hash = {0};

@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/td_control_structures.h"
 #include "memory_handlers/keyhole_manager.h"
@@ -45,8 +45,7 @@ api_error_type tdh_mem_sept_rd(page_info_api_input_t gpa_page_info, uint64_t tar
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
     tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
-    pamt_block_t          tdr_pamt_block;            // TDR PAMT block
-    pamt_entry_t        * tdr_pamt_entry_ptr;        // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
     tdcs_t              * tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
@@ -79,8 +78,7 @@ api_error_type tdh_mem_sept_rd(page_info_api_input_t gpa_page_info, uint64_t tar
                                                  TDX_RANGE_RO,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -120,6 +118,7 @@ api_error_type tdh_mem_sept_rd(page_info_api_input_t gpa_page_info, uint64_t tar
     return_val = lock_sept_check_and_walk_private_gpa(tdcs_ptr,
                                                       OPERAND_ID_RCX,
                                                       page_gpa,
+                                                      tdr_ptr->key_management_fields.hkid,
                                                       TDX_LOCK_SHARED,
                                                       &sept_entry_ptr,
                                                       &sept_level_entry,
@@ -165,13 +164,14 @@ api_error_type tdh_mem_sept_rd(page_info_api_input_t gpa_page_info, uint64_t tar
 
                 if (return_val != TDX_SUCCESS)
                 {
-                    FATAL_ERROR(); // Should not happen - no need to free the L2 SEPT PTR's
+                    // Should not happen - no need to free the L2 SEPT PTR's
+                    extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, vm_id, sept_level_entry, page_gpa.raw, *l2_sept_entry_ptr);
+                    fatal_error(FATAL_ERROR_ID_14, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
                 }
 
-                // Get the L2 attributes. L2 SEPT entry does not hold a BLOCKEDW indication
-                // of its own, so provide it based on the L1 state.
-                gpa_attr.attr_arr[vm_id] = l2_sept_get_gpa_attr(l2_sept_entry_ptr,
-                        sept_state_is_any_blockedw(sept_entry_copy));
+                // Get the L2 attributes.  L2 SEPT entry does not hold BLOCKEDW or PENDING indications
+                // of its own, so provide them based on the L1 state.
+                gpa_attr.attr_arr[vm_id] = l2_sept_get_gpa_attr(l2_sept_entry_ptr, sept_state_is_any_blockedw(sept_entry_copy), sept_state_is_any_pending(sept_entry_copy));
 
                 free_la(l2_sept_entry_ptr);
             }
@@ -208,7 +208,7 @@ EXIT:
 
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_ptr);
     }
 

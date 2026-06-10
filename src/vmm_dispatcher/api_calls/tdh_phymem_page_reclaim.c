@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/tdx_local_data.h"
 #include "data_structures/td_control_structures.h"
@@ -45,6 +45,7 @@ api_error_type tdh_phymem_page_reclaim(uint64_t page_pa)
     pa_t                  reclaimed_page_pa = {.raw = page_pa}; // Reclaimed page physical address
     pamt_block_t          reclaimed_page_pamt_block;            // Reclaimed page PAMT block
     pamt_entry_t        * reclaimed_page_pamt_entry_ptr;        // Pointer to the reclaimed page PAMT entry
+    pamt_walk_result_t    reclaimed_page_pamt_walk_result = { .valid = false };
     bool_t                reclaimed_page_pamt_locked_flag = false; // Indicate pamt is locked for this page
     page_size_t           reclaimed_page_leaf_size;
     page_size_api_input_t reclaimed_page_level = {.raw = 0};    // Output - reclaimed page level
@@ -85,13 +86,16 @@ api_error_type tdh_phymem_page_reclaim(uint64_t page_pa)
 
     // Walk and locate the leaf PAMT entry
     if ((return_val = pamt_walk(reclaimed_page_pa, reclaimed_page_pamt_block, TDX_LOCK_EXCLUSIVE,
-                                &reclaimed_page_leaf_size, false, false, &reclaimed_page_pamt_entry_ptr)) != TDX_SUCCESS)
+                                PT_4KB, false, false, &reclaimed_page_pamt_walk_result)) != TDX_SUCCESS)
     {
         TDX_ERROR("Failed to PAMT walk to entry - PAMT is locked\n");
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
         goto EXIT;
     }
     reclaimed_page_pamt_locked_flag = true;
+
+    reclaimed_page_pamt_entry_ptr = reclaimed_page_pamt_walk_result.pamt_entry_p;
+    reclaimed_page_leaf_size = reclaimed_page_pamt_walk_result.level_reached;
 
     // Verify that the target page type is not NDA or reserved
     if ((reclaimed_page_pamt_entry_ptr->pt == PT_NDA) ||
@@ -102,7 +106,7 @@ api_error_type tdh_phymem_page_reclaim(uint64_t page_pa)
         goto EXIT;
     }
 
-
+    tdx_debug_assert(reclaimed_page_pamt_entry_ptr->pt != PT_PAMT);
     if ((reclaimed_page_pamt_entry_ptr->pt == PT_DEVIFCS_R) ||
         (reclaimed_page_pamt_entry_ptr->pt == PT_DEVIFCS_NR) ||
         (reclaimed_page_pamt_entry_ptr->pt == PT_MMIO_MT) ||
@@ -211,6 +215,9 @@ api_error_type tdh_phymem_page_reclaim(uint64_t page_pa)
     // Update the PAMT entry of the reclaimed page to PT_FREE
     reclaimed_page_pamt_entry_ptr->pt = PT_NDA;
 
+    local_data_ptr->vmm_regs.r9 |= pamt_dec_nl_page_count_and_get_hint(
+                                    reclaimed_page_pamt_walk_result.pamt_walk_path_nl[PT_2MB]);
+
     return_val= TDX_SUCCESS;
 
 EXIT:
@@ -225,11 +232,7 @@ EXIT:
     }
     if (reclaimed_page_pamt_locked_flag)
     {
-        pamt_unwalk(reclaimed_page_pa,
-                    reclaimed_page_pamt_block,
-                    reclaimed_page_pamt_entry_ptr,
-                    TDX_LOCK_EXCLUSIVE,
-                    reclaimed_page_leaf_size);
+        pamt_unwalk(&reclaimed_page_pamt_walk_result);
     }
 
     return return_val;

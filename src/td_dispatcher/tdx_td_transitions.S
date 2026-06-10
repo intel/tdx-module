@@ -110,56 +110,82 @@ tdx_tdentry_to_td:
     /**
      * Restore all TD GPRs on module entry from a TDVPS GPR area ptr passed in RSI
      */
-    movq (%rsi),     %rax
-    movq 8(%rsi),    %rcx
-    movq 16(%rsi),   %rdx
-    movq 24(%rsi),   %rbx
-    // movq 32(%rsi),   %rsp - keep the RSP of the TDX module for debug purposes.
-    // Actual RSP of the TD will be loaded during the VMENTRY from the TDCS (TD VMCS)
-    movq 40(%rsi),   %rbp
+     push %rax
+     push %rbx
+     push %rcx
+     push %rdx
+     push %rbp
+     push %r8
+     push %r9
+     push %r10
+     push %r11
+     push %r12
+     push %r13
+     push %r14
+     push %r15
+     push %rdi
+     push %rsi
 
-    // RSI and RDI will be restored later - we are still using them
-
-    movq 64(%rsi),   %r8
-    movq 72(%rsi),   %r9
-    movq 80(%rsi),   %r10
-    movq 88(%rsi),   %r11
-    movq 96(%rsi),   %r12
-    movq 104(%rsi),  %r13
-    movq 112(%rsi),  %r14
-    movq 120(%rsi),  %r15
-
-    // Launch state is being passed as a parameter
-    test %edi, %edi
-    jz vmlaunch_lbl
-
-    movq 56(%rsi),   %rdi
-    movq 48(%rsi),   %rsi
-
-    vmresume
-    
-#ifdef DEBUGFEATURE_TDX_DBG_TRACE
-    call tdx_failed_vmentry
-#endif // DEBUGFEATURE_TDX_DBG_TRACE
-
-    /**
-    * Unreachable code.  panic.
-    */
-    ud2
+     movq (%rsi),     %rax
+     movq 8(%rsi),    %rcx
+     movq 16(%rsi),   %rdx
+     movq 24(%rsi),   %rbx
+     // movq 32(%rsi),   %rsp - keep the RSP of the TDX module for debug purposes.
+     // Actual RSP of the TD will be loaded during the VMENTRY from the TDCS (TD VMCS)
+     movq 40(%rsi),   %rbp
+     
+     // RSI and RDI will be restored later - we are still using them
+     
+     movq 64(%rsi),   %r8
+     movq 72(%rsi),   %r9
+     movq 80(%rsi),   %r10
+     movq 88(%rsi),   %r11
+     movq 96(%rsi),   %r12
+     movq 104(%rsi),  %r13
+     movq 112(%rsi),  %r14
+     movq 120(%rsi),  %r15
+     
+     // Launch state is being passed as a parameter
+     test %edi, %edi
+     jz vmlaunch_lbl
+     
+     movq 56(%rsi),   %rdi
+     movq 48(%rsi),   %rsi
+     
+     vmresume
+     
+     call tdx_failed_vmentry
+     
+     jmp restore_tdx_state
 
 vmlaunch_lbl:
 
-    movq 56(%rsi),   %rdi
-    movq 48(%rsi),   %rsi
+     movq 56(%rsi),   %rdi
+     movq 48(%rsi),   %rsi
+     
+     vmlaunch
+     
+     call tdx_failed_vmentry
 
-    vmlaunch
-    
-#ifdef DEBUGFEATURE_TDX_DBG_TRACE
-    call tdx_failed_vmentry
-#endif // DEBUGFEATURE_TDX_DBG_TRACE
-
+restore_tdx_state:
     /**
-     * Unreachable code.  panic. 
+     * Restore all TDX GPRs after L2 VM entry failure
      */
-    ud2
 
+     pop %rsi
+     pop %rdi
+     pop %r15
+     pop %r14
+     pop %r13
+     pop %r12
+     pop %r11
+     pop %r10
+     pop %r9
+     pop %r8
+     pop %rbp
+     pop %rdx
+     pop %rcx
+     pop %rbx
+     pop %rax
+
+     ret

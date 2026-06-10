@@ -30,7 +30,7 @@
 #include "memory_handlers/keyhole_manager.h"
 #include "memory_handlers/pamt_manager.h"
 #include "tdx_basic_types.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 /**
  * @brief Helper function for mt_walk (used for MMIOMT and DEVIFMT)
@@ -52,8 +52,7 @@ api_error_code_e mt_lock_pamt_and_map_la(
     const uint64_t entry_idx,
     const uint64_t entry_size,
     const bool_t is_guest,
-    pamt_block_t *pamt_block_ptr,
-    pamt_entry_t **pamt_entry,
+    pamt_walk_result_t* pamt_walk_result,
     const page_type_t expected_pt,
     const mapping_type_t mapping_type,
     void **entry_la);

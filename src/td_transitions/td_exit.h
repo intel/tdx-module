@@ -29,9 +29,9 @@
 #ifndef SRC_TD_TRANSITIONS_TD_EXIT_H_
 #define SRC_TD_TRANSITIONS_TD_EXIT_H_
 
-#include "auto_gen/tdx_error_codes_defs.h"
 #include "common/x86_defs/x86_defs.h"
 #include "data_structures/tdx_tdvps.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 #define IA32_DEBUGCTLMSR_BTF                   BIT(1)
 #define IA32_DEBUGCTLMSR_FREEZE_PERFMON_ON_PMI BIT(12)
@@ -43,7 +43,14 @@
 #define VMX_GUEST_LBR_CTL_INIT_VALUE                  0x0
 #define VMX_GUEST_DR7_INIT_VALUE                      0x00000400
 
-#define NUM_OF_PRESERVED_KEYHOLES              2
+#define NUM_OF_PRESERVED_KEYHOLES              5
+
+typedef enum
+{
+    VMM_FAILED_TO_ENTER_L2 = 8,
+    L1_FAILED_TO_ENTER_L2 = 9,
+    L2_ENTRY_FAILURE_AFTER_L2_EXIT = 10
+}l2_failure_flow_e;
 
 /**
  * @brief Write the TDG.VP.ENTER output operands to memory
@@ -94,14 +101,34 @@ void td_vmexit_to_vmm(uint8_t vcpu_state, uint8_t last_td_exit, uint64_t scrub_m
                       uint16_t xmm_select, bool_t is_td_dead, bool_t is_trap_exit);
 
 /**
+ * @brief Routine for handling exit from L2 VM and reenter to L1 VM with error code
+ *
+ * @param error_code
+ * @param vm_exit_reason
+ * @param vm_exit_qualification
+ * @param vm_exit_inter_info
+ * @param emulate_termination
+ */
+void td_l2_to_l1_exit_with_error_code(api_error_code_e error_code, vm_vmexit_exit_reason_t vm_exit_reason, vmx_exit_qualification_t vm_exit_qualification,
+                                      uint64_t extended_exit_qualification, vmx_exit_inter_info_t vm_exit_inter_info, bool_t emulate_termination);
+
+/**
  * @brief Routine for handling exit from L2 VM and reenter to L1 VM
  *
  * @param vm_exit_reason
  * @param vm_exit_qualification
  * @param vm_exit_inter_info
+ * @param emulate_termination
  */
 void td_l2_to_l1_exit(vm_vmexit_exit_reason_t vm_exit_reason, vmx_exit_qualification_t vm_exit_qualification,
-                      uint64_t extended_exit_qualification, vmx_exit_inter_info_t vm_exit_inter_info);
+                      uint64_t extended_exit_qualification, vmx_exit_inter_info_t vm_exit_inter_info, bool_t emulate_termination);
+
+/**
+ * @brief Routine for handling improper L2 vmcs configuration
+ *
+ * @param info
+ */
+void resume_l1_and_emulate_termination(l2_failure_flow_e info);
 
 /**
  * @brief Routine for handling exit from L2 VM and reenter to L1 VM
@@ -110,9 +137,10 @@ void td_l2_to_l1_exit(vm_vmexit_exit_reason_t vm_exit_reason, vmx_exit_qualifica
  * @param vm_exit_reason
  * @param vm_exit_qualification
  * @param vm_exit_inter_info
+ * @param emulate_termination
  */
 void td_l2_to_l1_exit_with_exit_case(api_error_code_e tdexit_case, vm_vmexit_exit_reason_t vm_exit_reason,
                                      vmx_exit_qualification_t vm_exit_qualification, uint64_t extended_exit_qualification,
-                                     vmx_exit_inter_info_t vm_exit_inter_info);
+                                     vmx_exit_inter_info_t vm_exit_inter_info, bool_t emulate_termination);
 
 #endif /* SRC_TD_TRANSITIONS_TD_EXIT_H_ */

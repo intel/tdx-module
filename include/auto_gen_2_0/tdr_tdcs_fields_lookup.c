@@ -24,7 +24,7 @@
  *  Spreadsheet Format Version - '25'
  **/
 
-#include "auto_gen/tdr_tdcs_fields_lookup.h"
+#include "./tdr_tdcs_fields_lookup.h"
 
 
 const md_lookup_t tdr_tdcs_lookup[MAX_NUM_TDR_TDCS_LOOKUP] = {
@@ -372,7 +372,7 @@ const md_lookup_t tdr_tdcs_lookup[MAX_NUM_TDR_TDCS_LOOKUP] = {
    .dbg_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .dbg_wr_mask = (1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .guest_rd_mask = (1ULL & 0xFFFFFFFFFFFFFFFFULL), .guest_wr_mask = (1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .migtd_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .migtd_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
-   .export_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (1ULL & 0xFFFFFFFFFFFFFFFFULL),
+   .export_mask = (1ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .special_rd_handling = false, .special_wr_handling = false,
    .mig_export = MIG_ME, .mig_import = MIG_ME 
  },
@@ -396,7 +396,7 @@ const md_lookup_t tdr_tdcs_lookup[MAX_NUM_TDR_TDCS_LOOKUP] = {
    .dbg_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .dbg_wr_mask = (1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .guest_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .guest_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
    .migtd_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .migtd_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
-   .export_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (1ULL & 0xFFFFFFFFFFFFFFFFULL),
+   .export_mask = (1ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (1ULL & 0xFFFFFFFFFFFFFFFFULL),
    .special_rd_handling = false, .special_wr_handling = false,
    .mig_export = MIG_ME, .mig_import = MIG_ME 
  },
@@ -418,9 +418,9 @@ const md_lookup_t tdr_tdcs_lookup[MAX_NUM_TDR_TDCS_LOOKUP] = {
    .num_of_fields = 1, .num_of_elem = 1, .offset = 0x0120, .attributes = { .raw = 0x10 },
    .prod_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .prod_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
    .dbg_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .dbg_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
-   .guest_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .guest_wr_mask = (9223372036854775823ULL & 0xFFFFFFFFFFFFFFFFULL),
+   .guest_rd_mask = (9223372036854775823ULL & 0xFFFFFFFFFFFFFFFFULL), .guest_wr_mask = (9223372036854775823ULL & 0xFFFFFFFFFFFFFFFFULL),
    .migtd_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .migtd_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
-   .export_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (9223372036854775823ULL & 0xFFFFFFFFFFFFFFFFULL),
+   .export_mask = (9223372036854775823ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (9223372036854775823ULL & 0xFFFFFFFFFFFFFFFFULL),
    .special_rd_handling = false, .special_wr_handling = true,
    .mig_export = MIG_ME, .mig_import = MIG_MEO 
  },
@@ -478,9 +478,9 @@ const md_lookup_t tdr_tdcs_lookup[MAX_NUM_TDR_TDCS_LOOKUP] = {
    .num_of_fields = 1, .num_of_elem = 1, .offset = 0x14D8, .attributes = { .raw = 0x0 },
    .prod_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .prod_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
    .dbg_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .dbg_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
-   .guest_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .guest_wr_mask = (4095ULL & 0xFFFFFFFFFFFFFFFFULL),
+   .guest_rd_mask = (4095ULL & 0xFFFFFFFFFFFFFFFFULL), .guest_wr_mask = (4095ULL & 0xFFFFFFFFFFFFFFFFULL),
    .migtd_rd_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL), .migtd_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
-   .export_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (4095ULL & 0xFFFFFFFFFFFFFFFFULL),
+   .export_mask = (4095ULL & 0xFFFFFFFFFFFFFFFFULL), .import_mask = (4095ULL & 0xFFFFFFFFFFFFFFFFULL),
    .special_rd_handling = false, .special_wr_handling = true,
    .mig_export = MIG_ME, .mig_import = MIG_MEO 
  },

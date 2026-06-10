@@ -103,6 +103,7 @@ api_error_type tdg_mmio_accept(
     return_val = walk_private_gpa(
         local_data->vp_ctx.tdcs,
         page_gpa,
+        local_data->vp_ctx.tdr->key_management_fields.hkid,
         &page_sept_entry_ptr,
         &page_level_entry,
         &cached_sept_entry);

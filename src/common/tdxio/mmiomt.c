@@ -76,8 +76,7 @@ api_error_code_e mmiomt_walk(
             qnode_idx_arr[i],
             sizeof(mmiomt_entry_t),
             false,
-            &mmiomt_walk_res->pamt_block_arr[i],
-            &mmiomt_walk_res->pamt_path_arr[i],
+            &mmiomt_walk_res->pamt_walk_result_arr[i],
             PT_MMIO_MT,
             mapping_type,
             (void **)&mmiomt_walk_res->mmiomt_path_arr[i]);
@@ -139,7 +138,7 @@ EXIT:
 
 void mmiomt_unwalk(mmiomt_walk_res_t *const mmiomt_walk_res)
 {
-    tdx_sanity_check(mmiomt_walk_res != NULL, SCEC_MMIOMT, 2);
+    tdx_sanity_check(mmiomt_walk_res != NULL, FATAL_ERROR_ID_246, 2);
 
     // MMIOMT_L0 does NOT contain any inner nodes to unlock
     if (mmiomt_walk_res->entry_locked)
@@ -162,12 +161,7 @@ void mmiomt_unwalk(mmiomt_walk_res_t *const mmiomt_walk_res)
         // The current level PA is extracted from the parent node
         mmiomt_pa.page_4k_num = mmiomt_walk_res->mmiomt_path_arr[level_idx + 1]->qnode[entry_idx_arr[level_idx]].pa;
 
-        pamt_unwalk(
-            mmiomt_pa,
-            mmiomt_walk_res->pamt_block_arr[level_idx],
-            mmiomt_walk_res->pamt_path_arr[level_idx],
-            TDX_LOCK_SHARED,
-            PT_4KB);
+        pamt_unwalk(&mmiomt_walk_res->pamt_walk_result_arr[level_idx]);
         free_la(mmiomt_walk_res->mmiomt_path_arr[level_idx]);
     }
 }
@@ -183,7 +177,7 @@ mmiomt_data_t *mmiomt_implicit_get(
     // Any other higher level doesn't contain any data nodes
     if (mmiomt_idx.level > MMIOMT_L2)
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_86, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     pa_t tbl_pa = {.raw = 0};
@@ -194,7 +188,7 @@ mmiomt_data_t *mmiomt_implicit_get(
     // Check root present bit
     if (!root_mmiomt_entry.qnode[0].p)
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_87, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     // Get pa from root
@@ -220,14 +214,14 @@ mmiomt_data_t *mmiomt_implicit_get(
         // If data entry reached, return found entry without freeing it
         if (curr_entry->type == MMIOMT_DATA)
         {
-            tdx_sanity_check(i == mmiomt_lvl, SCEC_MMIOMT, 1);
+            tdx_sanity_check(i == mmiomt_lvl, FATAL_ERROR_ID_247, 1);
             goto EXIT;
         }
 
         // Check qnode present bit
         if (!curr_entry->qnode[entry_idx_arr[i - 1]].p)
         {
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_88, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
         // Set next pa

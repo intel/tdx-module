@@ -47,8 +47,7 @@ api_error_type tdh_iq_inv_request(
     // TDR related variables
     pa_t tdr_pa = {.raw = inv_subject};
     tdr_t *tdr_ptr = NULL;                   // Pointer to the TDR page (linear address)
-    pamt_block_t tdr_pamt_block;             // TDR PAMT block
-    pamt_entry_t *tdr_pamt_entry_ptr = NULL; // Pointer to the TDR PAMT entry
+    pamt_walk_result_t tdr_pamt_walk_result;
     bool_t is_tdr_locked = false;            // Indicate TDR is locked
     tdcs_t *tdcs_ptr = NULL;                 // Pointer to the TDCS structure (Multi-page)
     bool_t op_state_locked_flag = false;
@@ -123,8 +122,7 @@ api_error_type tdh_iq_inv_request(
             TDX_RANGE_RO,
             TDX_LOCK_SHARED,
             PT_TDR,
-            &tdr_pamt_block,
-            &tdr_pamt_entry_ptr,
+            &tdr_pamt_walk_result,
             &is_tdr_locked,
             &tdr_ptr);
         if (return_val != TDX_SUCCESS)
@@ -188,7 +186,7 @@ api_error_type tdh_iq_inv_request(
             }
             is_tdinv_locked = true;
 
-            if ((!tdcs_tdxio_fields_ptr->is_req_active) ||
+            if ((!tdcs_tdxio_fields_ptr->req_active) ||
                 (get_qword_bm(tdcs_tdxio_fields_ptr->req_iommu_bm.qwords, iommu_id_reg.raw) == 0) ||
                 (tdcs_tdxio_fields_ptr->iotlb_committed[iommu_id_reg.raw] == tdcs_tdxio_fields_ptr->req_num))
             {
@@ -230,7 +228,7 @@ api_error_type tdh_iq_inv_request(
             dmar_idx.level = DMAR_PASIDTE_LVL;
             break;
         default:
-            FATAL_ERROR();
+            fatal_error(FATAL_ERROR_ID_121, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
         return_val = dmar_walk(
@@ -441,7 +439,7 @@ api_error_type tdh_iq_inv_request(
 
         break;
     default:
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_122, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     if (inv_req_type.inv_type == INV_REQ_TD)
@@ -527,7 +525,7 @@ EXIT:
         {
             free_la(tdr_ptr);
         }
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
     }
 
     release_iommu_lock(is_iommu_locked, iommu_config_ptr);

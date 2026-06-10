@@ -26,10 +26,10 @@
 
 #include "metadata_generic.h"
 #include "metadata_sys.h"
-#include "auto_gen/global_sys_fields_lookup.h"
+#include GLOBAL_SYS_FIELDS_LOOKUP_HEADER
 #include "helpers/error_reporting.h"
 #include "accessors/data_accessors.h"
-#include "auto_gen/cpuid_configurations.h"
+#include CPUID_CONFIGURATIONS_HEADER
 #include "helpers/migration.h"
 #include "data_structures/loader_data.h"
 #include "x86_defs/msr_defs.h"
@@ -76,27 +76,27 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
             }
             else if (entry->field_id.field_code == MD_SYS_BUILD_DATE_FIELD_CODE)
             {
-                *element_array = TDX_MODULE_BUILD_DATE;
+                *element_array = GLOBAL_TDX_MODULE_BUILD_DATE;
             }
             else if (entry->field_id.field_code == MD_SYS_BUILD_NUM_FIELD_CODE)
             {
-                *element_array = TDX_MODULE_BUILD_NUM;
+                *element_array = GLOBAL_TDX_MODULE_BUILD_NUM;
             }
             else if (entry->field_id.field_code == MD_SYS_MINOR_VERSION_FIELD_CODE)
             {
-                *element_array = TDX_MODULE_MINOR_VER;
+                *element_array = GLOBAL_TDX_MODULE_MINOR_VER;
             }
             else if (entry->field_id.field_code == MD_SYS_MAJOR_VERSION_FIELD_CODE)
             {
-                *element_array = TDX_MODULE_MAJOR_VER;
+                *element_array = GLOBAL_TDX_MODULE_MAJOR_VER;
             }
             else if (entry->field_id.field_code == MD_SYS_UPDATE_VERSION_FIELD_CODE)
             {
-                *element_array = TDX_MODULE_UPDATE_VER;
+                *element_array = GLOBAL_TDX_MODULE_UPDATE_VER;
             }
             else if (entry->field_id.field_code == MD_SYS_INTERNAL_VERSION_FIELD_CODE)
             {
-                *element_array = TDX_MODULE_INTERNAL_VER;
+                *element_array = GLOBAL_TDX_MODULE_INTERNAL_VER;
             }
             else
             {
@@ -122,6 +122,7 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
                 tdx_features_0.raw = 0;
                 tdx_features_0.td_migration = 1;
                 tdx_features_0.service_td = 1;
+                tdx_features_0.partitioned_td_migration = 1;
                 tdx_features_0.td_preserving = 1;
                 tdx_features_0.tdg_vp_rdwr = 1;
                 tdx_features_0.relaxed_mem_mng_concurrency = 1;
@@ -145,10 +146,13 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
                 tdx_features_0.fixed_ctr12_prof = 1;
                 tdx_features_0.maxpa_virt = 1;
                 tdx_features_0.maxgpa_virt = 1;
+                tdx_features_0.fatal_diagnostics = 1;
                 tdx_features_0.cpuid2_virt = 1;
                 tdx_features_0.enhanced_event_filtering = 0;
                 tdx_features_0.tdx_io = get_sysinfo_table()->mcheck_fields.io_sys_info_table_version > 0? 1: 0;
                 tdx_features_0.tdx_connect_partitioning = tdx_features_0.tdx_io;
+                tdx_features_0.dynamic_pamt = 1;
+                tdx_features_0.import_page_status = 1;
 
                 *element_array = tdx_features_0.raw;
             }
@@ -209,6 +213,15 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
                      entry->field_id.field_code == MD_SYS_PAMT_1G_ENTRY_SIZE_FIELD_CODE)
             {
                 *element_array = sizeof(pamt_entry_t);
+            }
+            else if (entry->field_id.field_code == MD_SYS_PAMT_PAGE_BITMAP_ENTRY_BITS_FIELD_CODE)
+            {
+                *element_array = 1;
+            }
+            else if (entry->field_id.field_code == MD_SYS_MIN_DYNAMIC_PAMT_NUM_HKID_BITS_FIELD_CODE)
+            {
+                *element_array = global_data->max_pa > MAX_DYNAMIC_PAMT_HKID_START_BIT ?
+                        (global_data->max_pa - MAX_DYNAMIC_PAMT_HKID_START_BIT) : 0;
             }
             else
             {
@@ -424,15 +437,15 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
         case MD_SYS_TDX_MODULE_HANDOFF_CLASS_CODE:
             if (entry->field_id.field_code == MD_SYS_MODULE_HV_FIELD_CODE)
             {
-                *element_array = TDX_MODULE_HV;
+                *element_array = GLOBAL_TDX_MODULE_HV;
             }
             else if (entry->field_id.field_code == MD_SYS_MIN_UPDATE_HV_FIELD_CODE)
             {
-                *element_array = TDX_MIN_UPDATE_HV;
+                *element_array = GLOBAL_TDX_MIN_UPDATE_HV;
             }
             else if (entry->field_id.field_code == MD_SYS_NO_DOWNGRADE_FIELD_CODE)
             {
-                *element_array = TDX_NO_DOWNGRADE;
+                *element_array = GLOBAL_TDX_NO_DOWNGRADE;
             }
             else if (entry->field_id.field_code == MD_SYS_NUM_HANDOFF_PAGES_FIELD_CODE)
             {
@@ -534,7 +547,7 @@ api_error_code_e md_sys_read_element(md_field_id_t field_id, const md_lookup_t* 
         uint64_t elem_num_in_field = (field_id.field_code - entry->field_id.field_code) % entry->num_of_elem;
         uint64_t offset = elem_num_in_field * elem_size;
 
-        tdx_sanity_check(offset + elem_size <= array_size, SCEC_METADATA_HANDLER_SOURCE, 20);
+        tdx_sanity_check(offset + elem_size <= array_size, FATAL_ERROR_ID_233, 20);
 
         uint64_t* elem_ptr = (uint64_t*)((uint8_t*)element_array + offset);
         read_value = *elem_ptr;
@@ -585,7 +598,7 @@ api_error_code_e md_sys_read_field(md_field_id_t field_id, const md_lookup_t* en
         for (uint32_t i = 0; i < entry->num_of_elem; i++)
         {
             uint64_t offset = i * elem_size;
-            tdx_sanity_check(offset + elem_size <= array_size, SCEC_METADATA_HANDLER_SOURCE, 21);
+            tdx_sanity_check(offset + elem_size <= array_size, FATAL_ERROR_ID_234, 21);
             uint64_t* elem_ptr = (uint64_t*)((uint8_t*)element_array + offset);
             read_value = *elem_ptr;
             value[i] = read_value & read_mask;

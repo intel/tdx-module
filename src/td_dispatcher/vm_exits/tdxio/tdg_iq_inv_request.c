@@ -19,7 +19,6 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.                                            
 //                                                                               
 // SPDX-License-Identifier: MIT
-
 /**
  * @file tdg_dmar_accept.c
  * @brief TDGDMARACCEPT API handler
@@ -84,14 +83,14 @@ api_error_type tdg_iq_inv_request(
     is_tdinv_locked = true;
 
     // TDCS.REQ_ACTIVE must be 0. There is no outstanding TDG invalidation request. Only 1 at time is allowed, or TDX_GUEST_INV_IN_PROGRESS returned
-    if (tdcs_tdxio_fields_ptr->is_req_active)
+    if (tdcs_tdxio_fields_ptr->req_active)
     {
         TDX_ERROR("TD invalidation already requested\n")
         return_val = api_error_with_operand_id(TDX_GUEST_INV_IN_PROGRESS, 0);
         goto EXIT;
     }
 
-    tdcs_tdxio_fields_ptr->status_complete_write = false;
+    tdcs_tdxio_fields_ptr->status_complete_wr = false;
 
     // Copy the VMM's input to a trusted buffer
     inv_desc_t *local_inv_buff = (inv_desc_t *)local_data->vp_ctx.tdcs->td_inv_req_buff;
@@ -172,7 +171,7 @@ api_error_type tdg_iq_inv_request(
                 goto EXIT;
             }
 
-            tdcs_tdxio_fields_ptr->status_complete_write = true;
+            tdcs_tdxio_fields_ptr->status_complete_wr = true;
             tdcs_tdxio_fields_ptr->status_complete_gpa.raw = local_inv_buff[i].wait.status_address;
             tdcs_tdxio_fields_ptr->status_complete_data = local_inv_buff[i].wait.status_data;
         }
@@ -200,7 +199,7 @@ api_error_type tdg_iq_inv_request(
 
     if (!is_inv_required)
     {
-        tdcs_tdxio_fields_ptr->status_complete_write = false;
+        tdcs_tdxio_fields_ptr->status_complete_wr = false;
 
         TDX_ERROR("No guest invalidation is required\n");
         return_val = api_error_with_operand_id(TDX_GUEST_INV_NOT_REQUIRED, OPERAND_ID_RDX);
@@ -210,9 +209,9 @@ api_error_type tdg_iq_inv_request(
     basic_memset_to_zero(tdcs_tdxio_fields_ptr->iotlb_committed, TOT_NUM_IOMMUS);
     basic_memset_to_zero(tdcs_tdxio_fields_ptr->iotlb_complete, TOT_NUM_IOMMUS);
     // decrement the required invalidations, if the last entry is a wait descriptor
-    tdcs_tdxio_fields_ptr->req_num = tdcs_tdxio_fields_ptr->status_complete_write ? (uint8_t)num_inv_desc - 1 : (uint8_t)num_inv_desc;
+    tdcs_tdxio_fields_ptr->req_num = tdcs_tdxio_fields_ptr->status_complete_wr ? (uint8_t)num_inv_desc - 1 : (uint8_t)num_inv_desc;
 
-    tdcs_tdxio_fields_ptr->is_req_active = true;
+    tdcs_tdxio_fields_ptr->req_active = true;
 
     return_val = TDX_SUCCESS;
 

@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/td_control_structures.h"
 #include "memory_handlers/keyhole_manager.h"
@@ -48,8 +48,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
     tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
-    pamt_block_t          tdr_pamt_block;            // TDR PAMT block
-    pamt_entry_t        * tdr_pamt_entry_ptr;        // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
     tdcs_t              * tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
@@ -64,8 +63,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     // New TD private page variables
     pa_t                  td_page_pa;                // Physical address of the new TD page
     void                * td_page_ptr;               // Pointer to the new TD page
-    pamt_block_t          td_page_pamt_block;        // TD page PAMT block
-    pamt_entry_t        * td_page_pamt_entry_ptr;    // Pointer to the TD page PAMT entry
+    pamt_walk_result_t    td_page_pamt_walk_result;
     bool_t                td_page_locked_flag = false;   // Indicate TD page is locked
 
     // Source page variables
@@ -91,8 +89,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
                                                  TDX_RANGE_RW,
                                                  TDX_LOCK_EXCLUSIVE,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -130,7 +127,8 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     }
 
     // SEPT and walk to find entry
-    return_val = walk_private_gpa(tdcs_ptr, page_gpa, &page_sept_entry_ptr, &page_level_entry, &page_sept_entry_copy);
+    return_val = walk_private_gpa(tdcs_ptr, page_gpa, tdr_ptr->key_management_fields.hkid,
+                                  &page_sept_entry_ptr, &page_level_entry, &page_sept_entry_copy);
 
     if (return_val != TDX_SUCCESS)
     {
@@ -167,8 +165,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
                                                             TDX_RANGE_RW,
                                                             TDX_LOCK_EXCLUSIVE,
                                                             PT_NDA,
-                                                            &td_page_pamt_block,
-                                                            &td_page_pamt_entry_ptr,
+                                                            &td_page_pamt_walk_result,
                                                             &td_page_locked_flag,
                                                             (void**)&td_page_ptr);
     if (return_val != TDX_SUCCESS)
@@ -209,6 +206,10 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     sha_update_block.api_name.bytes[11] = 'D';
     sha_update_block.gpa = page_gpa.raw;
 
+    // preserve VMM's XCR0 state
+    local_data_ptr->vmm_xcr0_state = ia32_xgetbv(0);
+    ia32_xsetbv(0, TDX_MODULE_XCR0_WITH_AVX);
+
     store_ymms_in_buffer(ymms);
 
     if ((sha_error_code = sha384_update_128B(&(tdcs_ptr->measurement_fields.td_sha_ctx),
@@ -217,25 +218,30 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     {
         // Unexpected error - Fatal Error
         TDX_ERROR("Unexpected error in SHA384 - error = %d\n", sha_error_code);
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_110, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     load_ymms_from_buffer(ymms);
     basic_memset_to_zero(ymms, sizeof(ymms));
 
+    // restore VMM's XCR0 state
+    ia32_xsetbv(0, local_data_ptr->vmm_xcr0_state);
+
     // Increment TDR child count
     tdr_ptr->management_fields.chldcnt++;
 
     // Update the new Secure EPT page’s PAMT entry
-    td_page_pamt_entry_ptr->pt = PT_REG;
-    set_pamt_entry_owner(td_page_pamt_entry_ptr, tdr_pa);
-    td_page_pamt_entry_ptr->bepoch.raw = 0;  // Setting BEPOCH to 0 is required to avoid confusion during page export
+    td_page_pamt_walk_result.pamt_entry_p->pt = PT_REG;
+    set_pamt_entry_owner(td_page_pamt_walk_result.pamt_entry_p, tdr_pa);
+    td_page_pamt_walk_result.pamt_entry_p->bepoch.raw = 0;  // Setting BEPOCH to 0 is required to avoid confusion during page export
+
+    pamt_inc_nl_page_count(td_page_pamt_walk_result.pamt_walk_path_nl[PT_2MB]);
 
 EXIT:
     // Release all acquired locks and free keyhole mappings
     if (td_page_locked_flag)
     {
-        pamt_unwalk(td_page_pa, td_page_pamt_block, td_page_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&td_page_pamt_walk_result);
         free_la(td_page_ptr);
     }
     if (page_sept_entry_ptr != NULL)
@@ -252,7 +258,7 @@ EXIT:
     }
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_ptr);
     }
     return return_val;

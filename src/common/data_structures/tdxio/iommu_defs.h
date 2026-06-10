@@ -176,15 +176,14 @@ typedef union
 } pmem_pcicmd_t;
 tdx_static_assert(sizeof(pmem_pcicmd_t) == 2, pmem_pcicmd_t);
 
-typedef ALIGN(8) struct
+typedef struct
 {
     iommu_states_t state;
     uint8_t padding;
     sharex_hp_lock_t lock;
     uint16_t rp_reg_sts; // rootport bitmap
     uint16_t active_spdm_session_count;
-    uint8_t reserved[5]; // Added to preserve alignment
-    uint8_t padding_1;
+    uint8_t padding_1[6];
     iommu_capabilities_t iommu_cap;
     pa_t t_rtaddr;
     iq_buffer_t t_iqaddr;

@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/td_control_structures.h"
 #include "x86_defs/vmcs_defs.h"
@@ -38,8 +38,8 @@
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
 #include "crypto/sha384.h"
-#include "auto_gen/msr_config_lookup.h"
-#include "auto_gen/cpuid_configurations.h"
+#include MSR_CONFIG_LOOKUP_HEADER
+#include CPUID_CONFIGURATIONS_HEADER
 #include "helpers/cpuid_fms.h"
 
 static void apply_cpuid_xfam_masks(volatile cpuid_config_return_values_t* cpuid_values,
@@ -186,11 +186,11 @@ static api_error_type read_and_set_td_configurations(tdr_t * tdr_ptr,
         goto EXIT;
     }
 
-    tdx_memcpy(tdcs_ptr->measurement_fields.mr_config_id.bytes, sizeof(measurement_t),
+    tdx_memcpy(tdcs_ptr->measurement_fields.mrconfigid.bytes, sizeof(measurement_t),
                td_params_ptr->mr_config_id.bytes, sizeof(measurement_t));
-    tdx_memcpy(tdcs_ptr->measurement_fields.mr_owner.bytes, sizeof(measurement_t),
+    tdx_memcpy(tdcs_ptr->measurement_fields.mrowner.bytes, sizeof(measurement_t),
                td_params_ptr->mr_owner.bytes, sizeof(measurement_t));
-    tdx_memcpy(tdcs_ptr->measurement_fields.mr_owner_config.bytes, sizeof(measurement_t),
+    tdx_memcpy(tdcs_ptr->measurement_fields.mrownerconfig.bytes, sizeof(measurement_t),
                td_params_ptr->mr_owner_config.bytes, sizeof(measurement_t));
 
     if (td_params_ptr->msr_config_ctls.reserved_0 != 0)
@@ -213,7 +213,8 @@ EXIT:
 }
 
 
-static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
+static api_error_type read_and_set_cpuid_configurations(uint64_t target_tdr_pa,
+                                                        tdcs_t * tdcs_ptr,
                                                         td_params_t * td_params_ptr,
                                                         tdx_module_global_t * global_data_ptr,
                                                         tdx_module_local_t * local_data_ptr)
@@ -225,6 +226,7 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
     td_param_attributes_t attributes;
     ia32_xcr0_t xfam;
     api_error_type return_val = UNINITIALIZE_ERROR;
+    cpuid_23_0_eax_t tmp_cpuid_23_eax_val = { .raw = 0 };
 
     attributes.raw = tdcs_ptr->executions_ctl_fields.attributes.raw;
     xfam.raw = tdcs_ptr->executions_ctl_fields.xfam;
@@ -294,7 +296,6 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
 
                 final_tdcs_values.eax = cpuid_01_eax.raw;
             }
-
             else if (tdcs_ptr->executions_ctl_fields.attributes.migratable)
             {
                 if (!check_fms_config(cpuid_01_eax))
@@ -439,7 +440,8 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
            }
            else
            {
-               FATAL_ERROR();
+               extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_td_handle(target_tdr_pa);
+               fatal_error(FATAL_ERROR_ID_57, FATAL_INFO_FORMAT_TD_HANDLE_INFO, &extended_fatal_info);
            }
         }
         else if (cpuid_leaf_subleaf.leaf == 0xA)
@@ -550,6 +552,22 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
                 final_tdcs_values.low = 0;
                 final_tdcs_values.high = 0;
             }
+            else
+            {
+                if (cpuid_leaf_subleaf.subleaf == 0)
+                {
+                    tmp_cpuid_23_eax_val.raw = final_tdcs_values.eax;
+                    tdcs_ptr->executions_ctl_fields.perfmon_ext_subleaves_bitmap = final_tdcs_values.eax;
+                }
+                else
+                {
+                    if ((tmp_cpuid_23_eax_val.raw & BIT(cpuid_leaf_subleaf.subleaf)) == 0)
+                    {
+                        final_tdcs_values.low = 0;
+                        final_tdcs_values.high = 0;
+                    }
+                }
+            }
         }
         else if (cpuid_leaf_subleaf.leaf == 0x80000008)
         {
@@ -608,8 +626,8 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
         }
 
         // Write the CPUID values to TDCS and set the CPUID_VALID flag
-        tdcs_ptr->cpuid_config_vals[cpuid_index].low = final_tdcs_values.low;
-        tdcs_ptr->cpuid_config_vals[cpuid_index].high = final_tdcs_values.high;
+        tdcs_ptr->cpuid_values[cpuid_index].low = final_tdcs_values.low;
+        tdcs_ptr->cpuid_values[cpuid_index].high = final_tdcs_values.high;
         tdcs_ptr->executions_ctl_fields.cpuid_valid[cpuid_index] = true;
     }
 
@@ -647,8 +665,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
     tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
-    pamt_block_t          tdr_pamt_block;            // TDR PAMT block
-    pamt_entry_t        * tdr_pamt_entry_ptr;        // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
     tdcs_t              * tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
@@ -683,8 +700,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
                                                  TDX_RANGE_RW,
                                                  TDX_LOCK_EXCLUSIVE,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -725,7 +741,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
     tdcs_ptr->epoch_tracking.epoch_and_refcount.refcount[1] = 0;
 
     uint64_t native_tsc_frequency = get_global_data()->native_tsc_frequency;
-    tdx_sanity_check((native_tsc_frequency <= BIT_MASK_32BITS), SCEC_SEAMCALL_SOURCE(TDH_MNG_INIT_LEAF), 0);
+    tdx_sanity_check((native_tsc_frequency <= BIT_MASK_32BITS), FATAL_ERROR_ID_288, 0);
     // safe to cast to 32-bits due to the sanity check above
     tdcs_ptr->executions_ctl_fields.hp_lock_timeout = translate_usec_to_tsc(DEFAULT_HP_LOCK_TIMEOUT_USEC, (uint32_t)native_tsc_frequency);
 
@@ -796,8 +812,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
     /**
      *  Handle CPUID Configuration
      */
-    return_val = read_and_set_cpuid_configurations(tdcs_ptr, td_params_ptr, global_data_ptr,
-                                                   local_data_ptr);
+    return_val = read_and_set_cpuid_configurations(target_tdr_pa, tdcs_ptr, td_params_ptr, global_data_ptr, local_data_ptr);
 
     if (return_val != TDX_SUCCESS)
     {
@@ -818,16 +833,14 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
         }
     }
 
-
-    if (!td_immutable_state_cross_check(tdcs_ptr))
+    return_val = td_immutable_state_cross_check(tdcs_ptr, false);
+    if (TDX_SUCCESS != return_val)
     {
         TDX_ERROR("td_immutable_state_cross_check failed\n");
-        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
         goto EXIT;
     }
 
     // ALL_CHECKS_PASSED:  The function is guaranteed to succeed
-
     /**
      *  Build the MSR bitmaps
      */
@@ -836,20 +849,27 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
     // Initialize the virtual MSR values
     init_virt_ia32_vmx_msrs(tdcs_ptr);
 
+     // preserve VMM's XCR0 state
+    local_data_ptr->vmm_xcr0_state = ia32_xgetbv(0);
+    ia32_xsetbv(0, TDX_MODULE_XCR0_WITH_AVX);
+
+    store_ymms_in_buffer(ymms);
+
     /**
      *  Initialize the TD Measurement Fields
      */
-    store_ymms_in_buffer(ymms);
-
     if ((sha_error_code = sha384_init(&(tdcs_ptr->measurement_fields.td_sha_ctx))) != 0)
     {
         // Unexpected error - Fatal Error
         TDX_ERROR("Unexpected error in SHA384 - error = %d\n", sha_error_code);
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_58, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 
     load_ymms_from_buffer(ymms);
     basic_memset_to_zero(ymms, sizeof(ymms));
+
+    // restore VMM's XCR0 state
+    ia32_xsetbv(0, local_data_ptr->vmm_xcr0_state);
 
     // Zero the RTMR hash values
     basic_memset_to_zero(tdcs_ptr->measurement_fields.rtmr, (SIZE_OF_SHA384_HASH_IN_QWORDS<<3)*NUM_RTMRS);
@@ -862,14 +882,14 @@ EXIT:
     {
         free_la(event_filters_p);
     }
-    if (tdr_locked_flag)
-    {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
-        free_la(tdr_ptr);
-    }
     if (tdcs_ptr != NULL)
     {
         free_la(tdcs_ptr);
+    }
+    if (tdr_locked_flag)
+    {
+        pamt_unwalk(&tdr_pamt_walk_result);
+        free_la(tdr_ptr);
     }
     if (td_params_ptr != NULL)
     {

@@ -276,7 +276,7 @@ EXIT:
 
 void dmar_unwalk(dmar_walk_res_t *const dmar_walk_res)
 {
-    tdx_sanity_check(dmar_walk_res != NULL, SCEC_DMAR_SOURCE, 1);
+    tdx_sanity_check(dmar_walk_res != NULL, FATAL_ERROR_ID_243, 1);
 
     if (dmar_walk_res->entry_locked)
     {
@@ -306,7 +306,7 @@ void dmar_unwalk(dmar_walk_res_t *const dmar_walk_res)
         break;
     default:
         TDX_ERROR("Invalid dmar level (%u)\n", dmar_walk_res->dmar_level);
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_76, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
 }
 
@@ -329,12 +329,10 @@ _STATIC_INLINE_ api_error_type dmar_table_alloc(
 {
     uint8_t alloc_page_cnt = 0; // Indicates how many pages were allocated successfully
 
-    pamt_block_t next_page_pamt_block;
-    pamt_entry_t *next_page_pamt_entry_ptr = NULL;
+    pamt_walk_result_t next_page_pamt_walk_result;
     bool_t pamt_locked_flag = false; // Flag indicating PAMT entry is locked
 
-    pamt_entry_t *pamt_entry_arr[num_pages]; // store walked PAMT entries
-    pamt_block_t pamt_block_arr[num_pages];  // store walked PAMT blocks
+    pamt_walk_result_t pamt_walk_result_arr[num_pages];
 
     api_error_type return_val = UNINITIALIZE_ERROR;
 
@@ -355,16 +353,14 @@ _STATIC_INLINE_ api_error_type dmar_table_alloc(
             OPERAND_ID_RDX,
             TDX_LOCK_EXCLUSIVE,
             PT_NDA,
-            &next_page_pamt_block,
-            &next_page_pamt_entry_ptr,
+            &next_page_pamt_walk_result,
             &pamt_locked_flag);
         if (return_val != TDX_SUCCESS)
         {
             TDX_ERROR("Failed to check/lock/map a DMAR page - error = %llx\n", return_val);
             goto EXIT;
         }
-        pamt_entry_arr[alloc_page_cnt] = next_page_pamt_entry_ptr;
-        pamt_block_arr[alloc_page_cnt] = next_page_pamt_block;
+        pamt_walk_result_arr[alloc_page_cnt] = next_page_pamt_walk_result;
     }
 
     // Successfully locked all PAMT pages.
@@ -372,21 +368,19 @@ _STATIC_INLINE_ api_error_type dmar_table_alloc(
     for (uint8_t i = 0; i < num_pages; i++)
     {
         // Initialize page
-        pamt_entry_arr[i]->owner = pamt_val_ptr->owner;
-        pamt_entry_arr[i]->bepoch = pamt_val_ptr->bepoch;
-        pamt_entry_arr[i]->pt = pamt_val_ptr->pt;
+        pamt_walk_result_arr[i].pamt_entry_p->owner = pamt_val_ptr->owner;
+        pamt_walk_result_arr[i].pamt_entry_p->bepoch = pamt_val_ptr->bepoch;
+        pamt_walk_result_arr[i].pamt_entry_p->pt = pamt_val_ptr->pt;
     }
 
     return_val = TDX_SUCCESS;
 
 EXIT:
-    tdx_sanity_check(alloc_page_cnt <= 127, SCEC_DMAR_SOURCE, 2);
+    tdx_sanity_check(alloc_page_cnt <= 127, FATAL_ERROR_ID_244, 2);
     for (int8_t i = (int8_t)alloc_page_cnt - 1; i >= 0; i--)
     {
-        pa_t next_page_pa = {.raw = start_pa.raw + (uint64_t)i * TDX_PAGE_SIZE_IN_BYTES};
-        next_page_pamt_entry_ptr = pamt_entry_arr[i];
-        next_page_pamt_block = pamt_block_arr[i];
-        pamt_unwalk(next_page_pa, next_page_pamt_block, next_page_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        next_page_pamt_walk_result = pamt_walk_result_arr[i];
+        pamt_unwalk(&next_page_pamt_walk_result);
     }
 
     return return_val;
@@ -407,12 +401,10 @@ _STATIC_INLINE_ api_error_type dmar_table_free(
 {
     uint8_t reached_page = 0; // Indicates how many PAMT pages were mapped successfully
 
-    pamt_block_t next_page_pamt_block;
-    pamt_entry_t *next_page_pamt_entry_ptr = NULL;
+    pamt_walk_result_t next_page_pamt_walk_result;
     bool_t pamt_locked_flag = false; // Flag indicating PAMT entry is locked
 
-    pamt_entry_t *pamt_entry_arr[num_pages]; // store walked PAMT entries
-    pamt_block_t pamt_block_arr[num_pages];  // store walked PAMT blocks
+    pamt_walk_result_t pamt_walk_result_arr[num_pages];
 
     api_error_type return_val = UNINITIALIZE_ERROR;
 
@@ -432,32 +424,28 @@ _STATIC_INLINE_ api_error_type dmar_table_free(
             OPERAND_ID_RCX,
             TDX_LOCK_EXCLUSIVE,
             PT_IOMMU_MT,
-            &next_page_pamt_block,
-            &next_page_pamt_entry_ptr,
+            &next_page_pamt_walk_result,
             &pamt_locked_flag);
         if (return_val != TDX_SUCCESS)
         {
             TDX_ERROR("Failed to check/lock/remove a DMAR page - error = %llx\n", return_val);
             goto EXIT;
         }
-        pamt_entry_arr[reached_page] = next_page_pamt_entry_ptr;
-        pamt_block_arr[reached_page] = next_page_pamt_block;
+        pamt_walk_result_arr[reached_page] = next_page_pamt_walk_result;
     }
     // Successfully locked all PAMT pages.
     // Update their value
     for (uint8_t i = 0; i < reached_page; i++)
     {
-        pamt_entry_arr[i]->pt = PT_NDA;
+        pamt_walk_result_arr[i].pamt_entry_p->pt = PT_NDA;
     }
 
     return_val = TDX_SUCCESS;
 EXIT:
     for (int8_t i = (int8_t)reached_page - 1; i >= 0; i--)
     {
-        pa_t next_page_pa = {.raw = start_pa.raw + (uint64_t)i * TDX_PAGE_SIZE_IN_BYTES};
-        next_page_pamt_entry_ptr = pamt_entry_arr[i];
-        next_page_pamt_block = pamt_block_arr[i];
-        pamt_unwalk(next_page_pa, next_page_pamt_block, next_page_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        next_page_pamt_walk_result = pamt_walk_result_arr[i];
+        pamt_unwalk(&next_page_pamt_walk_result);
     }
     return return_val;
 }
@@ -496,7 +484,7 @@ void dmar_map_entry(
             dmar_entry_ptr->raw.qwords[7]);
         break;
     default:
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_77, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         break;
     }
     dmar_set_state_info(dmar_walk_res, dmar_state_info);
@@ -779,7 +767,7 @@ void dmar_arc_read(const dmar_walk_res_t *const dmar_walk_res)
         local_data_ptr->vmm_regs.r15 = dmar_walk_res->pasidte_ptr->raw.qwords[7];
         break;
     default:
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_78, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
     local_data_ptr->vmm_regs.rdx = dmar_get_state_info(dmar_walk_res).raw;
 }
@@ -1094,7 +1082,7 @@ bool_t is_dmar_child_entires_free(const dmar_walk_res_t *const dmar_walk_res)
     }
     default:
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_79, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
     }
     ret_val = true;

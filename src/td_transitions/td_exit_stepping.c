@@ -203,7 +203,7 @@ stepping_filter_e vmexit_stepping_filter(vm_vmexit_exit_reason_t vm_exit_reason,
             // Always use instruction count heuristic if Perfmon is disabled, regardless of TDCS.ATTRIBUTES.ICSSD
             if (!perfmon_enabled)
             {
-                uint64_t inst_retired = ia32_rdmsr(IA32_FIXED_CTR0_MSR_ADDR);
+                uint64_t inst_retired = ia32_rdmsr(IA32_PMC_FX0_CTR_MSR_ADDR);
                 uint64_t rcx_delta = ld_p->guest_rcx_on_td_entry - ld_p->vp_ctx.tdvps->guest_state.gpr_state.rcx;
 
                 if ((inst_retired > 1) || ((0 == inst_retired) && (rcx_delta > 1)))
@@ -227,7 +227,13 @@ stepping_filter_e vmexit_stepping_filter(vm_vmexit_exit_reason_t vm_exit_reason,
             }
 
             // start stepping mode
-            ld_p->single_step_def_state.num_inst_step = (lfsr_get_random() & 0x1F) + 1;
+            uint64_t rand = 0;
+            if (!get_random_64b(&rand))
+            {
+                return FILTER_FAIL_TDEXIT_RDRAND;
+            }
+
+            ld_p->single_step_def_state.num_inst_step = (rand & 0x1F) + 1;
             ld_p->single_step_def_state.in_inst_step_mode = true;
 
             // Block external interrupts during stepping by raising TPR to 15
@@ -249,7 +255,12 @@ stepping_filter_e vmexit_stepping_filter(vm_vmexit_exit_reason_t vm_exit_reason,
         // If NMI or INIT started the stepping, remember that
         // Note: no need to remember SMI (and PREQ) exiting because
         // uCode keeps it pending when delivering SMI exiting
-        ld_p->single_step_def_state.nmi_exit_occured |= is_nmi_exiting(vm_exit_reason, vm_exit_inter_info);
+        if (is_nmi_exiting(vm_exit_reason, vm_exit_inter_info))
+        {
+            ld_p->single_step_def_state.nmi_exit_occured = true;
+            ld_p->single_step_def_state.nmisrc |= (vm_exit_qualification.nmi.source_identification);
+        }
+
         ld_p->single_step_def_state.init_exit_occured |= is_init_exiting(vm_exit_reason);
 
         // If stepping mode not done yet, resume the TD to execute next step
@@ -279,10 +290,11 @@ stepping_filter_e vmexit_stepping_filter(vm_vmexit_exit_reason_t vm_exit_reason,
     {
         // If NMI started the stepping, and current exiting is not NMI,
         // push a new NMI into local APIC
-        if (ld_p->single_step_def_state.nmi_exit_occured &&
-                !is_nmi_exiting(vm_exit_reason, vm_exit_inter_info))
+        if (ld_p->single_step_def_state.nmi_exit_occured && !is_nmi_exiting(vm_exit_reason, vm_exit_inter_info))
         {
-            send_self_ipi(APIC_DELIVERY_NMI, 0);
+            uint32_t vector = ld_p->single_step_def_state.nmisrc != 0 ? bit_scan_forward32(ld_p->single_step_def_state.nmisrc) : 0;
+
+            send_self_ipi(APIC_DELIVERY_NMI, vector);
         }
 
         // If INIT started the stepping, and current exiting is not INIT,
@@ -318,7 +330,7 @@ stepping_filter_e vmexit_stepping_filter(vm_vmexit_exit_reason_t vm_exit_reason,
             }
             else
             {
-                ia32_wrmsr(IA32_FIXED_CTR0_MSR_ADDR, 2);
+                ia32_wrmsr(IA32_PMC_FX0_CTR_MSR_ADDR, 2);
             }
 
             return FILTER_OK_RESUME_TD;

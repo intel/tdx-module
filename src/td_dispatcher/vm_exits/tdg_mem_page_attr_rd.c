@@ -60,8 +60,8 @@ api_error_type tdg_mem_page_attr_rd(pa_t page_gpa)
     tdcs_t *tdcs_ptr = local_data_ptr->vp_ctx.tdcs;
     tdr_t *tdr_ptr = local_data_ptr->vp_ctx.tdr;
 
-    tdx_sanity_check(tdcs_ptr != NULL, SCEC_TDCALL_SOURCE(TDG_MEM_PAGE_ATTR_RD_LEAF), 0);
-    tdx_sanity_check(tdr_ptr != NULL, SCEC_TDCALL_SOURCE(TDG_MEM_PAGE_ATTR_RD_LEAF), 1);
+    tdx_sanity_check(tdcs_ptr != NULL, FATAL_ERROR_ID_260, 0);
+    tdx_sanity_check(tdr_ptr != NULL, FATAL_ERROR_ID_261, 1);
 
     if (!check_gpa_validity(page_gpa, tdcs_ptr->executions_ctl_fields.gpaw, PRIVATE_ONLY, tdcs_ptr->executions_ctl_fields.virt_maxpa))
     {
@@ -73,7 +73,7 @@ api_error_type tdg_mem_page_attr_rd(pa_t page_gpa)
     // Check SEPT and walk to find entry
     // Ignore success/failure indication - this is handled by the check below.
     page_sept_entry_ptr = secure_ept_walk(tdcs_ptr->executions_ctl_fields.eptp, page_gpa,
-                                &page_level_entry, &page_sept_entry_copy, false);
+                                tdr_ptr->key_management_fields.hkid, &page_level_entry, &page_sept_entry_copy, false);
 
     // Create a copy of the SEPT entry and mark it locally as locked (guest-side only).
     return_val = sept_lock_acquire_guest(page_sept_entry_ptr);
@@ -121,15 +121,16 @@ api_error_type tdg_mem_page_attr_rd(pa_t page_gpa)
                                              &page_level_entry, &l2_sept_entry_copy, &l2_septe_ptr);
         if (return_val != TDX_SUCCESS)
         {
-            FATAL_ERROR();
+            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(local_data_ptr->vp_ctx.tdr_pa.raw, vm_id, page_level_entry, page_gpa.raw, *l2_septe_ptr);
+            fatal_error(FATAL_ERROR_ID_2, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
         }
 
         /**
-         * Get the L2 attributes.
-         *  L2 SEPT entry does not hold a BLOCKEDW indication of its own, so provide it based on the L1 state.
+         * Get the L2 attributes.  L2 SEPT entry does not hold BLOCKEDW or PENDING indications
+         * of its own, so provide them based on the L1 state.
          */
-        gpa_attr.attr_arr[vm_id] = l2_sept_get_gpa_attr(l2_septe_ptr,
-                                        sept_state_is_any_blockedw(page_sept_entry_copy));
+        gpa_attr.attr_arr[vm_id] = l2_sept_get_gpa_attr(l2_septe_ptr, sept_state_is_any_blockedw(page_sept_entry_copy), 
+            sept_state_is_any_pending_inc_mmiol(page_sept_entry_copy));
 
         free_la(l2_septe_ptr);
     }

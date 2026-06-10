@@ -33,7 +33,7 @@
 #include "x86_defs/x86_defs.h"
 #include "data_structures/tdx_global_data.h"
 
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 // With dynamic PAMT, the number of non-HKID bits in HPA must be at most 48
 #define MAX_DYNAMIC_PAMT_HKID_START_BIT         48
@@ -48,14 +48,15 @@ typedef enum {
     PT_TDR   = 4,
     PT_TDCX  = 5,
     PT_TDVPR = 6,
-    PT_EPT   = 8,
+    //reserved = 7,
+    PT_EPT   = 8
     // TDX-IO
-    PT_DEVIFCS_R  = 9,
+    ,PT_DEVIFCS_R  = 9,
     PT_DEVIFCS_NR = 10,
     PT_IOMMU_MT   = 11,
     PT_MMIO_MT    = 12,
     PT_DEVIF_MT   = 13
-
+    ,PT_PAMT  = 15
 } page_type_t;
 
 /**
@@ -102,7 +103,8 @@ typedef struct pamt_entry_s
     struct
     {
         sharex_hp_lock_t entry_lock; // 2 byte (16 bit)
-        page_type_t pt : 8;
+        page_type_t pt : 5;
+        uint64_t reserved : 3;
         uint64_t owner : 40; // don't access this field directly, use accessors below
     }; // primary
 
@@ -114,19 +116,35 @@ typedef struct pamt_entry_s
 tdx_static_assert(sizeof(pamt_entry_t) == PAMT_ENTRY_SIZE_IN_BYTES, pamt_entry_t);
 tdx_static_assert((MOVDIR64_CHUNK_SIZE % sizeof(pamt_entry_t)) == 0, pamt_entry_t_2);
 
+#define PAMT_NL_PAGE_COUNT_MASK         0x3FF
+
 /**
  * @struct pamt_entry_t
  *
  * @brief PAMT entry structure
  */
-typedef struct PACKED pamt_non_leaf_entry_s
+typedef struct pamt_non_leaf_entry_s
 {
-    sharex_hp_lock_t entry_lock;     // bits  0 : 15
-    page_type_t      pt        :  5; // bits 16 : 20
-    uint64_t         reserved0 :  7; // bits 21 : 27
-    uint64_t         page_hpa0 : 36; // bits 28 : 63 (don't access this field directly, use accessors below)
-    uint64_t         reserved1 : 28; // bits 34 : 91
-    uint64_t         page_hpa1 : 36; // bits 92 :127 (don't access this field directly, use accessors below)
+    struct
+    {
+        sharex_hp_lock_t entry_lock; // 2-byte
+        page_type_t      pt        :  5;
+        uint64_t         reserved0 :  7;
+        uint64_t         page_hpa0 : 36; // don't access this field directly, use accessors below
+    }; // first quadword
+
+    union
+    {
+        struct
+        {
+            uint64_t         page_count : 10;
+            uint64_t         reserved1  : 18;
+            uint64_t         page_hpa1  : 36; // don't access this field directly, use accessors below
+        }; // second quadword
+
+        uint64_t second_quadword;
+    };
+
 } pamt_non_leaf_entry_t;
 tdx_static_assert(sizeof(pamt_non_leaf_entry_t) == PAMT_ENTRY_SIZE_IN_BYTES, pamt_non_leaf_entry_t);
 tdx_static_assert((MOVDIR64_CHUNK_SIZE % sizeof(pamt_non_leaf_entry_t)) == 0, pamt_non_leaf_entry_t_2);
@@ -170,6 +188,7 @@ _STATIC_INLINE_ pa_t get_pamt_node_page1(pamt_non_leaf_entry_t* pamt_entry)
  * @brief 1GB PAMT block virtual structure. Contains 3 physical pointers, 1 to PAMT_1GB entry
  *        from the TDMR.PAMT_1GB array, and to the corresponding (to that 1GB area) PAMT_2MB entries (512)
  *        and PAMT_4KB entries (512*512).
+ *        In dynamic PAMT mode, the 4KB pointer points to a 4K page bitmap array
  */
 typedef struct pamt_block_s
 {
@@ -179,6 +198,87 @@ typedef struct pamt_block_s
     pamt_entry_t* pamt_4kb_p;
 } pamt_block_t;
 
+/**
+ * @struct pamt_walk_result_t
+ *
+ * @brief Pointers stored by pamt_walk function for all levels reached.
+ *        Pointers at index < level_reached are invalid and set to NULL.
+ *        A union is made for convenience, since some entries can be non-leaf, and some can be leaf.
+ *        Once created by pamt_walk, at the usage end must be passed to pamt_unwalk to free all the pointers.
+ */
+typedef struct pamt_walk_result_s
+{
+    bool_t valid;
+    page_size_t level_reached;
+
+    union
+    {
+        pamt_entry_t*          pamt_walk_path[PT_1GB + 1];
+        pamt_non_leaf_entry_t* pamt_walk_path_nl[PT_1GB + 1];
+    };
+
+    lock_type_t leaf_lock_type;
+    pamt_entry_t* pamt_entry_p; // Actual PAMT entry that should be used in most cases
+} pamt_walk_result_t;
+
+/**
+ * @brief Set, get or clear a bit in dynamic PAMT 4K bitmap, corresponding to the PAMT
+ *
+ * @param pamt_block - PAMT block related to the PAMT page
+ * @param hpa - Physical address of the PAMT page
+ *
+ * @return If bit setting was successful
+ */
+bool_t dynamic_pamt_4k_bitmap_set(pamt_block_t* pamt_block, uint64_t hpa);
+uint8_t dynamic_pamt_4k_bitmap_get(pamt_block_t* pamt_block, uint64_t hpa);
+void dynamic_pamt_4k_bitmap_clear(pamt_block_t* pamt_block, uint64_t hpa);
+
+#define PAMT_REMOVAL_HINT_BIT_NUM       62
+#define PAMT_REMOVAL_HINT               BIT(PAMT_REMOVAL_HINT_BIT_NUM)
+
+/**
+ * @brief If the provided non-leaf PAMT entry pointer (should happen only if the TDX module is configured for
+ *         Dynamic PAMT and the non-leaf entry is a PAMT_2M entry), atomically increment the non-leaf entry's page count.
+ *         Else, do nothing.
+ *
+ * @param pamt_nl_entry
+ */
+void pamt_inc_nl_page_count(pamt_non_leaf_entry_t* pamt_nl_entry);
+
+/**
+ * @brief If the provided non-leaf PAMT entry pointer in non-NULL (should happen only if the TDX module is configured for
+ *        Dynamic PAMT and the non-leaf entry is a PAMT_2M entry):
+ *        - Atomically decrement the non-leaf entry's page count.
+ *        - If the number of entries is decremented to 0, return true.  Else, return false.
+ *        Else, do nothing and return false.
+ *
+ * @param pamt_nl_entry
+ */
+bool_t pamt_dec_nl_page_count(pamt_non_leaf_entry_t* pamt_nl_entry);
+
+_STATIC_INLINE_ uint64_t pamt_dec_nl_page_count_and_get_hint(pamt_non_leaf_entry_t* pamt_nl_entry)
+{
+    return VAL_OR_ZERO(PAMT_REMOVAL_HINT, pamt_dec_nl_page_count(pamt_nl_entry));
+}
+
+/**
+ * @brief Tells if the page belongs to reserved area.
+ *        When used for sequential pages remembers the last_rsvd_idx for faster search
+ *
+ * @param page_offset Page offset from the TDMR base
+ * @param tdmr_entry TDMR entry that defines the reserved areas
+ * @param last_rsdv_idx Remembers the last reserved area index
+ * @return
+ */
+bool_t is_page_reserved(uint64_t page_offset, tdmr_entry_t *tdmr_entry, uint32_t* last_rsdv_idx);
+
+/**
+ * @brief Gets a covering TDMR for given HPA
+ *
+ * @param pa
+ * @return
+ */
+tdmr_entry_t* get_covering_tdmr_for_hpa(pa_t pa);
 
 /**
  * @brief This function gets a 4KB page aligned physical address and valid flag and returns a
@@ -220,17 +320,18 @@ void pamt_init(pamt_block_t* pamt_block, uint64_t num_4k_entries, tdmr_entry_t *
  * @param pamt_block PAMT block virtual structure covering the @a pa
  * @param leaf_lock_type Determines whether on the found PAMT leaf entry, the taken lock should
  *                            be shared or exclusive.
- * @param leaf_size Returns the leaf size of the found PAMT entry
- * @param walk_to_leaf_size - If it is true, leaf_size is used as an input too, and PAMT walk stops at that level
+ * @param target_size - Stops at target size if walk_to_leaf_size is true
+ * @param walk_to_leaf_size - If true, PAMT walk stops at target_size
  * @param is_guest - Indicates whether the walk+lock request came from the TD guest
- * @param pamt_entry returns the linear address of the PAMT entry if the lock acquisition succeeded.
- *                   Should be freed after use. Returns NULL if lock failed (doesn't need to be freed in that case).
+ * @param pamt_walk_result - Returns the linear pointers of all PAMT entries reached during the walk.
+ *                           Returns the reached level.
+ *                           Non-reached levels contain NULL. Must be passed to pamt_unwalk to be freed after use.
  *
  * @return Error code status
  */
 api_error_code_e pamt_walk(pa_t pa, pamt_block_t pamt_block, lock_type_t leaf_lock_type,
-                           page_size_t* leaf_size, bool_t walk_to_leaf_size, bool_t is_guest,
-                           pamt_entry_t** pamt_entry);
+                           page_size_t target_size, bool_t walk_to_target_size,
+                           bool_t is_guest, pamt_walk_result_t* pamt_walk_result);
 
 /**
  * @brief Performs PAMT lock release in a reverse order to PAMT walk (i.e. from leaf PAMT entry
@@ -241,15 +342,10 @@ api_error_code_e pamt_walk(pa_t pa, pamt_block_t pamt_block, lock_type_t leaf_lo
  *       The leaf entry linear pointer that was received from the corresponding PAMT walk will
  *       also be freed by the unwalk function.
  *
- * @param pa Physical address corresponding to the PAMT entry
- * @param pamt_block PAMT block virtual structure covering the @a pa
- * @param pamt_entry_p Linear pointer to the leaf PAMT entry that will be freed by the function
- * @param leaf_lock_type Determines whether the lock taken on the leaf entry by the PAMT walk was
- *                            shared or exclusive.
- * @param leaf_size Leaf size of the leaf PAMT entry
+ * @param pamt_walk_result - Uses the reached level, lock type and pointers for the unwalk process.
+ *                           Frees all the pointers.
  */
-void pamt_unwalk(pa_t pa, pamt_block_t pamt_block, pamt_entry_t* pamt_entry_p,
-                 lock_type_t leaf_lock_type, page_size_t leaf_size);
+void pamt_unwalk(pamt_walk_result_t* pamt_walk_result);
 
 /**
  * @brief Returns a linear address of pamt_entry describing the given pa. Does not acquires any locks.
@@ -259,6 +355,17 @@ void pamt_unwalk(pa_t pa, pamt_block_t pamt_block, pamt_entry_t* pamt_entry_p,
  * @return Linear address of the pamt_entry. Should be freed after use.
  */
 pamt_entry_t* pamt_implicit_get(pa_t pa, page_size_t leaf_size);
+
+/**
+ * @brief Returns a linear address of pamt_entry describing the given pa. Does not acquires any locks.
+ *        Function cannot fail, and failure will result in module halt.
+ * @param pa Physical address corresponding to the PAMT entry
+ * @param leaf_size Leaf size of the relevant page
+ * @param pamt_nl_entry If Dynamic PAMT is enabled, and leaf size is 4KB returns pointer to parent 2MB non-leaf entry.
+ *                      If the pointer is non-NULL, must be freed
+ * @return Linear address of the pamt_entry, and parent non-leaf entry. Both should be freed after use.
+ */
+pamt_entry_t* pamt_implicit_get_with_nl_entry(pa_t pa, page_size_t leaf_size, pamt_non_leaf_entry_t** pamt_nl_entry);
 
 /**
  * @brief Returns a linear address of pamt_entry describing the given pa. Acquires a lock as stated in
@@ -275,6 +382,25 @@ pamt_entry_t* pamt_implicit_get(pa_t pa, page_size_t leaf_size);
  */
 api_error_code_e pamt_implicit_get_and_lock(pa_t pa, page_size_t leaf_size, lock_type_t leaf_lock_type,
                                             pamt_entry_t** pamt_entry, bool_t is_guest);
+
+/**
+ * @brief Returns a linear address of pamt_entry describing the given pa. Acquires a lock as stated in
+ *        the input parameter
+ * @param pa Physical address corresponding to the PAMT entry
+ * @param leaf_size Leaf size of the relevant page
+ * @param leaf_lock_type Determines whether on the found PAMT leaf entry, the taken lock should
+ *                            be shared or exclusive.
+ * @param pamt_entry returns the linear address of the PAMT entry if the lock acquisition succeeded.
+ *                   Should be freed after use. Returns NULL if lock failed (doesn't need to be freed in that case).
+ * @param is_guest Specifies if the lock is for guest or host
+ * @param pamt_nl_entry If Dynamic PAMT is enabled, and leaf size is 4KB returns pointer to parent 2MB non-leaf entry.
+ *                      If the pointer is non-NULL, must be freed
+ *
+ * @return Error code status
+ */
+api_error_code_e pamt_implicit_get_with_nl_entry_and_lock(
+                                pa_t pa, page_size_t leaf_size, lock_type_t leaf_lock_type,
+                                pamt_entry_t** pamt_entry, pamt_non_leaf_entry_t** pamt_nl_entry, bool_t is_guest);
 
 /**
  * @brief Frees the lock of an implicit pamt entry, and also frees the pamt_entry linear address

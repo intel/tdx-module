@@ -24,8 +24,8 @@
  * @brief TDH_IMPORT_COMMIT API handler
  */
 #include "tdx_vmm_api_handlers.h"
-#include "auto_gen/op_state_lookup.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include OP_STATE_LOOKUP_HEADER
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "helpers/helpers.h"
 
 
@@ -34,8 +34,7 @@ api_error_type tdh_import_commit(uint64_t target_tdr_pa)
     // TDR and TDCS
     tdr_t             *tdr_p = NULL;         // Pointer to the owner TDR page
     pa_t               tdr_pa;               // Physical address of the owner TDR page
-    pamt_block_t       tdr_pamt_block;       // TDR PAMT block
-    pamt_entry_t      *tdr_pamt_entry_ptr = NULL;
+    pamt_walk_result_t tdr_pamt_walk_result;
     tdcs_t            *tdcs_p = NULL;        // Pointer to the TDCS structure
     bool_t             tdr_pamt_locked_flag = false;
 
@@ -50,8 +49,7 @@ api_error_type tdh_import_commit(uint64_t target_tdr_pa)
                                                  TDX_RANGE_RO,
                                                  TDX_LOCK_EXCLUSIVE,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_pamt_locked_flag,
                                                  &tdr_p);
 
@@ -89,7 +87,7 @@ EXIT:
 
     if (tdr_pamt_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_p);
     }
 

@@ -47,9 +47,7 @@
  */
 __attribute__((visibility("hidden"))) void tdx_tdexit_entry_point(void);
 
-#ifdef DEBUGFEATURE_TDX_DBG_TRACE
 void tdx_failed_vmentry(void);
-#endif // DEBUGFEATURE_TDX_DBG_TRACE
 
 /**
  * @brief Common prologue flow for L1 and L2 TD dispatchers

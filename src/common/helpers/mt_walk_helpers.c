@@ -32,25 +32,25 @@ api_error_code_e mt_lock_pamt_and_map_la(
     const uint64_t entry_idx,
     const uint64_t entry_size,
     const bool_t is_guest,
-    pamt_block_t *pamt_block_ptr,
-    pamt_entry_t **pamt_entry,
+    pamt_walk_result_t* pamt_walk_result,
     const page_type_t expected_pt,
     const mapping_type_t mapping_type,
     void **entry_la)
 {
     // Set correct offset
     entry_page_pa.raw += entry_idx * entry_size;
-    page_size_t leaf_size = PT_4KB;
+
+    pamt_block_t pamt_block;
 
     api_error_code_e return_val = non_shared_hpa_metadata_check_and_lock(
         entry_page_pa,
         TDX_LOCK_SHARED,
         expected_pt,
-        pamt_block_ptr,
-        pamt_entry,
-        &leaf_size,
+        PT_4KB,
         true,
-        is_guest);
+        is_guest,
+        &pamt_block,
+        pamt_walk_result);
     if (return_val != TDX_SUCCESS)
     {
         TDX_ERROR("Failed to acquire lock on pamt entry\n");

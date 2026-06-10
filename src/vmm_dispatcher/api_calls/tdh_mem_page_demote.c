@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/td_control_structures.h"
 #include "memory_handlers/keyhole_manager.h"
@@ -74,8 +74,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
     // TDR related variables
     pa_t                  tdr_pa = { .raw = 0 };     // TDR physical address
     tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
-    pamt_block_t          tdr_pamt_block;            // TDR PAMT block
-    pamt_entry_t        * tdr_pamt_entry_ptr;        // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
     tdcs_t              * tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
@@ -93,8 +92,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
 
     // New Secure-EPT page variables
     pa_t                  sept_page_pa[MAX_VMS];                     // Physical address of the new SEPT page
-    pamt_block_t          sept_page_pamt_block[MAX_VMS] = { 0 };     // SEPT page PAMT block
-    pamt_entry_t        * sept_page_pamt_entry_ptr[MAX_VMS] = { 0 }; // Pointer to the SEPT page PAMT entry
+    pamt_walk_result_t    sept_page_pamt_walk_result[MAX_VMS];
     bool_t                sept_page_locked_flag[MAX_VMS] = { 0 };    // Indicate SEPT page is locked
 
     bool_t                unblock_required_flag = false;
@@ -131,8 +129,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
                                                  TDX_RANGE_RW,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -166,6 +163,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
     return_val = lock_sept_check_and_walk_private_gpa(tdcs_ptr,
                                                       OPERAND_ID_RCX,
                                                       page_gpa,
+                                                      tdr_ptr->key_management_fields.hkid,
                                                       TDX_LOCK_SHARED,
                                                       &split_page_sept_entry_ptr,
                                                       &split_page_level_entry,
@@ -228,7 +226,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
         }
 
         return_val = is_tlb_and_iotlb_tracked(tdcs_ptr, split_page_pamt_entry_ptr->bepoch);
-        if(return_val != TDX_SUCCESS)
+        if (return_val != TDX_SUCCESS)
         {
             return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
             goto EXIT;
@@ -244,8 +242,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
                                                          OPERAND_ID_R8,
                                                          TDX_LOCK_EXCLUSIVE,
                                                          PT_NDA,
-                                                         &sept_page_pamt_block[0],
-                                                         &sept_page_pamt_entry_ptr[0],
+                                                         &sept_page_pamt_walk_result[0],
                                                          &sept_page_locked_flag[0]);
 
     if (return_val != TDX_SUCCESS)
@@ -278,8 +275,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
                                                                 OPERAND_ID_R8 + vm_id,
                                                                 TDX_LOCK_EXCLUSIVE,
                                                                 PT_NDA,
-                                                                &sept_page_pamt_block[vm_id],
-                                                                &sept_page_pamt_entry_ptr[vm_id],
+                                                                &sept_page_pamt_walk_result[vm_id],
                                                                 &sept_page_locked_flag[vm_id]);
 
             if (return_val != TDX_SUCCESS)
@@ -347,8 +343,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
                 // For L2, it means that if the page is not pending, the L2 entry gets unblocked.
                 // Else, it remains blocked (L2 has a single blocked state that applies for pending too)
                 ia32e_sept_t l2_sept_entry = *l2_sept_entry_ptr[vm_id];
-                tdx_debug_assert(unblock_required_flag);
-                if (!sept_state_is_any_pending(split_page_sept_entry_copy))
+                if (unblock_required_flag && !sept_state_is_any_pending(split_page_sept_entry_copy))
                 {
                     sept_l2_unblock(&l2_sept_entry);
                 }
@@ -407,9 +402,9 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
         true); // Keep locked
 
     // Update the new L1 Secure EPT page PAMT entry
-    sept_page_pamt_entry_ptr[0]->owner = tdr_pa.page_4k_num;
-    sept_page_pamt_entry_ptr[0]->pt = PT_EPT;
-
+    sept_page_pamt_walk_result[0].pamt_entry_p->owner = tdr_pa.page_4k_num;
+    sept_page_pamt_walk_result[0].pamt_entry_p->pt = PT_EPT;
+    pamt_inc_nl_page_count(sept_page_pamt_walk_result[0].pamt_walk_path_nl[PT_2MB]);
     // Increment TDR child count by 1 using atomic operation.
     (void)_lock_xadd_64b(&tdr_ptr->management_fields.chldcnt, 1);
 
@@ -428,8 +423,9 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
             sept_set_aliased(split_page_sept_entry_ptr, (uint16_t)vm_id);
 
             // Update the new L2 Secure EPT page PAMT entry
-            sept_page_pamt_entry_ptr[vm_id]->owner = tdr_pa.page_4k_num;
-            sept_page_pamt_entry_ptr[vm_id]->pt = PT_EPT;
+            sept_page_pamt_walk_result[vm_id].pamt_entry_p->owner = tdr_pa.page_4k_num;
+            sept_page_pamt_walk_result[vm_id].pamt_entry_p->pt = PT_EPT;
+            pamt_inc_nl_page_count(sept_page_pamt_walk_result[vm_id].pamt_walk_path_nl[PT_2MB]);
 
             // Increment TDR child count by 1 using atomic operation.
             (void)_lock_xadd_64b(&tdr_ptr->management_fields.chldcnt, 1);
@@ -448,9 +444,7 @@ EXIT:
     {
         if (sept_page_locked_flag[vm_id])
         {
-            pamt_unwalk((pa_t)(sept_page_pa[vm_id].raw & ~BIT(63)), // Ignore bit 63,
-                        sept_page_pamt_block[vm_id],
-                        sept_page_pamt_entry_ptr[vm_id], TDX_LOCK_EXCLUSIVE, PT_4KB);
+            pamt_unwalk(&sept_page_pamt_walk_result[vm_id]);
         }
 
         if (l2_sept_entry_ptr[vm_id] != NULL)
@@ -486,7 +480,7 @@ EXIT:
 
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_ptr);
     }
 

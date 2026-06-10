@@ -173,8 +173,7 @@ typedef struct
     mmiomt_idx_t mmiomt_idx;                            // Index includes lowest reached level
     bool_t entry_locked;                                // Flag indicating whether entry at LEVEL was exclusively locked (using the entry lock).
     mmiomt_entry_t *mmiomt_path_arr[MMIOMT_L_ROOT + 1]; // Array of L0 … L4 QNODE/DATA entry pointers (only valid where index >= LEVEL).
-    pamt_entry_t *pamt_path_arr[MMIOMT_L_ROOT];         // Array PAMT entry pointers for MMIOMT L0 … L4 pages, QNODE/DATA page (only valid where index >= LEVEL)
-    pamt_block_t pamt_block_arr[MMIOMT_L_ROOT];         // Array of PAMT blocks visited per MMIOMT walk
+    pamt_walk_result_t pamt_walk_result_arr[MMIOMT_L_ROOT]; // Array of PAMT walk results per MMIOMT walk
 } mmiomt_walk_res_t;
 
 #endif /* SRC_COMMON_DATA_STRUCTURES_MMIOMT_DEFS_H_ */

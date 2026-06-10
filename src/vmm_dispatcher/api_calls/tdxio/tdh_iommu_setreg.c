@@ -36,8 +36,7 @@ api_error_type tdh_iommu_setreg(
 {
     api_error_type return_val = UNINITIALIZE_ERROR;
 
-    pamt_entry_t *pamt_entry_ptr = NULL;
-    pamt_block_t pamt_block;
+    pamt_walk_result_t pamt_walk_result;
     bool_t pamt_entry_is_locked = false;
 
     void *reg_value_ptr = NULL;
@@ -122,8 +121,7 @@ api_error_type tdh_iommu_setreg(
                  OPERAND_ID_R8,
                  TDX_LOCK_EXCLUSIVE,
                  PT_NDA,
-                 &pamt_block,
-                 &pamt_entry_ptr,
+                 &pamt_walk_result,
                  &pamt_entry_is_locked)) != TDX_SUCCESS)
         {
             goto EXIT;
@@ -188,9 +186,9 @@ api_error_type tdh_iommu_setreg(
         }
 
         // Update PAMT entry
-        pamt_entry_ptr->owner = iommu_id_reg.iommu_id.raw;
-        pamt_entry_ptr->pt = PT_IOMMU_MT;
-        pamt_entry_ptr->bepoch.raw = iommu_config_ptr->iommu_generation;
+        pamt_walk_result.pamt_entry_p->owner = iommu_id_reg.iommu_id.raw;
+        pamt_walk_result.pamt_entry_p->pt = PT_IOMMU_MT;
+        pamt_walk_result.pamt_entry_p->bepoch.raw = iommu_config_ptr->iommu_generation;
 
         // Map page and initialize using MOVDIR64
         reg_value_ptr = map_pa_with_global_hkid((void *)reg_value, TDX_RANGE_RW);
@@ -304,7 +302,7 @@ EXIT:
 
     if (pamt_entry_is_locked)
     {
-        pamt_unwalk((pa_t)reg_value, pamt_block, pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&pamt_walk_result);
     }
 
     if (iommu_config_lock_taken)

@@ -28,7 +28,7 @@
 #define SRC_COMMON_METADATA_HANDLERS_METADATA_TD_H_
 
 #include "metadata_generic.h"
-#include "auto_gen/tdr_tdcs_fields_lookup.h"
+#include TDR_TDCS_FIELDS_LOOKUP_HEADER
 #include "helpers/error_reporting.h"
 
 api_error_code_e md_td_read_element(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
@@ -38,12 +38,12 @@ api_error_code_e md_td_read_field(md_field_id_t field_id, const md_lookup_t* ent
         md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx, uint64_t value[MAX_ELEMENTS_IN_FIELD]);
 
 api_error_code_e md_td_write_element(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-        md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx, uint64_t wr_value, uint64_t wr_request_mask,
-        uint64_t* old_value);
+                                     md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx, uint64_t wr_value,
+                                     uint64_t wr_request_mask, uint64_t* old_value, bool_t wr_mask_valid);
 
 api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-        md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx, uint64_t value[MAX_ELEMENTS_IN_FIELD],
-        uint64_t wr_mask, bool_t is_import);
+                                   md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx,
+                                   uint64_t value[MAX_ELEMENTS_IN_FIELD], uint64_t wr_mask, bool_t is_import, bool_t wr_mask_valid);
 
 /**
  * @brief Private helper function to get the L2 VM index

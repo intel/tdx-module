@@ -34,8 +34,7 @@ api_error_type tdh_mmio_mt_add(
 {
     // PAMT related variables
     void *mmiomt_ptr = NULL;
-    pamt_block_t mmiomt_pamt_block;
-    pamt_entry_t *mmiomt_pamt_entry_ptr = NULL;
+    pamt_walk_result_t mmiomt_pamt_walk_result;
     bool_t is_mmiomt_pamt_locked = false;
 
     // mmiomt_walk variables
@@ -59,8 +58,7 @@ api_error_type tdh_mmio_mt_add(
         OPERAND_ID_RDX,
         TDX_LOCK_EXCLUSIVE,
         PT_NDA,
-        &mmiomt_pamt_block,
-        &mmiomt_pamt_entry_ptr,
+        &mmiomt_pamt_walk_result,
         &is_mmiomt_pamt_locked);
     if (return_val != TDX_SUCCESS)
     {
@@ -111,7 +109,7 @@ api_error_type tdh_mmio_mt_add(
     mmiomt_parent_ptr->pa = mmiomt_pa.page_4k_num;
 
     // Update the new MMIOMT page PAMT entry
-    mmiomt_pamt_entry_ptr->pt = PT_MMIO_MT;
+    mmiomt_pamt_walk_result.pamt_entry_p->pt = PT_MMIO_MT;
 
 EXIT:
     if (mmiomt_ptr != NULL)
@@ -126,7 +124,7 @@ EXIT:
 
     if (is_mmiomt_pamt_locked)
     {
-        pamt_unwalk(mmiomt_pa, mmiomt_pamt_block, mmiomt_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&mmiomt_pamt_walk_result);
     }
     return return_val;
 }

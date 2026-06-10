@@ -28,7 +28,7 @@
 #include "tdx_basic_types.h"
 #include "tdx_api_defs.h"
 #include "tdx_vmm_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 #include "data_structures/tdx_global_data.h"
 #include "data_structures/loader_data.h"
@@ -40,8 +40,9 @@
 #include "helpers/virt_msr_helpers.h"
 
 #include "helpers/smrrs.h"
-#include "auto_gen/cpuid_configurations.h"
-#include "auto_gen/td_vmcs_fields_lookup.h"
+#include CPUID_CONFIGURATIONS_HEADER
+#include TD_VMCS_FIELDS_LOOKUP_HEADER
+#include "helpers/fatal_info.h"
 
 
 /*
@@ -55,12 +56,11 @@ _STATIC_INLINE_ bool_t check_allowed_vmx_ctls(uint32_t* dest,
 {
     // Sanity check on the MSR values returned by the CPU:
     // Any bit can't be both fixed-1 (bits that are 1 in NOT_ALLOWED0) and fixed-0 (bits that are 0 in ALLOWED1)
-    tdx_sanity_check((src.not_allowed0 & ~src.allowed1) == 0, SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 0);
+    tdx_sanity_check((src.not_allowed0 & ~src.allowed1) == 0, FATAL_ERROR_ID_289, 0);
 
     // Sanity check on the TDX-SEAM module's constants:
     // Any unknown bits must be 0 in the init value and must not be variable
-    tdx_sanity_check(((init | variable_mask) & unknown_mask) == 0,
-                     SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 1);
+    tdx_sanity_check(((init | variable_mask) & unknown_mask) == 0, FATAL_ERROR_ID_290, 1);
 
     // Check bits that are fixed-1 (bits that are 1 in NOT_ALLOWED0).
     // Any fixed-1 bit must be initialized to 1.  For this check, ignore bits in the init value that are unknown.
@@ -99,7 +99,7 @@ _STATIC_INLINE_ bool_t check_allowed_vmx_ctls(uint32_t* dest,
 _STATIC_INLINE_ bool_t check_allowed64_vmx_ctls(uint64_t not_allowed0, uint64_t allowed1,
                                                 uint64_t init, uint64_t variable_mask)
 {
-    tdx_sanity_check((not_allowed0 & ~allowed1) == 0, SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 2);
+    tdx_sanity_check((not_allowed0 & ~allowed1) == 0, FATAL_ERROR_ID_291, 2);
 
     if ((not_allowed0 & ~init) || (~allowed1 & init) || ((not_allowed0 | ~allowed1) & variable_mask))
     {
@@ -120,7 +120,7 @@ _STATIC_INLINE_ bool_t check_allowed1_vmx_ctls(uint64_t* dest,
 {
     /* Sanity check on the TDX-SEAM module's constants:
            Any unknown bits must be 0 in the init value and must not be variable */
-    tdx_sanity_check(((init | variable_mask) & unknown_mask) == 0, SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 3);
+    tdx_sanity_check(((init | variable_mask) & unknown_mask) == 0, FATAL_ERROR_ID_292, 3);
 
     /* Check bits that are fixed-0 (bits that are 0 in ALLOWED1).  Any fixed-0
        bit must be initialized to 0. */
@@ -288,6 +288,12 @@ _STATIC_INLINE_ api_error_type check_key_management_config(tdx_module_global_t* 
         return api_error_with_operand_id(TDX_NUM_ACTIVATED_HKIDS_NOT_SUPPORTED, MAX_HKIDS);
     }
 
+    // INIT SEAMRR base and size
+    tdx_global_data_ptr->seamrr_base = ia32_rdmsr(IA32_SEAMRR_BASE_MSR_ADDR) & IA32_SEAMRR_BASE_AND_MASK_MASK;
+
+    uint64_t seamrr_mask = ia32_rdmsr(IA32_SEAMRR_MASK_MSR_ADDR) & IA32_SEAMRR_BASE_AND_MASK_MASK;
+    tdx_global_data_ptr->seamrr_size = mask_to_size(seamrr_mask);
+
     /* Get the number of cache sub-blocks for TDWBINVD
     */
     // INIT number of cached blocks for WBINVD cycle
@@ -317,12 +323,13 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
 
     bool_t perfmon_ext_leaf_checked = false;
     bool_t perfmon_ext_leaf_supported = false;
+    cpuid_23_0_eax_t leaf_eax = { .raw = 0 };
 
     global_data_ptr->xfd_faulting_mask = 0; // Updated later per CPUID leaf 0xD
     global_data_ptr->x2apic_core_id_shift_count = 0;  // Updated later per CPUID leaf 0x1F
 
+    ia32_misc_enable_t misc_enable = {.raw = ia32_rdmsr(IA32_MISC_ENABLES_MSR_ADDR)};
     // Boot NT4 bit should not be set
-    ia32_misc_enable_t misc_enable = { .raw = ia32_rdmsr(IA32_MISC_ENABLES_MSR_ADDR) };
     if (misc_enable.limit_cpuid_maxval)
     {
     	return TDX_LIMIT_CPUID_MAXVAL_SET;
@@ -351,7 +358,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
     {
         return api_error_with_operand_id(TDX_CPUID_LEAF_NOT_SUPPORTED, CPUID_LAST_EXTENDED_LEAF);
     }
-    tdx_sanity_check(last_extended_leaf >= CPUID_MAX_EXTENDED_VAL_LEAF, SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 4);
+    tdx_sanity_check(last_extended_leaf >= CPUID_MAX_EXTENDED_VAL_LEAF, FATAL_ERROR_ID_293, 4);
     global_data_ptr->cpuid_last_extended_leaf = last_extended_leaf;
 
     for (uint32_t i = 0; i < MAX_NUM_CPUID_LOOKUP; i++)
@@ -488,6 +495,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
                 perfmon_ext_leaf_checked = true;
 
                 global_data_ptr->lam_supported = cpuid_7_1_eax.lam;
+                global_data_ptr->is_nmi_source_supported = cpuid_7_1_eax.nmi_source_ident;
                 global_data_ptr->lass_supported = cpuid_7_1_eax.lass;
                 global_data_ptr->perfmon_ext_leaf_supported = perfmon_ext_leaf_supported;
             }
@@ -526,15 +534,24 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
                 return TDX_INCORRECT_CPUID_VALUE;
             }
 
+            // CPUs with Perfmon version >= 6 support the new MSR range starting @ 0x1900
+            global_data_ptr->perfmon_new_msrs = (cpuid_0a_eax.version >= 6);
+
             // Read and check actual number of fixed-function counters
             global_data_ptr->num_fixed_ctrs = cpuid_0a_edx.num_fcs;
-            if (global_data_ptr->num_fixed_ctrs > MAX_FIXED_CTR)
+
+            // Per Intel SDM, Vol. 3, 19.2.5.2:
+            // FxCtr[i]_is_supported := ECX[i] || (EDX[4:0] > i)
+            // So, set all bitmap bits per EDX[4:0] and OR with the bitmap in ECX.
+            global_data_ptr->fc_bitmap = (uint32_t)((BIT(cpuid_0a_edx.num_fcs) - 1) | cpuid_0a_ecx.raw);
+
+            if ((BIT(MAX_FIXED_CTR) - 1) < global_data_ptr->fc_bitmap)
             {
                 tdx_local_data_ptr->vmm_regs.rcx = cpuid_config.leaf_subleaf.raw;
                 tdx_local_data_ptr->vmm_regs.rdx = CPUID_PERFMON_EDX_MASK_LOW;
-                tdx_local_data_ptr->vmm_regs.r8  = CPUID_PERFMON_EDX_MASK_HIGH;
                 tdx_local_data_ptr->vmm_regs.r9  = CPUID_PERFMON_EDX_EXPECTED_LOW;
-                tdx_local_data_ptr->vmm_regs.r10 = CPUID_PERFMON_EDX_EXPECTED_HIGH;
+                tdx_local_data_ptr->vmm_regs.r8 = CPUID_PERFMON_ECX_EDX_MASK_HIGH;
+                tdx_local_data_ptr->vmm_regs.r10 = CPUID_PERFMON_ECX_EDX_EXPECTED_HIGH;
 
                 TDX_ERROR("Failed CPUID_PERFMON_LEAF (0xA) check, num_fixed_ctrs %d is higher than supported",
                         cpuid_0a_edx.num_fcs);
@@ -542,11 +559,9 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
                 return TDX_INCORRECT_CPUID_VALUE;
             }
 
-            // Per Intel SDM, Vol. 3, 19.2.5.2:
-            // FxCtr[i]_is_supported := ECX[i] || (EDX[4:0] > i)
-            // So, set all bitmap bits per EDX[4:0] and OR with the bitmap in ECX.
-            global_data_ptr->fc_bitmap = (uint32_t)((BIT(cpuid_0a_edx.num_fcs) - 1) | cpuid_0a_ecx.raw);
-
+            // Set default value for PMC_BITMAP as all-1, e.g. if num_pmcs = 8 then pmc_bitmap = 0xFF
+            // Will be overwritten by leaf 0x23 if supported.
+            global_data_ptr->pmc_bitmap = (uint32_t)BIT(cpuid_0a_eax.num_gp_counters) - 1;
         }
 
         /* Get the supported extended features.  Allow only features that are recognized
@@ -565,8 +580,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
                 global_data_ptr->ia32_xss_supported_mask = cpuid_config.values.ecx & XCR0_SUPERVISOR_BIT_MASK;
 
                 // Sanity check: Masks for user and system extended features must be mutually exclusive
-                tdx_sanity_check((global_data_ptr->xcr0_supported_mask & global_data_ptr->ia32_xss_supported_mask) == 0,
-                                SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF),5);
+                tdx_sanity_check((global_data_ptr->xcr0_supported_mask & global_data_ptr->ia32_xss_supported_mask) == 0, FATAL_ERROR_ID_294, 5);
             }
             else
             {
@@ -589,7 +603,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
                     if ((uint64_t)global_data_ptr->xcr0_supported_mask & (BIT(subleaf)))
                     {
                         // FATAL_ERROR
-                        FATAL_ERROR();
+                        fatal_error(FATAL_ERROR_ID_60, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
                     }
                 }
                 else
@@ -598,7 +612,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
                     if ((uint64_t)global_data_ptr->ia32_xss_supported_mask & (BIT(subleaf)))
                     {
                         // FATAL_ERROR
-                        FATAL_ERROR();
+                        fatal_error(FATAL_ERROR_ID_61, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
                     }
                 }
             }
@@ -626,7 +640,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
             if (global_data_ptr->native_tsc_frequency < NATIVE_TSC_FREQUENCY_MIN)
             {
                 // Fatal Error
-                FATAL_ERROR();
+                fatal_error(FATAL_ERROR_ID_63, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             }
         }
         else if (leaf == 0x1A)
@@ -644,7 +658,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
 
             if (!bit_scan_reverse64(cpuid_1c_eax & (BIT(8)-1), &msb))
             {
-                FATAL_ERROR();
+                fatal_error(FATAL_ERROR_ID_114, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
             }
 
             global_data_ptr->max_lbr_depth = 8 * ((uint32_t)msb + 1);
@@ -711,10 +725,8 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
                 if (prev_level_type != LEVEL_TYPE_INVALID)
                 {
 
-                    tdx_sanity_check(shift_count != (uint32_t)-1,
-                                     SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 6);
-                    tdx_sanity_check(lpids_sharing_l3_cache != (uint32_t)-1,
-                                     SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 7);
+                    tdx_sanity_check(shift_count != (uint32_t)-1, FATAL_ERROR_ID_295, 6);
+                    tdx_sanity_check(lpids_sharing_l3_cache != (uint32_t)-1, FATAL_ERROR_ID_296, 7);
 
                     /* This is the first invalid topology sub-leaf.  The shift count
                        saved from the previous level indicates the shift count for
@@ -723,10 +735,8 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
                     global_data_ptr->x2apic_pkg_id_shift_count = shift_count;
 
                     // Calculate the core ID mask
-                    tdx_sanity_check((shift_count - global_data_ptr->x2apic_core_id_shift_count) < 32,
-                            SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 8);
-                    global_data_ptr->x2apic_core_id_mask =
-                            (uint32_t)(BIT(shift_count - global_data_ptr->x2apic_core_id_shift_count)) - 1U;
+                    tdx_sanity_check((shift_count - global_data_ptr->x2apic_core_id_shift_count) < 32, FATAL_ERROR_ID_297, 8);
+                    global_data_ptr->x2apic_core_id_mask = (uint32_t)(BIT(shift_count - global_data_ptr->x2apic_core_id_shift_count)) - 1U;
 
                     /* Verify that L3 cache is shared across package:
                        According to the Intel SDM description of CPUID leaf 4:
@@ -748,9 +758,65 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
 
             prev_level_type = ((cpuid_topology_level_t)cpuid_config.values.ecx).level_type;
         }
-        else if (cpuid_config.leaf_subleaf.leaf == 0x23)
+        else if (cpuid_config.leaf_subleaf.leaf == 0x23) // Extended Perfmon leaf
         {
-            tdx_sanity_check(perfmon_ext_leaf_checked == true, SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 9);
+            tdx_sanity_check(perfmon_ext_leaf_checked == true, FATAL_ERROR_ID_298, 9);
+
+            if (perfmon_ext_leaf_supported)
+            {
+                if (cpuid_config.leaf_subleaf.subleaf == 0)
+                {
+                    leaf_eax.raw = cpuid_config.values.eax;
+                    global_data_ptr->is_arch_pebs_supported = leaf_eax.leaf_5_supported;
+                }
+                else
+                {
+                    if ((leaf_eax.raw & (BIT(cpuid_config.leaf_subleaf.subleaf))) == 0)
+                    {
+                        // The CPU doesn't support this sub-leaf of 0x23
+                        if (cpuid_config.values.low != 0 ||
+                            cpuid_config.values.high != 0)
+                        {
+                            tdx_module_local_t *tdx_local_data_ptr = get_local_data();
+                            tdx_local_data_ptr->vmm_regs.rcx = cpuid_config.leaf_subleaf.raw;
+                            tdx_local_data_ptr->vmm_regs.rdx = (uint64_t)-1; // mask low
+                            tdx_local_data_ptr->vmm_regs.r8 = (uint64_t)-1;  // mask high
+                            tdx_local_data_ptr->vmm_regs.r9 = 0x0;           // expected low
+                            tdx_local_data_ptr->vmm_regs.r10 = 0x0;          // expected high
+                            return TDX_INCORRECT_CPUID_VALUE;
+                        }
+                    }
+                    else // Sub-leaf is supported by the CPU
+                    {
+                        if (cpuid_config.leaf_subleaf.subleaf == 1)
+                        {
+                            global_data_ptr->pmc_bitmap = cpuid_config.values.eax;
+                            // EBX contains fixed counters bitmap, should be the same as the one derived above
+                            if (cpuid_config.values.ebx != global_data_ptr->fc_bitmap)
+                            {
+                                tdx_module_local_t *tdx_local_data_ptr = get_local_data();
+
+                                tdx_local_data_ptr->vmm_regs.rcx = cpuid_config.leaf_subleaf.raw;
+                                tdx_local_data_ptr->vmm_regs.rdx = 0xFFFFFFFF00000000;                        // mask low:  EBX bits 31:0
+                                tdx_local_data_ptr->vmm_regs.r8 = 0x0;                                        // mask high
+                                tdx_local_data_ptr->vmm_regs.r9 = (uint64_t)global_data_ptr->fc_bitmap << 32; // expected low
+                                tdx_local_data_ptr->vmm_regs.r10 = 0x0;                                       // expected high
+
+                                TDX_ERROR("ebx (=%llx) is not equal to FC bitmap (=%llx)", cpuid_config.values.ebx, global_data_ptr->fc_bitmap);
+
+                                return TDX_INCORRECT_CPUID_VALUE;
+                            }
+                        }
+
+                    }
+                }
+            }
+            else
+            {
+                // The CPU doesn't support leaf 0x23, set the sampled values to 0
+                cpuid_config.values.low = 0;
+                cpuid_config.values.high = 0;
+            }
         }
         else if (cpuid_config.leaf_subleaf.leaf == CPUID_GET_MAX_PA_LEAF)
         {
@@ -760,7 +826,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
             cpuid_80000008_eax_t cpuid_80000008_eax = { .raw = cpuid_config.values.eax };
 
             global_data_ptr->max_pa = cpuid_80000008_eax.pa_bits;
-            tdx_sanity_check(global_data_ptr->max_pa <= 52, SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 10);
+            tdx_sanity_check(global_data_ptr->max_pa <= 52, FATAL_ERROR_ID_299, 10);
 
             // Check that LA_BITS is compatible with LA57 from CPUID(7, 0).ECX[16]
             if (global_data_ptr->la57_supported)
@@ -988,8 +1054,11 @@ _STATIC_INLINE_ api_error_type check_l2_vmx_msrs(tdx_module_global_t* tdx_global
         return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_VMX_TRUE_EXIT_CTLS_MSR_ADDR);
     }
 
-    if (!check_allowed_vmx_ctls(&l2_vmcs_values_ptr->entry_ctls, msr_values_ptr->ia32_vmx_true_entry_ctls,
-            ENTRY_CTLS_L2_INIT, ENTRY_CTLS_L2_VARIABLE, ENTRY_CTLS_L2_UNKNOWN))
+    vmx_vm_entry_ctls_t l2_variable_mask = {.raw = ENTRY_CTLS_L2_VARIABLE};
+    // Remove the TD Telemetry bit(25) as the TDH.SYS.INIT should not fail if this bit is not supported although it is defined as variable
+    l2_variable_mask.td_telemetry = 0;
+
+    if (!check_allowed_vmx_ctls(&l2_vmcs_values_ptr->entry_ctls, msr_values_ptr->ia32_vmx_true_entry_ctls, ENTRY_CTLS_L2_INIT, l2_variable_mask.raw, ENTRY_CTLS_L2_UNKNOWN))
     {
         return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_VMX_TRUE_ENTRY_CTLS_MSR_ADDR);
     }
@@ -1109,8 +1178,12 @@ _STATIC_INLINE_ api_error_type check_vmx_msrs(tdx_module_global_t* tdx_global_da
     }
 
     msr_values_ptr->ia32_vmx_true_entry_ctls.raw = ia32_rdmsr(IA32_VMX_TRUE_ENTRY_CTLS_MSR_ADDR);
-    if (!check_allowed_vmx_ctls(&td_vmcs_values_ptr->entry_ctls, msr_values_ptr->ia32_vmx_true_entry_ctls,
-            ENTRY_CTLS_INIT, ENTRY_CTLS_VARIABLE, ENTRY_CTLS_UNKNOWN))
+
+    vmx_vm_entry_ctls_t variable_mask = {.raw = ENTRY_CTLS_VARIABLE};
+    // Remove the TD Telemetry bit(25) as the TDH.SYS.INIT should not fail if this bit is not supported although it is defined as variable
+    variable_mask.td_telemetry = 0;
+
+    if (!check_allowed_vmx_ctls(&td_vmcs_values_ptr->entry_ctls, msr_values_ptr->ia32_vmx_true_entry_ctls, ENTRY_CTLS_INIT, variable_mask.raw, ENTRY_CTLS_UNKNOWN))
     {
         return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_VMX_TRUE_ENTRY_CTLS_MSR_ADDR);
     }
@@ -1245,12 +1318,6 @@ _STATIC_INLINE_ void tdx_init_global_data(tdx_module_global_t* tdx_global_data_p
 
     tdx_global_data_ptr->pkg_config_bitmap = (uint32_t)0;
 
-    // INIT SEAMRR base and size
-    tdx_global_data_ptr->seamrr_base = ia32_rdmsr(IA32_SEAMRR_BASE_MSR_ADDR) & IA32_SEAMRR_BASE_AND_MASK_MASK;
-
-    uint64_t seamrr_mask = ia32_rdmsr(IA32_SEAMRR_MASK_MSR_ADDR) & IA32_SEAMRR_BASE_AND_MASK_MASK;
-    tdx_global_data_ptr->seamrr_size = mask_to_size(seamrr_mask);
-
     tdx_global_data_ptr->num_of_init_lps = 0;
 
     tdx_global_data_ptr->global_state.sys_state = SYSINIT_DONE;
@@ -1330,9 +1397,9 @@ _STATIC_INLINE_ api_error_type check_module_build_time_defs(tdx_module_global_t*
     tdx_global_data_ptr->no_downgrade      = sysinfo_table->no_downgrade;
     tdx_global_data_ptr->num_handoff_pages = sysinfo_table->num_handoff_pages;
 
-    if ((tdx_global_data_ptr->module_hv != TDX_MODULE_HV) ||
-        (tdx_global_data_ptr->min_update_hv < TDX_MIN_UPDATE_HV) ||
-        ((tdx_global_data_ptr->no_downgrade == 0) && (TDX_NO_DOWNGRADE == 1)) ||
+    if ((tdx_global_data_ptr->module_hv != GLOBAL_TDX_MODULE_HV) ||
+        (tdx_global_data_ptr->min_update_hv < GLOBAL_TDX_MIN_UPDATE_HV) ||
+        ((tdx_global_data_ptr->no_downgrade == 0) && (GLOBAL_TDX_NO_DOWNGRADE == 1)) ||
         ((tdx_global_data_ptr->num_handoff_pages + 1) < TDX_MIN_HANDOFF_PAGES))
     {
         TDX_ERROR("Incompatible TD preserving defs\n");
@@ -1342,7 +1409,95 @@ _STATIC_INLINE_ api_error_type check_module_build_time_defs(tdx_module_global_t*
     return TDX_SUCCESS;
 }
 
-api_error_type tdh_sys_init(void)
+_STATIC_INLINE_ api_error_type configure_fatal_info_diagnostics(bool_t enable_configuration, fatal_error_config_t fatal_error_config)
+{
+    tdx_module_global_t* global_data = get_global_data();
+    global_data->fatal_info_p = NULL;
+    global_data->fatal_info_icr = 0;
+    global_data->fatal_info_config_hpa = (uint64_t)(-1);
+
+    if (enable_configuration)
+    {
+        if (fatal_error_config.reserved_0 || fatal_error_config.reserved_1)
+        {
+            TDX_ERROR("Reserved fields are not 0\n");
+            return TDX_OPERAND_INVALID;
+        }
+
+        // check whether info logging should be configured
+        if (fatal_error_config.fatal_info_hpa != HPA_CODE_NO_LOGGING_REQUIRED)
+        {
+            // check whether the configured HPA is valid
+            if (TDX_SUCCESS == shared_hpa_check_with_pwr_2_alignment((pa_t)(fatal_error_config.raw & BITS(53, 0)), CACHELINE_SIZE))
+            {
+                // mark for tdh_sys_lp_init that logging is required
+                global_data->fatal_info_config_hpa = fatal_error_config.raw & BITS(51, 6); // store only the hpa
+            }
+            else
+            {
+                // not a valid HPA
+                TDX_ERROR("Fatal info HPA isn't valid, HPA = 0x%lx\n", fatal_error_config.fatal_info_hpa);
+                return TDX_OPERAND_INVALID;
+            }
+        }
+
+        // check whether a notification interrupt should be configured
+        if (fatal_error_config.notification_intr)
+        {
+            ia32_apic_icr_t icr = { .raw = 0 };
+
+            switch (fatal_error_config.notification_intr)
+            {
+            case 0x1: // interrupt
+            {
+                if (fatal_error_config.notification_vector < 16)
+                {
+                    // notification_vector must be in the range 16:255
+                    TDX_ERROR("Illegal notification vecor = %d\n", fatal_error_config.notification_vector);
+                    return TDX_OPERAND_INVALID;
+                }
+
+                icr.delivery_mode = APIC_DELIVERY_FIXED;
+                icr.vector = fatal_error_config.notification_vector;
+                break;
+            }
+            case 0x2: // NMI
+            {
+                icr.delivery_mode = APIC_DELIVERY_NMI;
+                icr.vector = 2;
+                break;
+            }
+            case 0x3: // SMI
+            {
+                icr.delivery_mode = APIC_DELIVERY_SMI;
+                icr.vector = 0; // the vector is ignored
+                break;
+            }
+            default:
+            {
+                // should not happen, currently there are only 3 types supported by fatal error diagnostics configuration
+                TDX_ERROR("Unknown notification interrupt type = %d\n", fatal_error_config.notification_intr);
+                return TDX_OPERAND_INVALID;
+            }
+            }
+
+            icr.destination_mode = 0; // physical
+            icr.level            = 1; // assert
+            icr.trigger_mode     = 0; // edge
+            icr.dest_shorthand   = 3; // all excluding self
+            icr.raw_high         = 0; // destination
+            icr.rsvd0            = 0;
+            icr.rsvd1            = 0;
+            icr.rsvd2            = 0;
+
+            global_data->fatal_info_icr = icr.raw;
+        }
+    } // enable_configuration
+
+    return TDX_SUCCESS;
+}
+
+api_error_type tdh_sys_init(uint8_t version)
 {
     bool_t global_lock_acquired = false;
     tdx_module_global_t* tdx_global_data_ptr = get_global_data();
@@ -1358,12 +1513,20 @@ api_error_type tdh_sys_init(void)
     td_param_attributes_t attributes_fixed1;
 
     uint64_t reserved_rcx = tdx_local_data_ptr->vmm_regs.rcx;
+    uint64_t reserved_r8 = tdx_local_data_ptr->vmm_regs.r8;
 
     tdx_local_data_ptr->vmm_regs.rcx = 0;
     tdx_local_data_ptr->vmm_regs.rdx = 0;
     tdx_local_data_ptr->vmm_regs.r8 = 0;
     tdx_local_data_ptr->vmm_regs.r9 = 0;
     tdx_local_data_ptr->vmm_regs.r10 = 0;
+
+    if (version > 1)
+    {
+        TDX_ERROR("version %d is not supported by TDH.SYS.INIT\n", version);
+        retval = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
+        goto EXIT;
+    }
 
     // Acquire an exclusive lock to the whole TDX-SEAM module
     if (acquire_sharex_lock_ex(&tdx_global_data_ptr->global_lock) != LOCK_RET_SUCCESS)
@@ -1421,13 +1584,14 @@ api_error_type tdh_sys_init(void)
                                                  &tdx_global_data_ptr->seamdb_nonce,
                                                  &seamdb_size);
 
-    tdx_sanity_check((result == SEAMOPS_SUCCESS), SCEC_SEAMCALL_SOURCE(TDH_SYS_INIT_LEAF), 20);
+    tdx_sanity_check((result == SEAMOPS_SUCCESS), FATAL_ERROR_ID_300, 20);
 
     tdx_global_data_ptr->seamverifyreport_available = ((caps.raw & BIT(SEAMOPS_SEAMVERIFYREPORT_LEAF)) != 0);
     /*
      * Calculate allowed ATTRIBUTES bits.
      */
     attributes_fixed0.raw = TDX_ATTRIBUTES_FIXED0;
+    attributes_fixed0.tpa = is_tdx_io_supported();
     attributes_fixed1.raw = TDX_ATTRIBUTES_FIXED1;
 
     if (!tdx_global_data_ptr->lass_supported)
@@ -1452,6 +1616,13 @@ api_error_type tdh_sys_init(void)
     if (tdx_init_stack_canary() != TDX_SUCCESS)
     {
         retval = TDX_RND_NO_ENTROPY;
+        goto EXIT;
+    }
+
+    if (TDX_SUCCESS != configure_fatal_info_diagnostics((bool_t)version, (fatal_error_config_t)reserved_r8))
+    {
+        TDX_ERROR("Illegal fatal info config input. fatal_config = 0x%lx\n", reserved_r8);
+        retval = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
         goto EXIT;
     }
 

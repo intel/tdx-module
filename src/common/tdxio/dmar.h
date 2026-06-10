@@ -116,7 +116,7 @@ _STATIC_INLINE_ void dmar_set_cte_pde_cnt(
 _STATIC_INLINE_ uint8_t dmar_get_cte_pd_page_cnt(const dmar_cte_t *const cte_ptr)
 {
     uint8_t num_pd_pages = (uint8_t)CALCULATE_NUMBER_OF_UNITS_WITH_PADDING(BIT(cte_ptr->pdts + PDTS_IDX_CONST) * sizeof(dmar_pde_t), _4KB);
-    tdx_sanity_check((num_pd_pages >= MIN_NUM_PD_PAGES && num_pd_pages <= MAX_NUM_PD_PAGES), SCEC_DMAR_SOURCE, 3);
+    tdx_sanity_check((num_pd_pages >= MIN_NUM_PD_PAGES && num_pd_pages <= MAX_NUM_PD_PAGES), FATAL_ERROR_ID_245, 3);
 
     return num_pd_pages;
 }

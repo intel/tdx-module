@@ -29,17 +29,17 @@
 #include "accessors/vt_accessors.h"
 #include "accessors/data_accessors.h"
 #include "x86_defs/vmcs_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "data_structures/tdx_global_data.h"
 #include "data_structures/tdx_local_data.h"
 #include "tdx_vmm_api_handlers.h"
 #include "debug/tdx_debug.h"
 #include "helpers/helpers.h"
 #include "metadata_handlers/metadata_generic.h"
-#include "data_structures/tdxio/tdisp_defs.h"
 
 
 //TDX-IO New APIs
+#include "data_structures/tdxio/tdisp_defs.h"
 #include "tdxio/tdxio_vmm_api_handlers.h"
 
 
@@ -63,7 +63,7 @@ void tdx_vmm_dispatcher(void)
     vm_vmexit_exit_reason_t exit_reason;
     ia32_vmread(VMX_VM_EXIT_REASON_ENCODE, &exit_reason.raw);
 
-    tdx_sanity_check(exit_reason.basic_reason == VMEXIT_REASON_SEAMCALL, SCEC_VMM_DISPATCHER_SOURCE, 2);
+    tdx_sanity_check(exit_reason.basic_reason == VMEXIT_REASON_SEAMCALL, FATAL_ERROR_ID_308, 2);
 
     tdx_module_global_t * global_data = get_global_data();
     // Get leaf code from RAX in local data (saved on entry)
@@ -127,10 +127,6 @@ void tdx_vmm_dispatcher(void)
         ia32_vmwrite(VMX_HOST_IA32_PERF_GLOBAL_CONTROL_FULL_ENCODE, tdx_module_perf_global_ctrl);
     }
 
-    // preserve VMM's XCR0 state
-    local_data->vmm_xcr0_state = ia32_xgetbv(0);
-    ia32_xsetbv(0, TDX_MODULE_XCR0_WITH_AVX);
-
     if ((leaf_opcode.reserved0 != 0) || (leaf_opcode.reserved1 != 0))
     {
         TDX_ERROR("Leaf and version not supported 0x%llx\n", leaf_opcode.raw);
@@ -157,6 +153,7 @@ void tdx_vmm_dispatcher(void)
             case TDH_MNG_RD_LEAF:
             case TDH_VP_RD_LEAF:
             case TDH_VP_INIT_LEAF:
+            case TDH_SYS_INIT_LEAF:
             case TDH_MEM_SHARED_SEPT_WR_LEAF:
                 break;
             default:
@@ -442,7 +439,7 @@ void tdx_vmm_dispatcher(void)
     }
     case TDH_SYS_INIT_LEAF:
     {
-        local_data->vmm_regs.rax = tdh_sys_init();
+        local_data->vmm_regs.rax = tdh_sys_init((uint8_t)leaf_opcode.version);
         break;
     }
     case TDH_SYS_RD_LEAF:
@@ -512,6 +509,24 @@ void tdx_vmm_dispatcher(void)
                                              field_code,
                                              local_data->vmm_regs.r8,
                                              local_data->vmm_regs.r9);
+        break;
+    }
+    case TDH_PHYMEM_PAMT_ADD_LEAF:
+    {
+        page_size_api_input_t page_info = { .raw = local_data->vmm_regs.rcx };
+
+        local_data->vmm_regs.rax = tdh_phymem_pamt_add(page_info,
+                                             local_data->vmm_regs.rdx,
+                                             local_data->vmm_regs.r8);
+
+        break;
+    }
+    case TDH_PHYMEM_PAMT_REMOVE_LEAF:
+    {
+        page_size_api_input_t page_info = { .raw = local_data->vmm_regs.rcx };
+
+        local_data->vmm_regs.rax = tdh_phymem_pamt_remove(page_info);
+
         break;
     }
     case TDH_SERVTD_BIND_LEAF:
@@ -925,13 +940,16 @@ void tdx_vmm_dispatcher(void)
     }
     }
 
-    tdx_sanity_check(local_data->vmm_regs.rax != UNINITIALIZE_ERROR, SCEC_VMM_DISPATCHER_SOURCE, 1);
+    tdx_sanity_check(local_data->vmm_regs.rax != UNINITIALIZE_ERROR, FATAL_ERROR_ID_310, 1);
 
     IF_RARE (local_data->reset_avx_state)
     {
         // Current IPP crypto lib uses SSE state only (YMM's), so we only clear them
         clear_ymms();
         local_data->reset_avx_state = false;
+
+        // restore VMM's XCR0 state
+        ia32_xsetbv(0, local_data->vmm_xcr0_state);
     }
 
 EXIT:
@@ -957,18 +975,15 @@ void tdx_vmm_post_dispatching(void)
         ia32_wrmsr(IA32_LAM_ENABLE_MSR_ADDR, local_data_ptr->vmm_non_extended_state.ia32_lam_enable);
     }
 
-    // restore VMM's XCR0 state
-    ia32_xsetbv(0, local_data_ptr->vmm_xcr0_state);
-
     mark_lp_as_free();
 
     // Check that we have no mapped keyholes left
-    tdx_sanity_check(local_data_ptr->keyhole_state.total_ref_count == 0, SCEC_KEYHOLE_MANAGER_SOURCE, 20);
+    tdx_sanity_check(local_data_ptr->keyhole_state.total_ref_count - local_data_ptr->fatal_error_mem_mapped == 0, FATAL_ERROR_ID_311, 20);
 
     TDX_LOG("tdx_vmm_post_dispatching - preparing to do SEAMRET\n");
 
     tdx_seamret_to_vmm(); // Restore GPRs and SEAMRET
 
     // Shouldn't reach here:
-    tdx_sanity_check(0, SCEC_VMM_DISPATCHER_SOURCE, 0);
+    tdx_sanity_check(0, FATAL_ERROR_ID_312, 0);
 }

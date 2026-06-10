@@ -189,7 +189,7 @@ api_error_type tdh_ide_stream_idekmreq(
         if (ide_km_param.direction == DEV_TX)
         {
             stream_exinfo_ptr->primed_tx_key_counter++;
-            tdx_sanity_check((stream_exinfo_ptr->primed_tx_key_counter <= MAX_TX_PRIMED_KEYS), SCEC_IDE_SOURCE, 1);
+            tdx_sanity_check((stream_exinfo_ptr->primed_tx_key_counter <= MAX_TX_PRIMED_KEYS), FATAL_ERROR_ID_305, 1);
         }
     }
 

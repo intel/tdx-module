@@ -157,7 +157,7 @@ _STATIC_INLINE_ void generate_doe_header(
     // (Y + (x-1))/x == padded Y to be x aligned
     uint32_t padded_message_length_in_dwords = (uint32_t)CALCULATE_NUMBER_OF_UNITS_WITH_PADDING(total_msg_length, DOE_LENGTH_GRANULARITY);
     // Defence in depth
-    tdx_sanity_check((padded_message_length_in_dwords * DOE_LENGTH_GRANULARITY < max_buff_size), SCEC_SEAMCALL_SOURCE(SCEC_DOE_GEN_SOURCE), 0);
+    tdx_sanity_check((padded_message_length_in_dwords * DOE_LENGTH_GRANULARITY < max_buff_size), FATAL_ERROR_ID_249, 0);
 
     doe_header_ptr->doe_length.length = padded_message_length_in_dwords;
     uint32_t padding_count_in_bytes = padded_message_length_in_dwords * DOE_LENGTH_GRANULARITY - total_msg_length;

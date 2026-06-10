@@ -24,7 +24,7 @@
  *  Spreadsheet Format Version - '2'
  **/
 
-#include "auto_gen/global_sys_fields_lookup.h"
+#include "./global_sys_fields_lookup.h"
 
 
 const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
@@ -296,6 +296,26 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .guest_rd_mask = (0ULL & 0xFFFFULL), .guest_wr_mask = (0ULL & 0xFFFFULL),
    .export_mask = (0ULL & 0xFFFFULL), .import_mask = (0ULL & 0xFFFFULL),
    .special_rd_handling = false, .special_wr_handling = false,
+   .mig_export = MIG_NONE, .mig_import = MIG_NONE 
+ },
+ {
+   // PAMT_PAGE_BITMAP_ENTRY_BITS // 27
+   .field_id =  { .raw  = 0x9100000000000013 },
+   .num_of_fields = 1, .num_of_elem = 1,
+   .vmm_rd_mask = (-1ULL & 0xFFULL), .vmm_wr_mask = (0ULL & 0xFFULL),
+   .guest_rd_mask = (0ULL & 0xFFULL), .guest_wr_mask = (0ULL & 0xFFULL),
+   .export_mask = (0ULL & 0xFFULL), .import_mask = (0ULL & 0xFFULL),
+   .special_rd_handling = false, .special_wr_handling = false,
+   .mig_export = MIG_NONE, .mig_import = MIG_NONE 
+ },
+ {
+   // MIN_DYNAMIC_PAMT_NUM_HKID_BITS // 28
+   .field_id =  { .raw  = 0x9100000000000014 },
+   .num_of_fields = 1, .num_of_elem = 1,
+   .vmm_rd_mask = (-1ULL & 0xFFULL), .vmm_wr_mask = (0ULL & 0xFFULL),
+   .guest_rd_mask = (0ULL & 0xFFULL), .guest_wr_mask = (0ULL & 0xFFULL),
+   .export_mask = (0ULL & 0xFFULL), .import_mask = (0ULL & 0xFFULL),
+   .special_rd_handling = true, .special_wr_handling = false,
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {

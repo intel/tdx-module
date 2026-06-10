@@ -24,7 +24,7 @@
  *  Spreadsheet Format Version - '10'
  **/
 
-#include "auto_gen/cpuid_configurations.h"
+#include "./cpuid_configurations.h"
 
 // Lookup table first MAX_NUM_CPUID_CONFIG entries will be in the same order as in cpuid_configurable table
 
@@ -124,7 +124,7 @@ const cpuid_lookup_t cpuid_lookup[MAX_NUM_CPUID_LOOKUP] = {
  [6] = { .leaf_subleaf = {.leaf = 0x7, .subleaf = 0x1},
   .valid_entry = true,
   .verify_same = { .eax = 0xffffffff, .ebx = 0xffffffff, .ecx = 0xffffffff, .edx = 0xffffffff },
-  .fixed0_or_dynamic = { .eax = 0xfb57e20f, .ebx = 0xffffffff, .ecx = 0xffffffff, .edx = 0xfffdbbcf },
+  .fixed0_or_dynamic = { .eax = 0xfb57e200, .ebx = 0xffffffff, .ecx = 0xffffffff, .edx = 0xfffdbbcf },
   .config_index = 6
   },
  [14] = { .leaf_subleaf = {.leaf = 0x7, .subleaf = 0x2},
@@ -561,7 +561,7 @@ const cpuid_configurable_t cpuid_configurable[MAX_NUM_CPUID_CONFIG] = {
   },
  [6] = { .leaf_subleaf = {.leaf = 0x7, .subleaf = 0x1},
   .valid_entry = true,
-  .allow_direct = { .eax = 0x4a81db0, .edx = 0x24430 },
+  .allow_direct = { .eax = 0x4a81dbf, .edx = 0x24430 },
   .lookup_index = 6
   },
  [10] = { .leaf_subleaf = {.leaf = 0x7, .subleaf = 0x2},
@@ -696,9 +696,9 @@ const cpuid_config_return_values_t xfam_mask_0x7_0x0[XCR0_MAX_VALID_BIT + 1] = {
 const cpuid_config_return_values_t xfam_mask_0x7_0x1[XCR0_MAX_VALID_BIT + 1] = {
 
     [2]={ .eax = 0x800010 , .edx = 0x430  } ,
-    [5]={ .eax = 0x20  } ,
-    [6]={ .eax = 0x20  } ,
-    [7]={ .eax = 0x20  } ,
+    [5]={ .eax = 0x21  } ,
+    [6]={ .eax = 0x21  } ,
+    [7]={ .eax = 0x21  } ,
     [17]={ .eax = 0x200000  } ,
     [18]={ .eax = 0x200000  } ,
 

@@ -28,8 +28,6 @@
 #ifndef SRC_TD_DISPATCHER_VM_EXITS_TD_VMEXIT_H_
 #define SRC_TD_DISPATCHER_VM_EXITS_TD_VMEXIT_H_
 
-#define MAX_PERFMON_EVENTS_SUPPORTED 13
-
 /**
  * @brief Handler for XSETBV instruction exit
  */

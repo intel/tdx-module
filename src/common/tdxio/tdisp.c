@@ -133,7 +133,7 @@ bool_t assign_tdisp_header(
     }
     default:
     {
-        FATAL_ERROR();
+        fatal_error(FATAL_ERROR_ID_91, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
     }
 

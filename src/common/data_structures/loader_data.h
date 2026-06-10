@@ -53,7 +53,6 @@ typedef struct PACKED sysinfo_table_s
             uint8_t reserved_0[16];         /**< Reserved */
             bool_t smrr2_not_supported;
             bool_t tdx_without_integrity;
-
             uint16_t io_sys_info_table_version;
             uint8_t reserved_2[60];         /**< Reserved */
 

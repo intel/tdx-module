@@ -123,6 +123,28 @@ _STATIC_INLINE_ void ia32_ud2( void )
     _ASM_VOLATILE_ ("ud2" ::: "memory") ;
 }
 
+/**
+ * @brief Induce GP exception
+ */
+_STATIC_INLINE_ void ia32_gp(void)
+{
+    _ASM_VOLATILE_(
+        "movq $0x8000000000000000, %%rax\n"
+        "movq $0, (%%rax)\n"
+        ::: "memory", "rax");
+}
+
+/**
+ * @brief Induce SEAM shutdown by jumping to linear address 0 (long mode)
+ */
+_STATIC_INLINE_ void induce_shutdown(void)
+{
+    _ASM_VOLATILE_(
+        "movq $0, %%rax\n"
+        "jmpq *(%%rax)\n"
+        ::: "memory", "rax");
+}
+
 _STATIC_INLINE_ uint64_t ia32_rdmsr(uint64_t addr)
 {
     uint32_t low,high;
@@ -232,7 +254,7 @@ _STATIC_INLINE_ uint64_t get_tsc_ratio(void)
                &eax, &ebx,
                &ecx, &edx);
 
-    tdx_sanity_check(eax != 0, SCEC_HELPERS_SOURCE, 6);
+    tdx_sanity_check(eax != 0, FATAL_ERROR_ID_62, 0);
     uint64_t ratio = ((ebx / eax) * ecx);
 
     if (ratio == 0)
@@ -498,6 +520,14 @@ _STATIC_INLINE_ uint128_t _lock_read_128b(uint128_t * src)
     return result;
 }
 
+_STATIC_INLINE_ uint8_t _xchg_8_bit(uint8_t* mem, uint8_t quantum)
+{
+    //according to SDM, XCHG on memory operand is automatically uses the processor's locking protocol
+    //regardless of LOCK prefix
+    _ASM_VOLATILE_("xchgb %2, %0" : "=m" (*mem), "=a"(quantum) : "a"(quantum) : "memory");
+    return quantum;
+}
+
 _STATIC_INLINE_ uint16_t _xchg_16b(uint16_t *mem, uint16_t quantum)
 {
     //according to SDM, XCHG on memory operand is automatically uses the processor's locking protocol
@@ -592,6 +622,17 @@ _STATIC_INLINE_ bool_t bit_scan_forward64(uint64_t mask, uint64_t* lsb_position)
                         :"cc");
 
     return (mask != 0);
+}
+
+_STATIC_INLINE_ uint32_t bit_scan_forward32(uint32_t mask)
+{
+    uint32_t lsb_position;
+    _ASM_VOLATILE_ ("bsfl %1, %0 \n"
+                        :"=r"(lsb_position)
+                        :"r"(mask)
+                        :"cc");
+
+    return lsb_position;
 }
 
 _STATIC_INLINE_ bool_t bit_scan_reverse32(uint32_t value, uint32_t* msb_position)
@@ -792,6 +833,26 @@ _STATIC_INLINE_ void load_ymms_from_buffer(const uint256_t ymms[16])
 _STATIC_INLINE_ void atomic_mem_write_64b(uint64_t* mem, uint64_t val)
 {
     _ASM_VOLATILE_ ("movq %0, (%1)" : : "r" (val), "r" (mem) : "memory");
+}
+
+/**
+ * @brief This instruction is only supported starting from PTL
+ *
+ * @param msr_table - Linear address of a table of MSR addresses (8 bytes per address).
+ * @param msr_table_size - Number of elements in msr_table.
+ * @param data_table - Linear address of a table into which MSR data is stored (8 bytes per MSR).
+ * @param msr_bitmap - 64-bit bitmask of valid bits for the MSRs. Bit 0 is the valid bit for entry 0 in each table, etc.
+ */
+_STATIC_INLINE_ void rdmsr_list(const uint64_t* msr_table, uint8_t msr_table_size, uint64_t* data_table, uint64_t msr_bitmap)
+{
+    for (uint32_t i = 0; i < msr_table_size; i++)
+    {
+        tdx_sanity_check(i < 32, FATAL_ERROR_ID_275, 0);
+        if ((msr_bitmap & BIT(i)) != 0)
+        {
+            data_table[i] = ia32_rdmsr(msr_table[i]);
+        }
+    }
 }
 
 #endif /* SRC_COMMON_ACCESSORS_IA32_ACCESSORS_H_ */

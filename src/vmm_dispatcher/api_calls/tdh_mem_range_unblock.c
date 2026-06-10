@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/td_control_structures.h"
 #include "memory_handlers/keyhole_manager.h"
@@ -44,8 +44,7 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
     tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
-    pamt_block_t          tdr_pamt_block;            // TDR PAMT block
-    pamt_entry_t        * tdr_pamt_entry_ptr;        // Pointer to the TDR PAMT entry
+    pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
     tdcs_t              * tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
@@ -78,8 +77,7 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
                                                  TDX_RANGE_RO,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_ptr);
     if (return_val != TDX_SUCCESS)
@@ -111,6 +109,7 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
     return_val = lock_sept_check_and_walk_private_gpa(tdcs_ptr,
                                                       OPERAND_ID_RCX,
                                                       page_gpa,
+                                                      tdr_ptr->key_management_fields.hkid,
                                                       TDX_LOCK_EXCLUSIVE,
                                                       &sept_entry_ptr,
                                                       &sept_level_entry,
@@ -162,6 +161,7 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
         {
             // Get unblocked page HPA PAMT entry
             unblocked_page_pa.raw = leaf_ept_entry_to_hpa(sept_entry_copy, page_gpa.raw, sept_level_entry);
+            unblocked_page_pa = set_hkid_to_pa(unblocked_page_pa, tdr_ptr->key_management_fields.hkid);
             // Leaf points to a PT_REG page, get its PAMT entry
             unblocked_page_pamt_entry_ptr = pamt_implicit_get(unblocked_page_pa, (page_size_t)sept_level_entry);
         }
@@ -170,14 +170,14 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
             // Get unblocked page HPA PAMT entry
             unblocked_page_pa.raw = 0;
             unblocked_page_pa.page_4k_num = sept_entry_copy.base;
+            unblocked_page_pa = set_hkid_to_pa(unblocked_page_pa, tdr_ptr->key_management_fields.hkid);
             // Non-leaf points to a PT_SEPT page, get its PAMT entry
             unblocked_page_pamt_entry_ptr = pamt_implicit_get(unblocked_page_pa, PT_4KB);
         }
 
         // The TD may be running and this page must be blocked and tracked before it's removed.
-
         return_val = is_tlb_and_iotlb_tracked(tdcs_ptr, unblocked_page_pamt_entry_ptr->bepoch);
-        if(return_val != TDX_SUCCESS)
+        if (return_val != TDX_SUCCESS)
         {
             TDX_ERROR("Blocked SEPT page TLB tracking is not complete\n");
             return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
@@ -207,7 +207,9 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
             return_val = l2_sept_walk(tdr_ptr, tdcs_ptr, vm_id, page_gpa, &sept_level_entry, &l2_sept_entry_ptr);
             if (return_val != TDX_SUCCESS)
             {
-                FATAL_ERROR(); // Should not happen - no need to free the L2 SEPT PTR's
+                // Should not happen - no need to free the L2 SEPT PTR's
+                extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, vm_id, sept_level_entry, page_gpa.raw, *l2_sept_entry_ptr);
+                fatal_error(FATAL_ERROR_ID_13, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
             }
 
             sept_l2_unblock(l2_sept_entry_ptr);
@@ -257,7 +259,7 @@ EXIT:
 
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_ptr);
     }
 

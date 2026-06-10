@@ -42,8 +42,7 @@ api_error_type tdh_spdm_create(
     spdmdir_entry_t *spdmdir_entry_ptr = NULL;
 
     spdm_info_t *spdm_info_ptr = NULL;
-    pamt_entry_t *spdm_info_pamt_entry_ptr = NULL;
-    pamt_block_t spdm_info_pamt_block;
+    pamt_walk_result_t spdm_info_pamt_walk_result;
     bool_t is_spdm_info_pamt_locked = false;
 
     iommu_config_t *iommu_config_ptr = NULL;
@@ -81,8 +80,7 @@ api_error_type tdh_spdm_create(
         OPERAND_ID_R8,
         TDX_LOCK_EXCLUSIVE,
         PT_NDA,
-        &spdm_info_pamt_block,
-        &spdm_info_pamt_entry_ptr,
+        &spdm_info_pamt_walk_result,
         &is_spdm_info_pamt_locked);
     if (return_val != TDX_SUCCESS)
     {
@@ -114,9 +112,9 @@ api_error_type tdh_spdm_create(
     spdm_info_ptr->state = SPDM_STATE_NOT_BOUND;
 
     // Update PAMT entry of SPDM info to mark hosting IOMMU as the owner
-    spdm_info_pamt_entry_ptr->pt = PT_IOMMU_MT;
-    spdm_info_pamt_entry_ptr->owner = iommu_id_reg.iommu_id.raw;
-    spdm_info_pamt_entry_ptr->bepoch.raw = iommu_config_ptr->iommu_generation;
+    spdm_info_pamt_walk_result.pamt_entry_p->pt = PT_IOMMU_MT;
+    spdm_info_pamt_walk_result.pamt_entry_p->owner = iommu_id_reg.iommu_id.raw;
+    spdm_info_pamt_walk_result.pamt_entry_p->bepoch.raw = iommu_config_ptr->iommu_generation;
 
     // Increment count of SPDM sessions
     iommu_config_ptr->active_spdm_session_count++;
@@ -142,7 +140,7 @@ EXIT:
 
     if (is_spdm_info_pamt_locked)
     {
-        pamt_unwalk(spdm_info_pa, spdm_info_pamt_block, spdm_info_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&spdm_info_pamt_walk_result);
     }
 
     release_iommu_lock(is_iommu_locked, iommu_config_ptr);

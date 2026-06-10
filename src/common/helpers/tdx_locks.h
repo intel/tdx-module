@@ -31,13 +31,12 @@
 #include "tdx_basic_types.h"
 #include "tdx_basic_defs.h"
 
+#include "tdx_api_defs.h"
 #include "accessors/ia32_accessors.h"
 #include "debug/tdx_debug.h"
 #include "helpers/error_reporting.h"
 #include "service_td.h"
-
-#include "auto_gen/tdx_error_codes_defs.h"
-#include "tdx_api_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 typedef enum
 {
@@ -100,7 +99,7 @@ _STATIC_INLINE_ void release_mutex_lock(mutex_lock_t * lock_ptr)
     retval = _lock_cmpxchg_8bit(MUTEX_LOCK, MUTEX_FREE, lock_ptr);
 
     // Check that the previous lock was actually taken
-    tdx_sanity_check((retval == MUTEX_LOCK), SCEC_LOCK_SOURCE, 0);
+    tdx_sanity_check((retval == MUTEX_LOCK), FATAL_ERROR_ID_188, 0);
 }
 
 //Sharex lock layout:  [ Readers count [14:1] |  Exclusive lock [0] ]
@@ -142,7 +141,7 @@ _STATIC_INLINE_ lock_return_t acquire_sharex_lock_sh(sharex_lock_t * lock_ptr)
     retval.raw = _lock_xadd_16b(&lock_ptr->raw, 2);
 
     // Check that we don't overflow the counter when only readers are on the lock
-    tdx_sanity_check((retval.raw != SHAREX_FULL_COUNTER_NO_WRITER), SCEC_LOCK_SOURCE, 1);
+    tdx_sanity_check((retval.raw != SHAREX_FULL_COUNTER_NO_WRITER), FATAL_ERROR_ID_189, 1);
 
     return (retval.exclusive == 0) ? LOCK_RET_SUCCESS : LOCK_RET_FAIL;
 }
@@ -169,7 +168,7 @@ _STATIC_INLINE_ lock_return_t acquire_sharex_lock(sharex_lock_t * lock_ptr, lock
         return acquire_sharex_lock_sh(lock_ptr);
     }
 
-    tdx_sanity_check(0, SCEC_LOCK_SOURCE, 2);
+    tdx_sanity_check(0, FATAL_ERROR_ID_190, 2);
 
     // Not supposed to return this after sanity check
     return LOCK_RET_FAIL;
@@ -184,7 +183,7 @@ _STATIC_INLINE_ void release_sharex_lock_sh(sharex_lock_t * lock_ptr)
     retval.raw = _lock_xadd_16b(&lock_ptr->raw, (uint16_t)-2);
 
     // Check that the previous lock wasn't exclusively taken, or wasn't taken at all
-    tdx_sanity_check(!(retval.exclusive == 1 || retval.counter == 0), SCEC_LOCK_SOURCE, 3);
+    tdx_sanity_check(!(retval.exclusive == 1 || retval.counter == 0), FATAL_ERROR_ID_191, 3);
 }
 
 _STATIC_INLINE_ void release_sharex_lock_ex(sharex_lock_t * lock_ptr)
@@ -196,7 +195,7 @@ _STATIC_INLINE_ void release_sharex_lock_ex(sharex_lock_t * lock_ptr)
     retval.raw = _xchg_16b(&lock_ptr->raw, SHAREX_FREE);
 
     //Check if lock wasn't free, or shared
-    tdx_sanity_check(retval.exclusive == 1, SCEC_LOCK_SOURCE, 4);
+    tdx_sanity_check(retval.exclusive == 1, FATAL_ERROR_ID_192, 4);
 }
 
 _STATIC_INLINE_ void release_sharex_lock(sharex_lock_t * lock_ptr, lock_type_t lock_type)
@@ -211,7 +210,7 @@ _STATIC_INLINE_ void release_sharex_lock(sharex_lock_t * lock_ptr, lock_type_t l
     }
     else
     {
-        tdx_sanity_check(0, SCEC_LOCK_SOURCE, 5);
+        tdx_sanity_check(0, FATAL_ERROR_ID_193, 5);
     }
 }
 
@@ -224,7 +223,7 @@ _STATIC_INLINE_ lock_return_t promote_sharex_lock(sharex_lock_t * lock_ptr)
     retval.raw = _lock_cmpxchg_16b(SHAREX_SINGLE_READER, SHAREX_EXCLUSIVE_LOCK, &lock_ptr->raw);
 
     //Check if lock was already exclusive or free
-    tdx_sanity_check(!(retval.exclusive == 1 || retval.raw == SHAREX_FREE), SCEC_LOCK_SOURCE, 6);
+    tdx_sanity_check(!(retval.exclusive == 1 || retval.raw == SHAREX_FREE), FATAL_ERROR_ID_194, 6);
 
     return (retval.counter == 1) ? LOCK_RET_SUCCESS : LOCK_RET_FAIL;
 }
@@ -238,7 +237,7 @@ _STATIC_INLINE_ lock_return_t demote_sharex_lock(sharex_lock_t * lock_ptr)
     retval.raw = _xchg_16b(&lock_ptr->raw, SHAREX_SINGLE_READER);
 
     //Check if lock wasn't free, or shared
-    tdx_sanity_check(retval.exclusive == 1, SCEC_LOCK_SOURCE, 7);
+    tdx_sanity_check(retval.exclusive == 1, FATAL_ERROR_ID_195, 7);
 
     return LOCK_RET_SUCCESS;
 }
@@ -284,7 +283,7 @@ _STATIC_INLINE_ api_error_type sept_lock_acquire_guest(ia32e_sept_t* sept_ptr)
 
 _STATIC_INLINE_ void sept_lock_release(ia32e_sept_t* sept_ptr)
 {
-    tdx_sanity_check(sept_ptr->raw & BIT(SEPT_ENTRY_TDEL_BIT_POSITION) , SCEC_LOCK_SOURCE, 8);
+    tdx_sanity_check(sept_ptr->raw & BIT(SEPT_ENTRY_TDEL_BIT_POSITION) , FATAL_ERROR_ID_196, 8);
 
     // Lock is taken. Just release it by resetting the TDEL bit
     (void)_lock_btr_64b(&sept_ptr->raw, SEPT_ENTRY_TDEL_BIT_POSITION);
@@ -341,7 +340,7 @@ _STATIC_INLINE_ api_error_code_e acquire_sharex_lock_hp_sh(sharex_hp_lock_t * lo
         // Sanity-check the counter after we know that exclusive bit was not set
         // Only when exclusive bit is not set the shared-counters has "real" "readers"
         // And that number should not overflow
-        tdx_sanity_check((retval.counter != SHAREX_HP_FULL_COUNTER), SCEC_LOCK_SOURCE, 10);
+        tdx_sanity_check((retval.counter != SHAREX_HP_FULL_COUNTER), FATAL_ERROR_ID_197, 10);
 
         return TDX_SUCCESS;
     }
@@ -364,7 +363,7 @@ _STATIC_INLINE_ api_error_code_e acquire_sharex_lock_hp_sh(sharex_hp_lock_t * lo
         // Sanity-check the counter after we know that exclusive bit was not set
         // Only when exclusive bit is not set the shared-counters has "real" "readers"
         // And that number should not overflow
-        tdx_sanity_check((retval.counter != SHAREX_HP_FULL_COUNTER), SCEC_LOCK_SOURCE, 11);
+        tdx_sanity_check((retval.counter != SHAREX_HP_FULL_COUNTER), FATAL_ERROR_ID_198, 11);
 
         return TDX_SUCCESS;
     }
@@ -423,7 +422,7 @@ _STATIC_INLINE_ api_error_code_e acquire_sharex_lock_hp(sharex_hp_lock_t * lock_
         return acquire_sharex_lock_hp_sh(lock_ptr, is_guest);
     }
 
-    tdx_sanity_check(0, SCEC_LOCK_SOURCE, 12);
+    tdx_sanity_check(0, FATAL_ERROR_ID_199, 12);
 
     // Not supposed to return this after sanity check
     return UNINITIALIZE_ERROR;
@@ -438,7 +437,7 @@ _STATIC_INLINE_ void release_sharex_lock_hp_sh(sharex_hp_lock_t * lock_ptr)
     retval.raw = _lock_xadd_16b(&lock_ptr->raw, (uint16_t)-SHAREX_HP_SINGLE_READER);
 
     // Check that the previous lock wasn't exclusively taken, or wasn't taken at all
-    tdx_sanity_check(!(retval.exclusive == 1 || retval.counter == 0), SCEC_LOCK_SOURCE, 13);
+    tdx_sanity_check(!(retval.exclusive == 1 || retval.counter == 0), FATAL_ERROR_ID_200, 13);
 }
 
 _STATIC_INLINE_ void release_sharex_lock_hp_ex(sharex_hp_lock_t * lock_ptr)
@@ -446,7 +445,7 @@ _STATIC_INLINE_ void release_sharex_lock_hp_ex(sharex_hp_lock_t * lock_ptr)
     tdx_debug_assert(lock_ptr != NULL);
 
     //Check if lock isn't free, or shared
-    tdx_sanity_check(lock_ptr->exclusive == 1, SCEC_LOCK_SOURCE, 14);
+    tdx_sanity_check(lock_ptr->exclusive == 1, FATAL_ERROR_ID_201, 14);
 
     _lock_and_16b(&lock_ptr->raw, SHAREX_HP_HOST_PRIORITY); // save HP state and reset counter and exclusive bit
 }
@@ -464,7 +463,7 @@ _STATIC_INLINE_ void release_sharex_lock_hp(sharex_hp_lock_t * lock_ptr, lock_ty
         return;
     }
 
-    tdx_sanity_check(0, SCEC_LOCK_SOURCE, 15);
+    tdx_sanity_check(0, FATAL_ERROR_ID_202, 15);
 }
 
 _STATIC_INLINE_ api_error_code_e promote_sharex_lock_hp(sharex_hp_lock_t * lock_ptr)
@@ -476,7 +475,7 @@ _STATIC_INLINE_ api_error_code_e promote_sharex_lock_hp(sharex_hp_lock_t * lock_
     retval.raw = _lock_cmpxchg_16b(SHAREX_HP_SINGLE_READER, SHAREX_HP_EXCLUSIVE_LOCK, &lock_ptr->raw);
 
     //Check if lock was already exclusive or free
-    tdx_sanity_check(!(retval.exclusive == 1 || retval.raw == SHAREX_HP_FREE), SCEC_LOCK_SOURCE, 16);
+    tdx_sanity_check(!(retval.exclusive == 1 || retval.raw == SHAREX_HP_FREE), FATAL_ERROR_ID_203, 16);
 
     if (retval.raw == SHAREX_HP_SINGLE_READER)
     {
@@ -488,7 +487,7 @@ _STATIC_INLINE_ api_error_code_e promote_sharex_lock_hp(sharex_hp_lock_t * lock_
                                         SHAREX_HP_EXCLUSIVE_LOCK, &lock_ptr->raw);
 
         //Check again if lock was already exclusive or free
-        tdx_sanity_check(!(retval.exclusive == 1 || retval.raw == SHAREX_HP_FREE), SCEC_LOCK_SOURCE, 17);
+        tdx_sanity_check(!(retval.exclusive == 1 || retval.raw == SHAREX_HP_FREE), FATAL_ERROR_ID_204, 17);
 
         if (retval.raw == (SHAREX_HP_SINGLE_READER | SHAREX_HP_HOST_PRIORITY))
         {
@@ -520,7 +519,7 @@ _STATIC_INLINE_ void release_bit_lock(uint32_t* mem_ptr, uint32_t bit_idx)
     bool_t retval;
     retval = _lock_btr_32b(mem_ptr, bit_idx);
 
-    tdx_sanity_check(retval != 0, SCEC_LOCK_SOURCE, 18);
+    tdx_sanity_check(retval != 0, FATAL_ERROR_ID_205, 18);
 }
 
 #endif /* SRC_COMMON_HELPERS_TDX_LOCKS_H_ */

@@ -58,8 +58,7 @@ api_error_type tdh_ide_stream_create(
     stream_info_t *stinfo_1_ptr = NULL;
 
     stream_exinfo_t *stream_exinfo_ptr = NULL;
-    pamt_block_t stream_exinfo_pamt_block;
-    pamt_entry_t *stream_exinfo_pamt_entry = NULL;
+    pamt_walk_result_t stream_exinfo_pamt_walk_result;
     bool_t is_stream_exinfo_locked = false;
 
     rp_cfg_page_t *rp_cfg_page_ptr = NULL;
@@ -194,8 +193,7 @@ api_error_type tdh_ide_stream_create(
         OPERAND_ID_R15,
         TDX_LOCK_EXCLUSIVE,
         PT_NDA,
-        &stream_exinfo_pamt_block,
-        &stream_exinfo_pamt_entry,
+        &stream_exinfo_pamt_walk_result,
         &is_stream_exinfo_locked);
     if (return_val != TDX_SUCCESS)
     {
@@ -236,9 +234,9 @@ api_error_type tdh_ide_stream_create(
     // No failures after this point, update all metadata fields
 
     // Update PAMT of IDE stream extended info page
-    stream_exinfo_pamt_entry->pt = PT_IOMMU_MT;
-    stream_exinfo_pamt_entry->owner = iommu_id_reg.iommu_id.raw;
-    stream_exinfo_pamt_entry->bepoch.raw = iommu_config_ptr->iommu_generation;
+    stream_exinfo_pamt_walk_result.pamt_entry_p->pt = PT_IOMMU_MT;
+    stream_exinfo_pamt_walk_result.pamt_entry_p->owner = iommu_id_reg.iommu_id.raw;
+    stream_exinfo_pamt_walk_result.pamt_entry_p->bepoch.raw = iommu_config_ptr->iommu_generation;
 
     // Initialize the IDE stream extended info page
     stream_exinfo_ptr = (stream_exinfo_t *)map_pa_with_global_hkid(
@@ -277,7 +275,7 @@ EXIT:
 
     if (is_stream_exinfo_locked)
     {
-        pamt_unwalk(stream_exinfo_pa, stream_exinfo_pamt_block, stream_exinfo_pamt_entry, TDX_LOCK_EXCLUSIVE, PT_4KB);
+        pamt_unwalk(&stream_exinfo_pamt_walk_result);
     }
 
     if (stinfo_1_ptr != NULL)

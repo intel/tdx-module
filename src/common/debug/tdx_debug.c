@@ -28,7 +28,7 @@
 #include "tdx_debug.h"
 #include "accessors/data_accessors.h"
 #include "memory_handlers/keyhole_manager.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE
 void init_debug_control(void)

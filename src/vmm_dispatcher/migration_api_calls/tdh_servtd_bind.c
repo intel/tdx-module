@@ -25,7 +25,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "helpers/helpers.h"
 #include "helpers/service_td.h"
@@ -40,8 +40,7 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
     // TDR and TDCS
     tdr_t             *tdr_p = NULL;         // Pointer to the owner TDR page
     pa_t               tdr_pa;               // Physical address of the owner TDR page
-    pamt_block_t       tdr_pamt_block;       // TDR PAMT block
-    pamt_entry_t      *tdr_pamt_entry_ptr = NULL;
+    pamt_walk_result_t tdr_pamt_walk_result;
     tdcs_t            *tdcs_p = NULL;        // Pointer to the TDCS structure
     bool_t             tdr_locked_flag = false;
 
@@ -50,8 +49,7 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
     // SRVICE TD TDR
     tdr_t             *servtd_tdr_p = NULL;         // Pointer to the Service-TD TDR page
     pa_t               servtd_tdr_pa;               // Physical address of the Service-TD TDR page
-    pamt_block_t       servtd_tdr_pamt_block;       // TDR PAMT block
-    pamt_entry_t      *servtd_tdr_pamt_entry_ptr = NULL;
+    pamt_walk_result_t servtd_tdr_pamt_walk_result;
     tdcs_t            *servtd_tdcs_p = NULL;        // Pointer to the Service-TD TDCS structure
     bool_t             servtd_tdr_locked_flag = false;
 
@@ -88,8 +86,7 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
                                                  TDX_RANGE_RO,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &tdr_pamt_block,
-                                                 &tdr_pamt_entry_ptr,
+                                                 &tdr_pamt_walk_result,
                                                  &tdr_locked_flag,
                                                  &tdr_p);
 
@@ -115,8 +112,7 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
                                                  TDX_RANGE_RO,
                                                  TDX_LOCK_SHARED,
                                                  PT_TDR,
-                                                 &servtd_tdr_pamt_block,
-                                                 &servtd_tdr_pamt_entry_ptr,
+                                                 &servtd_tdr_pamt_walk_result,
                                                  &servtd_tdr_locked_flag,
                                                  &servtd_tdr_p);
 
@@ -252,7 +248,10 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
 
         break;
     default:
-        FATAL_ERROR();
+    {
+        extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_td_handle(target_tdr_pa);
+        fatal_error(FATAL_ERROR_ID_59, FATAL_INFO_FORMAT_TD_HANDLE_INFO, &extended_fatal_info);
+    }
     }
 
     tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].state = SERVTD_BOUND;
@@ -282,7 +281,7 @@ EXIT:
 
     if (servtd_tdr_locked_flag)
     {
-        pamt_unwalk(servtd_tdr_pa, servtd_tdr_pamt_block, servtd_tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&servtd_tdr_pamt_walk_result);
         free_la(servtd_tdr_p);
     }
 
@@ -303,7 +302,7 @@ EXIT:
 
     if (tdr_locked_flag)
     {
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+        pamt_unwalk(&tdr_pamt_walk_result);
         free_la(tdr_p);
     }
 

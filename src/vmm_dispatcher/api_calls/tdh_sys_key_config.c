@@ -28,7 +28,7 @@
 #include "tdx_basic_defs.h"
 #include "tdx_basic_types.h"
 #include "tdx_vmm_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/mktme.h"
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
@@ -52,8 +52,10 @@ api_error_type tdh_sys_key_config(void)
     if (tdx_global_data_ptr->global_state.sys_state != SYSCONFIG_DONE)
     {
         TDX_ERROR("Wrong sys_init state: %d\n", tdx_global_data_ptr->global_state.sys_state);
-        retval = TDX_SYS_KEY_CONFIG_NOT_PENDING;
-        goto EXIT;
+        {
+            retval = TDX_SYS_KEY_CONFIG_NOT_PENDING;
+            goto EXIT;
+        }
     }
 
     // Use an atomic operation (e.g., LOCK BTS) on PL.PKG_CONFIG_BITMAP to verify

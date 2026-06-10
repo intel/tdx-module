@@ -47,7 +47,6 @@
 
 #define CORRUPT_ADDRESS                                 (1ULL << 63) // Non-canonical Linear Address
 
-#ifdef DEBUGFEATURE_TDX_DBG_TRACE
 #define EXCEPTION_HANDLER(func, vec)                    endbr64;            /* 4 bytes */ \
                                                         movq $vec, %rdi;    /* 7 bytes */ \
                                                         jmp func;           /* 5 bytes */
@@ -63,48 +62,60 @@
 .type  tdx_fault_wrapper,@function
 tdx_fault_wrapper:
 
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 0)           // Vector 0
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 1)           // Vector 1
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 2)           // Vector 2
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 3)           // Vector 3
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 4)           // Vector 4
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 5)           // Vector 5
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 6)           // Vector 6
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 7)           // Vector 7
-    EXCEPTION_HANDLER(tdx_debug_handler_with_errc, 8)         // Vector 8
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 9)           // Vector 9
-    EXCEPTION_HANDLER(tdx_debug_handler_with_errc, 10)        // Vector 10
-    EXCEPTION_HANDLER(tdx_debug_handler_with_errc, 11)        // Vector 11
-    EXCEPTION_HANDLER(tdx_debug_handler_with_errc, 12)        // Vector 12
-    EXCEPTION_HANDLER_NO_VEC(tdx_gp_handler)                  // Vector 13 - #GP
-    EXCEPTION_HANDLER(tdx_debug_handler_with_errc, 14)        // Vector 14
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 15)          // Vector 15
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 16)          // Vector 16
-    EXCEPTION_HANDLER(tdx_debug_handler_with_errc, 17)        // Vector 17
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 18)          // Vector 18
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 19)          // Vector 19
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 20)          // Vector 20
-    EXCEPTION_HANDLER(tdx_debug_handler_with_errc, 21)        // Vector 21
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 22)          // Vector 22
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 23)          // Vector 23
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 24)          // Vector 24
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 25)          // Vector 25
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 26)          // Vector 26
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 27)          // Vector 27
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 28)          // Vector 28
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 29)          // Vector 29
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 30)          // Vector 30
-    EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 31)          // Vector 31
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 0)           // Vector 0
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 1)           // Vector 1
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 2)           // Vector 2
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 3)           // Vector 3
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 4)           // Vector 4
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 5)           // Vector 5
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 6)           // Vector 6
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 7)           // Vector 7
+
+#ifdef DEBUGFEATURE_TDX_DBG_TRACE
+    EXCEPTION_HANDLER(tdx_handler_with_errc, 8)         // Vector 8 - #DF
+#else
+    EXCEPTION_HANDLER(tdx_unsupported_handler, 8)       // Vector 8 - #DF
+#endif
+
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 9)           // Vector 9
+    EXCEPTION_HANDLER(tdx_handler_with_errc, 10)        // Vector 10
+    EXCEPTION_HANDLER(tdx_handler_with_errc, 11)        // Vector 11
+    EXCEPTION_HANDLER(tdx_handler_with_errc, 12)        // Vector 12
+    EXCEPTION_HANDLER_NO_VEC(tdx_gp_handler)            // Vector 13 - #GP
+
+#ifdef DEBUGFEATURE_TDX_DBG_TRACE
+    EXCEPTION_HANDLER(tdx_handler_with_errc, 14)        // Vector 14 - #PF
+#else
+    EXCEPTION_HANDLER(tdx_unsupported_handler, 14)      // Vector 14 - #PF
+#endif
+
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 15)          // Vector 15
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 16)          // Vector 16
+    EXCEPTION_HANDLER(tdx_handler_with_errc, 17)        // Vector 17
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 18)          // Vector 18
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 19)          // Vector 19
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 20)          // Vector 20
+    EXCEPTION_HANDLER(tdx_handler_with_errc, 21)        // Vector 21
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 22)          // Vector 22
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 23)          // Vector 23
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 24)          // Vector 24
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 25)          // Vector 25
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 26)          // Vector 26
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 27)          // Vector 27
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 28)          // Vector 28
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 29)          // Vector 29
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 30)          // Vector 30
+    EXCEPTION_HANDLER(tdx_handler_no_errc, 31)          // Vector 31
 
     ud2
 
 
-tdx_debug_handler_no_errc:
+tdx_handler_no_errc:
 
     movq $0, %rsi                          // Pass zero in error code as second parameter
     jmp skip_errc
 
-tdx_debug_handler_with_errc:
+tdx_handler_with_errc:
 
     // We got the exception vector as the first parameter in RSI
     movq (%rsp), %rsi                      // Pass error code as second parameter
@@ -113,58 +124,9 @@ tdx_debug_handler_with_errc:
 skip_errc:
 
     movq (%rsp), %rdx                      // Get the faulting RIP as the third paramater
-    callq tdx_debug_exception_handler
+    callq tdx_exception_handler
 
     ud2
-
-#else/* DEBUG_IDT - DEBUGFEATURE_TDX_DBG_TRACE */
-
-#define EXCEPTION_HANDLER(func)                         endbr64;            /* 4 bytes */ \
-                                                        jmp func;           /* 5 bytes */\
-                                                        /* 7 nops to fill 7 bytes to complete 16 bytes */\
-                                                        nop; nop; nop; nop; \
-                                                        nop; nop; nop; \
-
-.globl tdx_fault_wrapper
-.type  tdx_fault_wrapper,@function
-tdx_fault_wrapper:
-
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 0
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 1
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 2
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 3
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 4
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 5
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 6
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 7
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 8
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 9
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 10
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 11
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 12
-    EXCEPTION_HANDLER(tdx_gp_handler)                 // Vector 13 - #GP
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 14
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 15
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 16
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 17
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 18
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 19
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 20
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 21
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 22
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 23
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 24
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 25
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 26
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 27
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 28
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 29
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 30
-    EXCEPTION_HANDLER(tdx_unsupported_handler)        // Vector 31
-
-    ud2
-
-#endif/* DEBUG_IDT - DEBUGFEATURE_TDX_DBG_TRACE*/
 
 tdx_unsupported_handler:
     // This a generic handler for unsupported exception type
@@ -188,16 +150,12 @@ tdx_gp_handler:
     xorq %rax, %rsi                        // Check indicator validity
     jz   indicator_valid                   // If not correct - Initiate SEAM shutdown
 
-#ifdef DEBUGFEATURE_TDX_DBG_TRACE
     movq $13,      %rdi                      // Set up vector
     movq -8(%rsp), %rsi                      // Set up error code
     movq (%rsp),   %rdx                      // Set up faulting RIP
-    callq tdx_debug_exception_handler
-#else
-    movq $CORRUPT_ADDRESS, %rsp            // Corrupt stack pointer
-    movq $0, %rax
-    jmpq *%rax                             // Jump to non-mapped address
-#endif
+    callq tdx_exception_handler
+
+    ud2
 
 indicator_valid:
 

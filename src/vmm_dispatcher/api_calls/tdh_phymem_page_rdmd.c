@@ -26,7 +26,7 @@
  */
 #include "tdx_vmm_api_handlers.h"
 #include "tdx_basic_defs.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "x86_defs/x86_defs.h"
 #include "data_structures/td_control_structures.h"
 #include "memory_handlers/keyhole_manager.h"
@@ -46,7 +46,7 @@ api_error_type tdh_phymem_page_rdmd(uint64_t target_page_pa)
     page_size_api_input_t page_pa_and_size = { .raw = target_page_pa };
     pa_t                  page_pa;
     pamt_block_t          page_pamt_block;
-    pamt_entry_t        * page_pamt_entry_ptr;
+    pamt_walk_result_t    page_pamt_walk_result = { .valid = false };
     bool_t                page_locked_flag = false;
 
     page_size_t           page_min_size = page_pa_and_size.level;
@@ -54,7 +54,6 @@ api_error_type tdh_phymem_page_rdmd(uint64_t target_page_pa)
     pamt_entry_t          pamt_entry;
 
     phymem_page_rdmd_pt_ret_t pt_ret;
-
     api_error_type        return_val = UNINITIALIZE_ERROR;
 
     // Initialize output registers to default values
@@ -65,9 +64,17 @@ api_error_type tdh_phymem_page_rdmd(uint64_t target_page_pa)
     local_data_ptr->vmm_regs.r10 = 0ULL;
     local_data_ptr->vmm_regs.r11 = 0ULL;
 
-    page_min_size = PT_4KB;
+    // Check reserved and other fields
+    if (page_pa_and_size.reserved1 || page_pa_and_size.reserved2 || (page_min_size > PT_1GB) ||
+        (!get_global_data()->dynamic_pamt_enabled && (page_min_size > PT_4KB)))
+    {
+        TDX_ERROR("Wrong page size or reserved bits 0x%llx\n", page_pa_and_size.raw);
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RCX);
+        goto EXIT;
+    }
+
     page_actual_size = page_min_size;
-    page_pa.raw = target_page_pa;
+    page_pa.raw = page_pa_and_size.hpa << 12;
 
     // Check that page address is page-aligned and that its HKID is zero
     if (!is_addr_aligned_pwr_of_2(page_pa.raw, TDX_PAGE_SIZE_IN_BYTES << (page_min_size * 9)) ||
@@ -88,7 +95,7 @@ api_error_type tdh_phymem_page_rdmd(uint64_t target_page_pa)
 
     // Walk and locate the leaf PAMT entry
     if ((return_val = pamt_walk(page_pa, page_pamt_block, TDX_LOCK_SHARED,
-                                &page_actual_size, true, false, &page_pamt_entry_ptr)) != TDX_SUCCESS)
+                                page_actual_size, true, false, &page_pamt_walk_result)) != TDX_SUCCESS)
     {
         TDX_ERROR("Failed to PAMT walk to entry - PAMT is locked\n");
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
@@ -96,18 +103,49 @@ api_error_type tdh_phymem_page_rdmd(uint64_t target_page_pa)
     }
     page_locked_flag = true;
 
-    pamt_entry = *page_pamt_entry_ptr;
+    page_actual_size = page_pamt_walk_result.level_reached;
+    pamt_entry = *(page_pamt_walk_result.pamt_entry_p);
 
     pt_ret.raw = 0;
+    if (get_global_data()->dynamic_pamt_enabled)
+    {
+        if ((page_min_size == PT_4KB) && (pamt_entry.pt == PT_NDA) &&
+            dynamic_pamt_4k_bitmap_get(&page_pamt_block, page_pa.raw))
+        {
+            // A 4KB page was requested, but we got to a PT_NDA entry (which may be a 2MB or 4KB entry).
+            // In this case, the PAMT_PAGE_BITMAP indicates if this is a PAMT page.
+            // We return the information of the PAMT page.
+            pt_ret.pt = PT_PAMT;
+            local_data_ptr->vmm_regs.r8 = PT_4KB;
+        }
+        else
+        {
+            pt_ret.pt = pamt_entry.pt;
+            if (pamt_entry.pt == PT_PAMT)
+            {
+                pt_ret.non_leaf = 1;
 
-    local_data_ptr->vmm_regs.rcx = pamt_entry.pt;
-    local_data_ptr->vmm_regs.r8 = (uint64_t)page_actual_size;
+                pamt_non_leaf_entry_t* pamt_node = (pamt_non_leaf_entry_t*)&pamt_entry;
+                local_data_ptr->vmm_regs.r10 = get_pamt_node_page0(pamt_node).raw;
+                local_data_ptr->vmm_regs.r11 = get_pamt_node_page1(pamt_node).raw;
+            }
+            local_data_ptr->vmm_regs.r8  = (uint64_t)page_actual_size;
+        }
+    }
+    else
+    {
+        pt_ret.pt = pamt_entry.pt;
+        local_data_ptr->vmm_regs.r8  = (uint64_t)page_actual_size;
+    }
+
+    local_data_ptr->vmm_regs.rcx = pt_ret.raw;
 
     if (pamt_entry.pt == PT_IOMMU_MT)
     {
         local_data_ptr->vmm_regs.rdx = pamt_entry.owner; //IOMMU ID
     }
     else
+    if (pt_ret.pt != PT_PAMT) // Don't return OWNER for PAMT pages or PT_PAMT non-leaf entries
     {
         // HKID should be zero at this point
         local_data_ptr->vmm_regs.rdx = get_pamt_entry_owner(&pamt_entry).raw; // Shift to get TDR HPA
@@ -124,7 +162,7 @@ EXIT:
     // Release all acquired locks
     if (page_locked_flag)
     {
-        pamt_unwalk(page_pa, page_pamt_block, page_pamt_entry_ptr, TDX_LOCK_SHARED, page_actual_size);
+        pamt_unwalk(&page_pamt_walk_result);
     }
 
     return return_val;

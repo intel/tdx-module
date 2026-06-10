@@ -57,7 +57,7 @@ api_error_code_e devifmt_walk(
      */
     while (current_level != devifmt_idx.level)
     {
-        tdx_sanity_check(current_level != DEVIFMT_L0, SCEC_DEVIFMT_SOURCE, 0);
+        tdx_sanity_check(current_level != DEVIFMT_L0, FATAL_ERROR_ID_241, 0);
 
         // Check that the current level present bit is on
         if (devifmt_walk_result_ptr->devifmt_path_arr[current_level]->p != 1)
@@ -78,8 +78,7 @@ api_error_code_e devifmt_walk(
             entry_idx_arr[child_level],
             sizeof(devifmt_entry_t),
             is_guest,
-            &devifmt_walk_result_ptr->pamt_block_arr[child_level],
-            &devifmt_walk_result_ptr->pamt_path_arr[child_level],
+            &devifmt_walk_result_ptr->pamt_walk_result_arr[child_level],
             PT_DEVIF_MT,
             mapping_type,
             (void **)&devifmt_walk_result_ptr->devifmt_path_arr[child_level]);
@@ -245,7 +244,7 @@ EXIT:
 
 _STATIC_INLINE_ void devifmt_release_lock(devifmt_entry_t *const devifmt_entry_ptr)
 {
-    tdx_sanity_check(devifmt_entry_ptr->raw & BIT(DEVIFMT_LOCK_BIT_IDX), SCEC_DEVIFMT_UNLOCK_SOURCE, 8);
+    tdx_sanity_check(devifmt_entry_ptr->raw & BIT(DEVIFMT_LOCK_BIT_IDX), FATAL_ERROR_ID_242, 8);
 
     // Lock is already taken. Release it by resetting the lock bit
     (void)_lock_btr_64b(&devifmt_entry_ptr->raw, DEVIFMT_LOCK_BIT_IDX);
@@ -273,12 +272,7 @@ void devifmt_unwalk(devifmt_walk_res_t *const devifmt_walk_result_ptr)
         // The current level PA is extracted from the parent node
         devifmt_pa.page_4k_num = devifmt_walk_result_ptr->devifmt_path_arr[level_idx + 1]->pa;
 
-        pamt_unwalk(
-            devifmt_pa,
-            devifmt_walk_result_ptr->pamt_block_arr[level_idx],
-            devifmt_walk_result_ptr->pamt_path_arr[level_idx],
-            TDX_LOCK_SHARED,
-            PT_4KB);
+        pamt_unwalk(&devifmt_walk_result_ptr->pamt_walk_result_arr[level_idx]);
         free_la(devifmt_walk_result_ptr->devifmt_path_arr[level_idx]);
     }
 }

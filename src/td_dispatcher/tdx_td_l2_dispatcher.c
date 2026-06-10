@@ -34,7 +34,7 @@
 #include "x86_defs/vmcs_defs.h"
 #include "data_structures/tdx_local_data.h"
 #include "tdx_td_api_handlers.h"
-#include "auto_gen/tdx_error_codes_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
 #include "helpers/helpers.h"
 #include "td_dispatcher/vm_exits/td_vmexit.h"
 #include "td_transitions/td_exit.h"
@@ -63,7 +63,8 @@ static void bus_lock_exit_l2(tdx_module_local_t* local_data_ptr, vmx_exit_inter_
  * @brief Handle L2 VM entry failures per basic exit reason
  **/
 static void handle_l2_vm_entry_failures(vm_vmexit_exit_reason_t vm_exit_reason,
-        vmx_exit_qualification_t vm_exit_qualification, vmx_exit_inter_info_t vm_exit_inter_info)
+                                        vmx_exit_qualification_t vm_exit_qualification,
+                                        vmx_exit_inter_info_t vm_exit_inter_info)
 {
     if (vm_exit_reason.vmenter_fail != 0)
     {
@@ -71,7 +72,7 @@ static void handle_l2_vm_entry_failures(vm_vmexit_exit_reason_t vm_exit_reason,
         {
             case VMEXIT_REASON_FAILED_VMENTER_GS:
                 // Invalid guest state is (typically) caused by L1 VMM operation
-                td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info);
+                td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info, false);
                 break;
             case VMEXIT_REASON_FAILED_VMENTER_MC:
                 // This VM entry failure was due to a #MC, disable the TD
@@ -80,18 +81,24 @@ static void handle_l2_vm_entry_failures(vm_vmexit_exit_reason_t vm_exit_reason,
                 break;
                 // No other exit reasons should happen on VM entry failure
             default:
-                FATAL_ERROR();
+            {
+                tdx_module_local_t* tdx_local_data_ptr = get_local_data();
+                extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_unexpected_vm_exit(tdx_local_data_ptr->vp_ctx.tdr_pa.raw,
+                                                                                                           tdx_local_data_ptr->current_td_vm_id,
+                                                                                                           (uint32_t)vm_exit_reason.basic_reason,
+                                                                                                           0);
+                fatal_error(FATAL_ERROR_ID_96, FATAL_INFO_FORMAT_UNEXPECTED_VM_EXIT_INFO, &extended_fatal_info);
                 break;
+            }
         }
         // Flow should never reach here
-        tdx_sanity_check(0, SCEC_TD_DISPATCHER_SOURCE, 102);
+        tdx_sanity_check(0, FATAL_ERROR_ID_256, 102);
     }
 }
 
 void tdx_td_l2_dispatcher(void)
 {
     tdx_module_local_t* tdx_local_data_ptr = get_local_data();
-
     tdvps_t* tdvps_p = tdx_local_data_ptr->vp_ctx.tdvps;
     tdcs_t* tdcs_p = tdx_local_data_ptr->vp_ctx.tdcs;
 
@@ -104,8 +111,7 @@ void tdx_td_l2_dispatcher(void)
     uint16_t vm_id = tdx_local_data_ptr->vp_ctx.tdvps->management.curr_vm;
 
 
-    tdx_sanity_check((vm_id == tdx_local_data_ptr->current_td_vm_id) && (vm_id > 0) && (vm_id < MAX_VMS),
-                     SCEC_TD_DISPATCHER_SOURCE, 55);
+    tdx_sanity_check((vm_id == tdx_local_data_ptr->current_td_vm_id) && (vm_id > 0) && (vm_id < MAX_VMS), FATAL_ERROR_ID_257, 55);
 
     bhb_drain_sequence(get_global_data());
 
@@ -145,8 +151,7 @@ void tdx_td_l2_dispatcher(void)
             case L2_EXIT_ROUTE_L2_TO_L1_EXIT:
                 // A posted interrupt has been injected by the VM exit handler to L1.
                 // Do an L2->L1 exit so that uCode will process the interrupt.
-                td_l2_to_l1_exit_with_exit_case(TDX_L2_EXIT_PENDING_INTERRUPT, vm_exit_reason,
-                                                vm_exit_qualification, 0, vm_exit_inter_info);
+                td_l2_to_l1_exit_with_exit_case(TDX_L2_EXIT_PENDING_INTERRUPT, vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info, false);
                 break;
 
             default:
@@ -248,7 +253,7 @@ void tdx_td_l2_dispatcher(void)
         case VMEXIT_REASON_XSETBV_INSTRUCTION:
         case VMEXIT_REASON_TPR_BELOW_THRESHOLD:
         case VMEXIT_REASON_VIRTUALIZED_EOI:
-            td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info);
+            td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info, false);
             break;
 
         // L2->L1 exit or #VE injection, depending of TDVPS.ENABLE_EXTENDED_VE
@@ -258,7 +263,7 @@ void tdx_td_l2_dispatcher(void)
         case VMEXIT_REASON_WBINVD_INSTRUCTION:
         case VMEXIT_REASON_PCONFIG:
             {
-                td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info);
+                td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info, false);
             }
             break;
 
@@ -274,7 +279,7 @@ void tdx_td_l2_dispatcher(void)
                 }
                 else
                 {
-                    td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info);
+                    td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info, false);
                 }
             }
 
@@ -294,7 +299,7 @@ void tdx_td_l2_dispatcher(void)
                 }
                 else
                 {
-                    td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info);
+                    td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info, false);
                 }
             }
             break;
@@ -318,20 +323,27 @@ void tdx_td_l2_dispatcher(void)
             }
             else
             {
-                td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info);
+                td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info, false);
             }
             break;
         }
         case VMEXIT_REASON_EPT_PML_FULL:
+        {
             // PML is only allowed for debuggable TDs
             if (tdcs_p->executions_ctl_fields.attributes.debug)
             {
                 async_tdexit_to_vmm(TDX_SUCCESS, vm_exit_reason, vm_exit_qualification.raw, 0, 0, 0);
             }
             // otherwise, others are not expected
-            FATAL_ERROR();
+            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_unexpected_vm_exit(tdx_local_data_ptr->vp_ctx.tdr_pa.raw,
+                                                                                                       tdx_local_data_ptr->current_td_vm_id,
+                                                                                                       (uint32_t)vm_exit_reason.basic_reason,
+                                                                                                       0);
+            fatal_error(FATAL_ERROR_ID_97, FATAL_INFO_FORMAT_UNEXPECTED_VM_EXIT_INFO, &extended_fatal_info);
             break;
+        }
         default:
+        {
             // If the TD is debuggable then other exit reasons are expected
             if (tdcs_p->executions_ctl_fields.attributes.debug)
             {
@@ -344,9 +356,14 @@ void tdx_td_l2_dispatcher(void)
 
             // Otherwise, other exit reasons are not expected
             TDX_ERROR("Fatal/unknown exit reason %d \n", vm_exit_reason.basic_reason);
-            FATAL_ERROR();
+            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_unexpected_vm_exit(tdx_local_data_ptr->vp_ctx.tdr_pa.raw,
+                                                                                                       tdx_local_data_ptr->current_td_vm_id,
+                                                                                                       (uint32_t)vm_exit_reason.basic_reason,
+                                                                                                       0);
+            fatal_error(FATAL_ERROR_ID_98, FATAL_INFO_FORMAT_UNEXPECTED_VM_EXIT_INFO,&extended_fatal_info);
 
             break;
+        }
     }
 
     // Make sure the active VMCS is set to the current VM's VMCS.
@@ -376,7 +393,7 @@ EXIT:
     {
         // Convert the VOE fields in VMCS to exit information fields and do an L2->L1 exit
         convert_l2_voe_to_l1_exit();
-        td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info);
+        td_l2_to_l1_exit(vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info, false);
     }
 
     // If NMI unblocking by IRET was indicated during VM exit, re-block NMI
@@ -390,7 +407,6 @@ EXIT:
     //Return to TD
     tdx_return_to_td(true, false, &tdx_local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state);
 
-    //Unreachable code. panic
-    tdx_sanity_check(0, SCEC_TD_DISPATCHER_SOURCE, 50);
+    resume_l1_and_emulate_termination(L2_ENTRY_FAILURE_AFTER_L2_EXIT);
 }
 

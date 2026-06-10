@@ -121,7 +121,7 @@ api_error_type tdh_ide_stream_delete(
 
     // There should not be any device interfaces active
     // Devif creation acquires shared lock on the stream extended info page
-    if (stream_exinfo_ptr->devif_ref_cnt != 0)
+    if (stream_exinfo_ptr->tdi_ref_cnt != 0)
     {
         TDX_ERROR("There are active device interfaces on the device\n");
         return_val = api_error_with_operand_id(TDX_IDE_STREAM_HAS_DEVICE_INTERFACES, OPERAND_ID_RDX);

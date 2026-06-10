@@ -47,7 +47,7 @@ api_error_type tdh_mng_key_config(uint64_t target_tdr_pa)
 
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
-    tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
+    tdr_t               * tdr_ptr = NULL;            // Pointer to the TDR page (linear address)
     pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 

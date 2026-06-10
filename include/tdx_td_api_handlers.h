@@ -281,4 +281,5 @@ api_error_type tdg_mem_page_attr_wr(
     gpa_attr_t gpa_attr,
     attr_flags_t attr_flags);
 
+
 #endif /* INCLUDE_TDX_TD_API_HANDLERS_H_ */

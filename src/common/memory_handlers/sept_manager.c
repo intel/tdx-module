@@ -811,7 +811,7 @@ void l2_sept_update_gpa_attr(ia32e_sept_t* const l2_sept_entry_ptr, const gpa_at
     }
 }
 
-bool_t cmpxchg_keep_masked(ia32e_sept_t* ept_entry, uint64_t expected_val, uint64_t* new_val, uint64_t mask)
+void cmpxchg_keep_masked(ia32e_sept_t* ept_entry, uint64_t expected_val, uint64_t* new_val, uint64_t mask)
 {
     uint64_t old_value;
 
@@ -828,27 +828,19 @@ bool_t cmpxchg_keep_masked(ia32e_sept_t* ept_entry, uint64_t expected_val, uint6
 
         if (old_value == expected_val)
         {
-            return true;
+            return;
         }
 
         // If values differ only in the masked bits, try again with those bits taken from the value in memory
         expected_val = old_value;
     } while ((old_value & ~mask) == (expected_val & ~mask));
 
-    return false;
+    // Fatal error, the SEPT entry was not as expected. shouold never happen.
+    fatal_error(FATAL_ERROR_ID_345, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
 }
 
 
 void atomically_update_sept_state_keep_masked_bits(ia32e_sept_t* ept_entry, uint64_t new_state, uint64_t mask)
 {
-    uint64_t expected_state = ept_entry->raw;
-
-    if (!cmpxchg_keep_masked(ept_entry, expected_state, &new_state, mask))
-    {
-        // Fatal error, the SEPT entry was not as expected
-        fatal_error(FATAL_ERROR_ID_345, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
-    }
-
-    // Write the new value in a single 64-bit write
-    atomic_mem_write_64b(&ept_entry->raw, new_state);
+    cmpxchg_keep_masked(ept_entry, ept_entry->raw, &new_state, mask);
 }

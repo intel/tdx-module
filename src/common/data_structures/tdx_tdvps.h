@@ -34,6 +34,7 @@
 
 #include "x86_defs/x86_defs.h"
 #include "x86_defs/msr_defs.h"
+#include "x86_defs/vmcs_defs.h"
 #include "debug/tdx_debug.h"
 
 #include "helpers/error_reporting.h"
@@ -69,10 +70,27 @@ typedef enum
 
 typedef enum
 {
-    HOST_ROUTED_NONE     = 0, // L2 TD exit not routed to L1
-    HOST_ROUTED_ASYNC    = 1, // L2 async TD exit routed to L1 (TDH.VP.ENTER with RESUME_L1 set)
-    HOST_ROUTED_TDVMCALL = 2  // L2 sync (TDG.VP.VMCALL) TD exit routed to L1 (TDH.VP.ENTER with RESUME_L1 set)
-} l2_exit_host_routing_e;
+    L2_EXIT_ROUTED_NONE     = 0, // L2 TD exit not routed to L1
+    L2_EXIT_ROUTED_ASYNC    = 1, // L2 async TD exit routed to L1 (TDH.VP.ENTER with RESUME_L1 set)
+    L2_EXIT_ROUTED_TDVMCALL = 2  // L2 sync (TDG.VP.VMCALL) TD exit routed to L1 (TDH.VP.ENTER with RESUME_L1 set)
+} l2_exit_routing_e;
+
+typedef enum
+{
+    HOST_ROUTED     = 0,
+    INTR_ROUTED     = 1
+} l2_exit_reason_e;
+
+typedef union l2_exit_host_routing_u
+{
+    struct
+    {
+        uint8_t routing : 4;
+        uint8_t reason  : 4;
+    };
+
+    uint8_t raw;
+} l2_exit_host_routing_t;
 
 #define MAX_VMS           4
 #define MAX_L2_VMS        (MAX_VMS - 1)
@@ -191,7 +209,12 @@ typedef struct tdvps_ve_info_s
     };
 
     uint8_t ve_category;
-    uint8_t reserved_1[83];
+    uint8_t reserved_1[3];
+    uint64_t extended_instr_info;
+    uint32_t interruptibility_state;
+    uint8_t reserved_2[4];
+    uint64_t apic_data;
+    uint8_t reserved_3[56];
 } tdvps_ve_info_t;
 tdx_static_assert(sizeof(tdvps_ve_info_t) == SIZE_OF_VE_INFO_STRUCT_IN_BYTES, tdvps_ve_info_t);
 
@@ -204,13 +227,37 @@ typedef union vcpu_state_s
 {
     struct
     {
-        uint64_t vmxip    : 1;
-        uint64_t reserved : 63;
+        uint64_t vintr_pending_0       : 1;
+        uint64_t vintr_pending_1       : 1;
+        uint64_t vintr_pending_2       : 1;
+        uint64_t vintr_pending_3       : 1;
+        uint64_t vintr_in_service_0    : 1;
+        uint64_t vintr_in_service_1    : 1;
+        uint64_t vintr_in_service_2    : 1;
+        uint64_t vintr_in_service_3    : 1;
+        uint64_t vnmi_pending_0        : 1;
+        uint64_t vnmi_pending_1        : 1;
+        uint64_t vnmi_pending_2        : 1;
+        uint64_t vnmi_pending_3        : 1;
+        uint64_t on_set_0              : 1;
+        uint64_t on_set_1              : 1;
+        uint64_t on_set_2              : 1;
+        uint64_t on_set_3              : 1;
+        uint64_t reserved              : 48;
+    };
+
+    struct
+    {
+        uint64_t any_vintr_pending     : 4;
+        uint64_t any_vintr_in_service  : 4;
+        uint64_t any_vnmi_pending      : 4;
+        uint64_t any_on_set            : 4;
     };
     uint64_t raw;
-}vcpu_state_t;
+} vcpu_state_t;
+tdx_static_assert(sizeof(vcpu_state_t) == 8, vcpu_state_t);
 
-#define SIZE_OF_TDVPS_MANAGEMENT_STRUCT_IN_BYTES 1536
+#define SIZE_OF_TDVPS_MANAGEMENT_STRUCT_IN_BYTES 1280
 #define EPF_GPA_LIST_SIZE 32
 #define OFFSET_OF_TDVPS_MANAGEMENT_IN_BYTES      0x100
 
@@ -285,7 +332,7 @@ typedef struct tdvps_management_s
 
     uint64_t  last_seamdb_index;
     uint16_t  curr_vm;
-    uint8_t   l2_exit_host_routing;
+    l2_exit_host_routing_t l2_exit_host_routing;
     uint8_t   reserved_7[1];
 
     bool_t    vm_launched[MAX_VMS];
@@ -312,14 +359,9 @@ typedef struct tdvps_management_s
     uint64_t  shadow_cr4_guest_host_mask[MAX_VMS]; // Index 0 is not used - L2 only
     uint64_t  shadow_cr4_read_shadow[MAX_VMS];     // Index 0 is not used - L2 only
     uint32_t  shadow_instruction_timeout_control[MAX_VMS];
-    uint64_t  shadow_pid_hpa;
+    uint64_t  shadow_pid_hpa[MAX_VMS];
 
-    uint8_t   reserved_9[24];
-
-    uint32_t  shadow_pinbased_exec_ctls;
-
-    uint8_t   reserved_10[12];
-
+    uint32_t  shadow_pinbased_exec_ctls[MAX_VMS];
     uint32_t  shadow_ple_gap[MAX_VMS];
     uint32_t  shadow_ple_window[MAX_VMS];
     uint16_t  shadow_posted_int_notification_vector;
@@ -337,7 +379,14 @@ typedef struct tdvps_management_s
 
     uint64_t  l2_vapic_gpa[MAX_VMS];
     uint64_t  l2_vapic_hpa[MAX_VMS];
-    uint8_t   reserved_12[592]; /**< Reserved for aligning the next field */
+
+    uint64_t  last_rate_limited_tdcall_tsc;
+
+    bool_t    wakeup_sent[MAX_VMS];
+    uint16_t  pidpt_index[MAX_VMS];
+    bool_t    intr_setup_done[MAX_VMS];
+
+    uint8_t   reserved_12[312]; /**< Reserved for aligning the next field */
 } tdvps_management_t;
 tdx_static_assert(sizeof(tdvps_management_t) == SIZE_OF_TDVPS_MANAGEMENT_STRUCT_IN_BYTES, tdvps_management_t);
 
@@ -471,6 +520,7 @@ typedef union  tdvps_vapic_s
         uint8_t reserved[TDX_PAGE_SIZE_IN_BYTES - APIC_T_SIZE];
     };
     uint8_t raw[TDX_PAGE_SIZE_IN_BYTES];
+    apic_t apic;
 } tdvps_vapic_t;
 tdx_static_assert(sizeof(tdvps_vapic_t) == SIZE_OF_TDVPS_VAPIC_STRUCT_IN_BYTES, tdvps_vapic_t);
 
@@ -521,6 +571,7 @@ typedef struct ALIGN(TDX_PAGE_SIZE_IN_BYTES) tdvps_s
     tdvps_ve_info_t                ve_info;
     uint8_t                        reserved_0[128]; /**< Reserved for aligning the next field */
     tdvps_management_t             management;
+    pidsc_t                          sec_pid[MAX_VMS];
     uint64_t                       last_epf_gpa_list[EPF_GPA_LIST_SIZE];  // Array of GPAs that caused EPF at this TD vCPU instruction
 
     uint8_t                        reserved_1[256]; /**< Reserved for aligning the next field */
@@ -554,5 +605,10 @@ typedef union attr_flags_u
 tdx_static_assert(sizeof(attr_flags_t) == 8, attr_flags_t);
 
 #pragma pack(pop)
+
+_STATIC_INLINE_ uint64_t get_sec_pid_hpa_with_hkid(tdvps_t* tdvps_p, uint16_t vm_id)
+{
+    return tdvps_p->management.tdvps_page_pa[0] + offsetof(tdvps_t, sec_pid) + (sizeof(pidsc_t) * vm_id);
+}
 
 #endif /* SRC_COMMON_DATA_STRUCTURES_TDX_TDVPS_H_ */

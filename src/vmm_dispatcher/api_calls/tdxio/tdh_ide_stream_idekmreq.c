@@ -153,7 +153,7 @@ api_error_type tdh_ide_stream_idekmreq(
 
     // If OBJECT_ID is K_SET_STOP, verify there are no active device interfaces bound to the stream
     if (object_id == IDE_OBJECT_ID_K_SET_STOP &&
-        stream_exinfo_ptr->devif_ref_cnt != 0)
+        stream_exinfo_ptr->tdi_ref_cnt != 0)
     {
         TDX_ERROR("OBJECT_ID is K_SET_STOP, and there are active device interfaces bound to the stream\n");
         return_val = api_error_with_operand_id(TDX_IDE_STREAM_HAS_DEVICE_INTERFACES, OPERAND_ID_RDX);

@@ -154,6 +154,7 @@ void tdx_vmm_dispatcher(void)
             case TDH_VP_RD_LEAF:
             case TDH_VP_INIT_LEAF:
             case TDH_SYS_INIT_LEAF:
+            case TDH_SYS_UPDATE_LEAF:
             case TDH_MEM_SHARED_SEPT_WR_LEAF:
                 break;
             default:
@@ -418,9 +419,9 @@ void tdx_vmm_dispatcher(void)
         sysconfig_options.raw = local_data->vmm_regs.r8;
 
         local_data->vmm_regs.rax = tdh_sys_config(local_data->vmm_regs.rcx,
-                                                 local_data->vmm_regs.rdx,
-                                                 sysconfig_options
-                                                 );
+                                                  local_data->vmm_regs.rdx,
+                                                  sysconfig_options
+                                                  );
         break;
     }
     case TDH_SYS_KEY_CONFIG_LEAF:
@@ -475,7 +476,7 @@ void tdx_vmm_dispatcher(void)
     }
     case TDH_SYS_UPDATE_LEAF:
     {
-		local_data->vmm_regs.rax = tdh_sys_update();
+        local_data->vmm_regs.rax = tdh_sys_update((uint8_t)leaf_opcode.version, local_data->vmm_regs.r9, local_data->vmm_regs.r10);
         break;
     }
     case TDH_MEM_TRACK_LEAF:

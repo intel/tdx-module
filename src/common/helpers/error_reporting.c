@@ -142,6 +142,7 @@ extended_fatal_info_t prepare_extended_fatal_info_unexpected_vm_exit(uint64_t hp
 void fatal_error(fatal_error_id_e error_id, fatal_info_format_e format, extended_fatal_info_t* extended_info)
 {
     tdx_module_global_t* global_data = get_global_data();
+    tdx_module_local_t* local_data = get_local_data();
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE
     TDX_ERROR("!!!!!!!!!!!!!!!!!!  - FATAL ERROR INFO - BASIC -  !!!!!!!!!!!!!!!!!!!\n");
@@ -211,9 +212,9 @@ void fatal_error(fatal_error_id_e error_id, fatal_info_format_e format, extended
 #endif // DEBUGFEATURE_TDX_DBG_TRACE
 
     // check if fatal error diagnostics logging was configured
-    if (global_data->fatal_info_p)
+    if (local_data->fatal_info_p)
     {
-        fatal_info_t* fatal_info_p = (fatal_info_t*)global_data->fatal_info_p;
+        fatal_info_t* fatal_info_p = (fatal_info_t*)local_data->fatal_info_p;
 
         // check that fatal info does not contain any valid info
         if (FATAL_INFO_STATE_NO_INFO != _lock_cmpxchg_8bit(FATAL_INFO_STATE_NO_INFO, FATAL_INFO_STATE_WRITING_IN_PROGRESS, (uint8_t*)&fatal_info_p->basic_info.state))
@@ -232,7 +233,7 @@ void fatal_error(fatal_error_id_e error_id, fatal_info_format_e format, extended
             tdx_memcpy(&fatal_info_p->extended_info, sizeof(extended_fatal_info_t), extended_info, sizeof(extended_fatal_info_t));
         }
 
-        ia32_clflushopt((void*)global_data->fatal_info_p);
+        ia32_clflushopt((void*)local_data->fatal_info_p);
         mfence();
         
         // update the state and release the state lock

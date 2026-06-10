@@ -161,6 +161,8 @@ static api_error_type handle_command_by_type(migs_index_and_cmd_t migs_i_and_cmd
         field_id->context_code = MD_CTX_SYS;
         *sys_exported = false;
         migsc_p->interrupted_state.sys_migrated = false;
+
+        tdcs_p->executions_ctl2_fields.field_support_at_init |= BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT);
     }
     else // migs_i_and_cmd.command == MIGS_INDEX_COMMAND_RESUME
     {
@@ -182,11 +184,20 @@ static api_error_type handle_command_by_type(migs_index_and_cmd_t migs_i_and_cmd
 
         migsc_p->interrupted_state.valid = false;
 
+        decrement_mig_interrupted_counters(&tdcs_p->migration_fields.mig_interrupted_count, migsc_p,
+                                           (bool_t)tdcs_p->executions_ctl2_fields.field_support_at_init & BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT));
+
         // Check that the same function is resumed with the same parameters
         if ((migsc_p->interrupted_state.func.raw != local_data_ptr->vmm_regs.rax) ||
             (migsc_p->interrupted_state.page_list_info.raw != page_list_info.raw))
         {
             return TDX_INVALID_RESUMPTION;
+        }
+
+        return_val = check_migsc_aes_gcm_context_compatibility_on_export_resume(migsc_p, 0);
+        if (TDX_SUCCESS != return_val)
+        {
+            return return_val;
         }
 
         // Restore the saved state
@@ -276,6 +287,13 @@ static api_error_type handle_continues_export(api_error_type* return_val, bool_t
             migsc_p->interrupted_state.field_id.raw = next_field_id->raw;
 
             migsc_p->interrupted_state.num_processed = page_list_i;
+
+            migsc_p->interrupted_state.aes_gcm_context_version = CRYPTO_LIB_COMPAT_VERSION;
+            if (tdcs_p->executions_ctl2_fields.field_support_at_init & BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT))
+            {
+                (void)_lock_xadd_16b(&get_global_data()->mig_interrupted_count, 1);
+                (void)_lock_xadd_16b(&tdcs_p->migration_fields.mig_interrupted_count, 1);
+            }
 
             *continue_loop = false;
             return tmp_return_val;

@@ -136,9 +136,10 @@ void tdx_ept_misconfig_exit_to_vmm(pa_t gpa);
  * @param tdvps_p            - TDVPS where the VE_AREA is located
  * @param gpa                - guest physical address to be stored in the VE_AREA
  * @param glp                - guest linear address to be stored in the VE_AREA
+ * @param apic_data
  */
 void tdx_inject_ve(uint64_t vm_exit_reason, uint64_t exit_qualification, ve_category_e category,
-                   tdvps_t* tdvps_p, uint64_t gpa, uint64_t gla);
+                   tdvps_t* tdvps_p, uint64_t gpa, uint64_t gla, uint64_t apic_data);
 
 /**
  * @brief Handler for nmi exit, Inject an NMI if applicable
@@ -161,5 +162,6 @@ void td_nmi_exit(tdx_module_local_t* tdx_local_data_ptr);
  */
 void async_tdexit_ept_violation(pa_t gpa, ept_level_t req_level, ia32e_sept_t sept_entry,
                                 ept_level_t ept_level, ia32e_sept_t* sept_entry_ptr, vmx_eeq_type_t eeq_type);
+
 
 #endif /* SRC_TD_DISPATCHER_VM_EXITS_TD_VMEXIT_H_ */

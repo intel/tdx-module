@@ -36,8 +36,5 @@ extern const uint8_t GLOBAL_TDX_MINOR_SEAM_SVN;
 extern const uint64_t GLOBAL_TDX_MODULE_MAJOR_VER;
 extern const uint64_t GLOBAL_TDX_MODULE_MINOR_VER;
 extern const uint64_t GLOBAL_TDX_MODULE_UPDATE_VER;
-extern const uint64_t GLOBAL_TDX_MODULE_HV;
-extern const uint64_t GLOBAL_TDX_MIN_UPDATE_HV;
-extern const uint64_t GLOBAL_TDX_NO_DOWNGRADE;
 
 #endif // _MAKEFILE_CONSTS_H_

@@ -418,8 +418,8 @@ static api_error_type finish_entry_processing(uint64_t* entry_num, gpa_list_info
             migsc_p->interrupted_state.l2_attr_list_pa.raw = l2_attr_list_pa.raw;
             migsc_p->interrupted_state.new_page_list_pa.raw = new_page_list_pa.raw;
             migsc_p->mbmd.mem.header.mig_epoch = tdcs_p->migration_fields.mig_epoch;
+            migsc_p->interrupted_state.aes_gcm_context_version = 0;
         }
-
     }
     else
     {

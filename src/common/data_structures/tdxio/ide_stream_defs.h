@@ -804,7 +804,7 @@ typedef struct
     // Must be 0
     uint8_t reserved[5];                                          // [515:519]
     // Number of DEVIFCS structures associated with this stream
-    uint64_t devif_ref_cnt;                                       // [520:527]
+    uint64_t tdi_ref_cnt;                                       // [520:527]
     // Tracks if keys have been configured Array of 4 UINT8_T where each field is a bitfield. First index is direction and second is key set
     // Bit 0 – PR_KEY, Bit 2 – NPR_KEY, Bit 4 – CPL_KEY
     uint8_t key_valid[2][2];                                      // [528:531]

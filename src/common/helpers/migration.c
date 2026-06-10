@@ -109,3 +109,63 @@ void copy_mbmd(mbmd_t* mbmd_dst, mbmd_t* mbmd_src)
     tdx_memcpy(mbmd_dst, sizeof(mbmd_t), mbmd_src, sizeof(mbmd_t));
 }
 
+void decrement_mig_interrupted_counters(uint16_t* mig_interrupted_count, migsc_t* migsc_p, bool_t decrement_interrupted_count)
+
+{
+    /* Check the following to avoid an underflow:
+       - The interrupted flow was executed on a TDX module which supported MIG_INTERRUPTED_COUNT.
+       - The interrupted flow indeed incremented MIG_INTERRUPTED_COUNT, as indicated by AES_GCM_CONTEXT_VERSION > 0. */
+    if (decrement_interrupted_count && (migsc_p->interrupted_state.aes_gcm_context_version > 0))
+    {
+        uint16_t old_val = _lock_xadd_16b(&get_global_data()->mig_interrupted_count, (uint16_t)-1);
+        tdx_sanity_check(old_val > 0, FATAL_ERROR_ID_362, 0);
+        old_val = _lock_xadd_16b(mig_interrupted_count, (uint16_t)-1);
+        tdx_sanity_check(old_val > 0, FATAL_ERROR_ID_363, 0);
+    }
+}
+
+api_error_type check_migsc_aes_gcm_context_compatibility_on_export_resume(migsc_t* migsc_p, uint16_t migs_index)
+{
+    if(migsc_p->interrupted_state.aes_gcm_context_version != CRYPTO_LIB_COMPAT_VERSION)
+    {
+        if(get_global_data()->update_compatibility)
+        {
+            return TDX_INCOMPATIBLE_MBMD_MAC_CONTEXT;
+        }
+        else
+        {
+            /* The host VMM did not opt-in to receive an error on update compatibility mismatch.  Reset the crypto library context using the new IV
+               counter and continue the export session.  This will cause an incorrect MAC to be calculated, and eventually will fail on import with
+               a TDX_INCORRECT_MBMD_MAC error. */
+            reset_to_next_iv(migsc_p, migsc_p->iv_counter, migs_index);
+
+            mbmd_immutable_td_state_t dummy_mbmd = { 0 };
+            if (aes_gcm_process_aad(&migsc_p->aes_gcm_context, (uint8_t*)&dummy_mbmd, MBMD_SIZE_NO_MAC(dummy_mbmd)) != AES_GCM_NO_ERROR)
+            {
+                fatal_error(FATAL_ERROR_ID_370, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
+            }
+            
+            migsc_p->iv_counter++;
+        }
+    }
+
+    return TDX_SUCCESS;
+}
+
+api_error_type check_migsc_aes_gcm_context_compatibility_on_import_resume(migsc_t* migsc_p)
+{
+    if(migsc_p->interrupted_state.aes_gcm_context_version != CRYPTO_LIB_COMPAT_VERSION)
+    {
+        if(get_global_data()->update_compatibility)
+        {
+            return TDX_INCOMPATIBLE_MBMD_MAC_CONTEXT;
+        }
+        else
+        {
+            return TDX_INCORRECT_MBMD_MAC;
+        }
+    }
+
+    return TDX_SUCCESS;
+}
+

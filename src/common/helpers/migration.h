@@ -241,7 +241,7 @@ typedef struct PACKED migsc_s {
         tdx_leaf_and_version_t func;
         bool_t                 valid;
         bool_t                 sys_migrated;   // Used by TDH.*PORT.STATE.IMMUTABLE
-        uint8_t                reserved_1[2];
+        uint16_t               aes_gcm_context_version;
         uint32_t               num_processed;
         page_list_info_t       page_list_info;
         md_field_id_t          field_id;
@@ -438,5 +438,52 @@ bool_t check_and_get_gpa_from_entry(gpa_list_entry_t gpa_entry, bool_t gpaw, pa_
  */
 void copy_mbmd(mbmd_t* mbmd_dst, mbmd_t* mbmd_src);
 
+// Decrements global and TD-specific migration interrupted counters
+void decrement_mig_interrupted_counters(uint16_t* mig_interrupted_count, migsc_t* migsc_p, bool_t decrement_interrupted_count);
+
+/**
+ * @brief Verifies compatibility of AES-GCM crypto context when resuming a migration export operation
+ *
+ * This function checks if the AES-GCM context version in the migration stream context matches
+ * the current crypto library compatibility version. It manages compatibility issues during 
+ * TD migration when an export operation needs to be resumed after being interrupted.
+ *
+ * The function:
+ * 1. Checks if the AES-GCM context version is compatible with current crypto library
+ * 2. If incompatible:
+ *    - Increments the IV counter to ensure cryptographic uniqueness
+ *    - Either returns an incompatibility error or resets the AES-GCM context based on global policy
+ *
+ * @param mig_interrupted_count         Pointer to the TDCS mig_interrupted_count
+ * @param migsc_p                       Pointer to the migration stream context
+ * @param decrement_interrupted_count   Check compatibility with previous modules (preserving update) 
+ *
+ * @return TDX_SUCCESS if compatible or successfully reset
+ * @return TDX_INCOMPATIBLE_MBMD_MAC_CONTEXT if incompatible and update_compatibility is enabled
+ */
+api_error_type check_migsc_aes_gcm_context_compatibility_on_export_resume(migsc_t* migsc_p, uint16_t migs_index);
+
+/**
+ * @brief Verifies compatibility of AES-GCM crypto context when resuming a migration import operation
+ *
+ * This function checks if the AES-GCM context version in the migration stream context matches
+ * the current crypto library compatibility version. It manages compatibility issues during 
+ * TD migration when an import operation needs to be resumed after being interrupted.
+ *
+ * The function:
+ * 1. Checks if the AES-GCM context version is compatible with current crypto library
+ * 2. If incompatible:
+ *    - Returns an error based on global policy (either incompatible or incorrect MAC context)
+ *    - Unlike export, does not attempt to reset or recover the context
+ *
+ * @param mig_interrupted_count         Pointer to the TDCS mig_interrupted_count
+ * @param migsc_p                       Pointer to the migration stream context
+ * @param decrement_interrupted_count   Check compatibility with previous modules (preserving update)
+ *
+ * @return TDX_SUCCESS if compatible
+ * @return TDX_INCOMPATIBLE_MBMD_MAC_CONTEXT if incompatible and update_compatibility is enabled
+ * @return TDX_INCORRECT_MBMD_MAC if incompatible and update_compatibility is disabled
+ */
+api_error_type check_migsc_aes_gcm_context_compatibility_on_import_resume(migsc_t* migsc_p);
 
 #endif /* SRC_COMMON_HELPERS_MIGRATION_H_ */

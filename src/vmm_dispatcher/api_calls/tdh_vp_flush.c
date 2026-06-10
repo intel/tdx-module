@@ -112,9 +112,9 @@ api_error_type tdh_vp_flush(uint64_t target_tdvpr_pa)
     }
 
     // Check if this VCPU is associated with the current LP
-    if (tdvps_ptr->management.assoc_lpid != local_data_ptr->lp_info.lp_id)
+    if (tdvps_ptr->management.assoc_lpid != local_data_ptr->lp_info.x2apic_id)
     {
-        TDX_ERROR("TD VCPU not associated - LPID = %d\n", local_data_ptr->lp_info.lp_id);
+        TDX_ERROR("TD VCPU not associated - LPID = %d\n", local_data_ptr->lp_info.x2apic_id);
         return_val = TDX_VCPU_NOT_ASSOCIATED;
         goto EXIT;
     }

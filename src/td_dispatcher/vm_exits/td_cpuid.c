@@ -79,7 +79,7 @@ void td_cpuid_exit(void)
     // CPUID in the range 0x40000000 to 0x4FFFFFFF always inject a #VE
     if ((leaf >= CPUID_RESERVED_START) && (leaf <= CPUID_RESERVED_END))
     {
-        tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_NON_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+        tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_NON_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
         return;
     }
 
@@ -88,7 +88,7 @@ void td_cpuid_exit(void)
     if (((cpl == 0) && vp_ctx->tdvps->management.cpuid_supervisor_ve) ||
         ((cpl > 0) && vp_ctx->tdvps->management.cpuid_user_ve))
     {
-        tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+        tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
         return;
     }
 
@@ -137,7 +137,7 @@ void td_cpuid_exit(void)
         }
         else
         {
-            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
             return;
         }
     }
@@ -149,7 +149,7 @@ void td_cpuid_exit(void)
            not defined.  In this case, the value is 0, however if REDUCE_VE is not set we inject a #VE. */
         if (!td_ctls.reduce_ve && !vp_ctx->tdcs->executions_ctl_fields.cpuid_valid[index])
         {
-            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
             return;
         }
 
@@ -157,7 +157,7 @@ void td_cpuid_exit(void)
            This is done regardless of REDUCE_VE. */
         if (((cpl == 0) && vp_ctx->tdvps->cpuid_control[index].supervisor_ve) || ((cpl > 0) && vp_ctx->tdvps->cpuid_control[index].user_ve))
         {
-            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
             return;
         }
 
@@ -180,7 +180,7 @@ void td_cpuid_exit(void)
     case 0x2:
         if (!td_ctls.virt_cpuid2)
         {
-            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
             return;
         }
 
@@ -197,7 +197,7 @@ void td_cpuid_exit(void)
     case 0x80000005:
         if (!td_ctls.reduce_ve)
         {
-            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
             return;
         }
 
@@ -207,7 +207,7 @@ void td_cpuid_exit(void)
     case 0x9:
         if (!td_ctls.reduce_ve || vp_ctx->tdcs->executions_ctl_fields.cpuid_flags.dca_supported)
         {
-            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
             return;
         }
         break;
@@ -216,7 +216,7 @@ void td_cpuid_exit(void)
     case 0xF:
         if (!td_ctls.reduce_ve || vp_ctx->tdcs->executions_ctl_fields.cpuid_flags.rdt_m_supported)
         {
-            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
             return;
         }
 
@@ -226,7 +226,7 @@ void td_cpuid_exit(void)
     case 0x10:
         if (!td_ctls.reduce_ve || vp_ctx->tdcs->executions_ctl_fields.cpuid_flags.rdt_a_supported)
         {
-            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
             return;
         }
 
@@ -236,7 +236,7 @@ void td_cpuid_exit(void)
     case 0x1B:
         if (!td_ctls.reduce_ve || vp_ctx->tdcs->executions_ctl_fields.cpuid_flags.pconfig_supported)
         {
-            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
             return;
         }
 
@@ -369,7 +369,7 @@ void td_cpuid_exit(void)
         else
         {
             // No topology enumeration
-            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0);
+            tdx_inject_ve(VMEXIT_REASON_CPUID_INSTRUCTION, 0, VE_INFO_CONFIG_PARAVIRT, vp_ctx->tdvps, 0, 0, 0);
             return;
         }
 

@@ -46,6 +46,12 @@
 #define AES_XTS_256                BIT(2)
 #define AES_XTS_256_WITH_INTEGRITY BIT(3)
 
+#define TDX_MODULE_HV 1
+#define TDX_MIN_UPDATE_HV 0
+#define TDX_NO_DOWNGRADE 1
+#define CRYPTO_LIB_COMPAT_VERSION 1 // ICP 1.0.1
+#define MIN_UPDATE_COMPATIBILITY_HV 1
+
 typedef enum
 {
     SYSINIT_PENDING = 0,
@@ -106,7 +112,7 @@ typedef struct ALIGN(KOT_ENTRY_ALIGNMENT) PACKED kot_entry_s
      * kot entry state state: KOT_STATE_HKID_FREE = 0, KOT_STATE_HKID_ASSIGNED, KOT_STATE_HKID_RECLAIMED,
      *                        KOT_STATE_HKID_FLUSHED, KOT_STATE_HKID_RESERVED
      */
-    uint8_t state;
+     uint8_t state;
 } kot_entry_t;
 
 #define MAX_HKIDS 2048
@@ -263,6 +269,8 @@ typedef struct xsave_component_info_s
     bool_t   align;
 } xsave_component_info_t;
 
+#define TD_GUEST_SYSTEM_INFO_SIZE       256
+
 /**
  * @struct tdx_module_local_t
  *
@@ -288,6 +296,9 @@ typedef struct tdx_module_global_s
     uint16_t min_update_hv;
     uint16_t no_downgrade;
     uint16_t num_handoff_pages;
+    bool_t update_compatibility;
+    uint16_t td_build_count;
+    uint16_t mig_interrupted_count;
 
     /* SEAMDB_INDEX/NONCE are sampled by TDH.SYS.INIT using SEAMOPS(SEAMDB_GETREF).  If TD preserving
        is not supported by the CPU, they are set to 0. */
@@ -388,9 +399,7 @@ typedef struct tdx_module_global_s
     cpuid_1a_eax_t  native_model_info;
 
     // fatal error diagnostics
-    uint64_t* fatal_info_p;
     uint64_t fatal_info_config_hpa;
-    sharex_lock_t fatal_info_lock;
     uint64_t fatal_info_icr;
 
     // interruption checking interval
@@ -398,6 +407,8 @@ typedef struct tdx_module_global_s
 
     bool_t          dynamic_pamt_enabled;
 
+
+    uint64_t td_guest_cached_system_info[TD_GUEST_SYSTEM_INFO_SIZE / 8];
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE
     debug_control_t debug_control;
@@ -448,57 +459,5 @@ tdx_static_assert((offsetof(tdx_module_global_t, tdmr_info_copy) + offsetof(tdmr
 tdx_static_assert((offsetof(tdx_module_global_t, tdmr_info_copy) + offsetof(tdmr_info_entry_t, pamt_4k_base)) % sizeof_field(tdmr_info_entry_t, pamt_4k_base) == 0, tdmr_info_entry_t);
 tdx_static_assert((offsetof(tdx_module_global_t, tdmr_info_copy) + offsetof(tdmr_info_entry_t, pamt_4k_size)) % sizeof_field(tdmr_info_entry_t, pamt_4k_size) == 0, tdmr_info_entry_t);
 tdx_static_assert((offsetof(tdx_module_global_t, tdmr_info_copy) + offsetof(tdmr_info_entry_t, rsvd_areas)) % sizeof(uint64_t) == 0, tdmr_info_entry_t);
-
-#define SIZE_OF_CONNECT_FIELDS sizeof_field(tdx_module_global_t, iommu_configs) + \
-                               sizeof_field(tdx_module_global_t, mmiomt_root_node) + \
-                               sizeof_field(tdx_module_global_t, devifmt_root_node)
-
-// // !!! IMPORTANT !!!
-// // ALL HANDED-OFF STRUCTURES NEEDS TO BE PACKED TO ELIMINATE POSSIBLE COMPILER BUILD DIFFS
-#define TDX_MIN_HANDOFF_SIZE   sizeof_field(tdx_module_global_t, kot.entries) + \
-                               sizeof_field(tdx_module_global_t, wbt_entries) + \
-                               sizeof_field(tdx_module_global_t, tdmr_table) + \
-                               sizeof_field(tdx_module_global_t, num_of_tdmr_entries) + \
-                               sizeof_field(tdx_module_global_t, hkid) + \
-                               sizeof_field(tdx_module_global_t, pkg_config_bitmap) +\
-                               SIZE_OF_CONNECT_FIELDS +\
-                               sizeof_field(tdx_module_global_t, dynamic_pamt_enabled)
-
-#define TDX_MIN_HANDOFF_PAGES  ((ROUND_UP(TDX_MIN_HANDOFF_SIZE, _4KB)) / _4KB)
-
-tdx_static_assert(TDX_MIN_HANDOFF_PAGES > 0, TDX_MIN_HANDOFF_PAGES);
-
-#define HANDOFF_KOT_ENTRIES_SIZE                16384
-#define HANDOFF_WBT_ENTRIES_SIZE                16512
-#define HANDOFF_TDMR_TABLE_SIZE                 20480
-#define HANDOFF_NUM_OF_TDMR_ENTRIES_SIZE        4
-#define HANDOFF_HKID_SIZE                       2
-#define HANDOFF_PKG_CONFIG_BITMAP_SIZE          4
-#define HANDOFF_IOMMU_CONFIGS_SIZE              48384
-#define HANDOFF_MMIOMT_ROOT_NODE_SIZE           32
-#define HANDOFF_DEVIFMT_ROOT_NODE_SIZE          8
-#define HANDOFF_DYNAMIC_PAMT_ENABLED_SIZE       1
-
-tdx_static_assert(TDX_MIN_HANDOFF_SIZE == (HANDOFF_KOT_ENTRIES_SIZE +
-                                           HANDOFF_WBT_ENTRIES_SIZE +
-                                           HANDOFF_TDMR_TABLE_SIZE +
-                                           HANDOFF_NUM_OF_TDMR_ENTRIES_SIZE +
-                                           HANDOFF_HKID_SIZE +
-                                           HANDOFF_PKG_CONFIG_BITMAP_SIZE +
-                                           HANDOFF_IOMMU_CONFIGS_SIZE +
-                                           HANDOFF_MMIOMT_ROOT_NODE_SIZE +
-                                           HANDOFF_DEVIFMT_ROOT_NODE_SIZE +
-                                           HANDOFF_DYNAMIC_PAMT_ENABLED_SIZE), TDX_MIN_HANDOFF_SIZE);
-
-tdx_static_assert(sizeof_field(tdx_module_global_t, kot.entries) == HANDOFF_KOT_ENTRIES_SIZE, HANDOFF_KOT_ENTRIES_SIZE);
-tdx_static_assert(sizeof_field(tdx_module_global_t, wbt_entries) == HANDOFF_WBT_ENTRIES_SIZE, HANDOFF_WBT_ENTRIES_SIZE);
-tdx_static_assert(sizeof_field(tdx_module_global_t, tdmr_table) == HANDOFF_TDMR_TABLE_SIZE, HANDOFF_TDMR_TABLE_SIZE);
-tdx_static_assert(sizeof_field(tdx_module_global_t, num_of_tdmr_entries) == HANDOFF_NUM_OF_TDMR_ENTRIES_SIZE, HANDOFF_NUM_OF_TDMR_ENTRIES_SIZE);
-tdx_static_assert(sizeof_field(tdx_module_global_t, hkid) == HANDOFF_HKID_SIZE, HANDOFF_HKID_SIZE);
-tdx_static_assert(sizeof_field(tdx_module_global_t, pkg_config_bitmap) == HANDOFF_PKG_CONFIG_BITMAP_SIZE, HANDOFF_PKG_CONFIG_BITMAP_SIZE);
-tdx_static_assert(sizeof_field(tdx_module_global_t, iommu_configs) == HANDOFF_IOMMU_CONFIGS_SIZE, HANDOFF_IOMMU_CONFIGS_SIZE);
-tdx_static_assert(sizeof_field(tdx_module_global_t, mmiomt_root_node) == HANDOFF_MMIOMT_ROOT_NODE_SIZE, HANDOFF_MMIOMT_ROOT_NODE_SIZE);
-tdx_static_assert(sizeof_field(tdx_module_global_t, devifmt_root_node) == HANDOFF_DEVIFMT_ROOT_NODE_SIZE, HANDOFF_DEVIFMT_ROOT_NODE_SIZE);
-tdx_static_assert(sizeof_field(tdx_module_global_t, dynamic_pamt_enabled) == HANDOFF_DYNAMIC_PAMT_ENABLED_SIZE, HANDOFF_DYNAMIC_PAMT_ENABLED_SIZE);
 
 #endif // __TDX_GLOBAL_DATA_H_INCLUDED__

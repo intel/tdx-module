@@ -1473,23 +1473,31 @@ typedef union ia32_xapic_id_u
 } ia32_xapic_id_t;
 tdx_static_assert(sizeof(ia32_xapic_id_t) == 4, ia32_xapic_id_t);
 
+typedef union ia32_apic_icr_low_u
+{
+    struct
+    {
+        uint32_t vector           : 8;  // 0:7
+        uint32_t delivery_mode    : 3;  // 8:10
+        uint32_t destination_mode : 1;  // 11
+        uint32_t delivery_status  : 1;  // 12
+        uint32_t rsvd0            : 1;  // 13
+        uint32_t level            : 1;  // 14
+        uint32_t trigger_mode     : 1;  // 15
+        uint32_t rsvd1            : 2;  // 16:17
+        uint32_t dest_shorthand   : 2;  // 18:19
+        uint32_t rsvd2            : 12; // 20:31
+    };
+
+    uint32_t raw;
+
+} ia32_apic_icr_low_t;
+
 typedef union ia32_apic_icr_u
 {
     struct
     {
-        struct
-        {
-            uint32_t vector           : 8;  // 0:7
-            uint32_t delivery_mode    : 3;  // 8:10
-            uint32_t destination_mode : 1;  // 11
-            uint32_t delivery_status  : 1;  // 12
-            uint32_t rsvd0            : 1;  // 13
-            uint32_t level            : 1;  // 14
-            uint32_t trigger_mode     : 1;  // 15
-            uint32_t rsvd1            : 2;  // 16:17
-            uint32_t dest_shorthand   : 2;  // 18:19
-            uint32_t rsvd2            : 12; // 20:31
-        };
+        ia32_apic_icr_low_t icr_low;
 
         union
         {
@@ -1532,6 +1540,64 @@ tdx_static_assert(sizeof(ia32_apic_register_t) == 4*4, ia32_apic_register_t);
 #define APIC_MMIO_EOI_OFFSET            0x0B0
 
 #define APIC_IRR_ISR_SIZE               8
+
+typedef struct apic_s
+{
+    uint32_t                reserved_000[8];   // 0x000
+    uint32_t                apic_id;           // 0x020
+    uint32_t                reserved_024[3];
+    uint32_t                apic_ver;          // 0x030
+    uint32_t                reserved_034[3];
+    uint32_t                reserved_040[16];
+    uint32_t                tpr;               // 0x080
+    uint32_t                reserved_084[3];
+    uint32_t                apr;               // 0x090
+    uint32_t                reserved_094[3];
+    uint32_t                ppr;               // 0x0A0
+    uint32_t                reserved_0A4[3];
+    uint32_t                eoi;               // 0x0B0
+    uint32_t                reserved_0B4[3];
+    uint32_t                rrd;               // 0x0C0
+    uint32_t                reserved_0C4[3];
+    uint32_t                ldr;               // 0x0D0
+    uint32_t                reserved_0D4[3];
+    uint32_t                dfr;               // 0x0E0
+    uint32_t                reserved_0E4[3];
+    uint32_t                siv;               // 0x0F0
+    uint32_t                reserved_0F4[3];
+    ia32_apic_register_t    isr[8];            // 0x100
+    ia32_apic_register_t    tmr[8];            // 0x180
+    ia32_apic_register_t    irr[8];            // 0x200
+    uint32_t                esr;               // 0x280
+    uint32_t                reserved_284[3];
+    uint32_t                reserved_290[24];  // 0x290
+    uint32_t                lvt_cmci;          // 0x2F0
+    uint32_t                reserved_2F4[3];
+    ia32_apic_icr_low_t     icr_low;           // 0x300
+    uint32_t                reserved_304[3];
+    uint32_t                icr_high;          // 0x310
+    uint32_t                reserved_314[3];
+    uint32_t                lvt_tr;            // 0x320
+    uint32_t                reserved_324[3];
+    uint32_t                lvt_tsr;           // 0x330
+    uint32_t                reserved_334[3];
+    uint32_t                lvt_pmcr;          // 0x340
+    uint32_t                reserved_344[3];
+    uint32_t                lvt_lint0;         // 0x350
+    uint32_t                reserved_354[3];
+    uint32_t                lvt_lint1;         // 0x360
+    uint32_t                reserved_364[3];
+    uint32_t                lvt_er;            // 0x370
+    uint32_t                reserved_374[3];
+    uint32_t                init_count;        // 0x380
+    uint32_t                reserved_384[3];
+    uint32_t                curr_count;        // 0x390
+    uint32_t                reserved_394[3];
+    uint32_t                reserved_3A0[16];   // 0x3A0
+    uint32_t                div_config;        // 0x3E0
+    uint32_t                reserved_3E4[3];
+    uint32_t                reserved_3F0[4];    // 0x3F0
+} apic_t;
 
 #define POLY_MASK_32                    0xB4BCD35C
 

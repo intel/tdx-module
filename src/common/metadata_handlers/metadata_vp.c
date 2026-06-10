@@ -35,6 +35,7 @@
 #include "helpers/helpers.h"
 #include "helpers/virt_msr_helpers.h"
 #include "td_dispatcher/vm_exits/td_vmexit.h"
+#include "helpers/ipi_helpers.h"
 
 #define POSTED_INTER_DESCRIPTOR_SIZE  64
 
@@ -356,6 +357,7 @@ static bool_t check_guest_cr3_value(uint64_t wr_value, tdcs_t* tdcs_ptr)
     return check_gpa_validity((pa_t)cr3.raw, tdcs_ptr->executions_ctl_fields.gpaw, PRIVATE_ONLY, tdcs_ptr->executions_ctl_fields.virt_maxpa);
 }
 
+
 static uint64_t md_vp_get_element_special_rd_handle(md_field_id_t field_id, md_access_t access_type,
                                                     md_context_ptrs_t md_ctx, uint16_t vm_id, uint64_t read_value)
 {
@@ -513,21 +515,13 @@ static uint64_t md_vp_get_element_special_rd_handle(md_field_id_t field_id, md_a
         {
             case MD_TDVPS_VCPU_STATE_DETAILS_FIELD_CODE:
             {
-                // Calculate virtual interrupt pending status
-                vcpu_state_t vcpu_state_details;
-                guest_interrupt_status_t interrupt_status;
-                uint64_t interrupt_status_raw;
-
-                set_vm_vmcs_as_active(md_ctx.tdvps_ptr, 0);
-
-                ia32_vmread(VMX_GUEST_INTERRUPT_STATUS_ENCODE, &interrupt_status_raw);
-                interrupt_status.raw = (uint16_t)interrupt_status_raw;
-                vcpu_state_details.raw = 0ULL;
-                if ((interrupt_status.rvi & 0xF0UL) > (md_ctx.tdvps_ptr->vapic.vapic[PPR_INDEX] & 0xF0UL))
+                // On read by L1, update the fields that are normally calculated on L1->L2 entry and on TD exit
+                if (access_type == MD_GUEST_RD)
                 {
-                    vcpu_state_details.vmxip = 1ULL;
+                    update_vcpu_state_details_on_l1_rd(md_ctx.tdcs_ptr, md_ctx.tdvps_ptr);
                 }
-                read_value = vcpu_state_details.raw;
+
+                read_value = md_ctx.tdvps_ptr->guest_state.vcpu_state_details.raw;
 
                 break;
             }
@@ -876,7 +870,7 @@ static api_error_code_e md_vp_element_vmcs_wr_handle(md_field_id_t field_id, md_
         pinbased_exec_ctls.raw = (uint32_t)*wr_value;
         if (pinbased_exec_ctls.process_posted_interrupts == 1)
         {
-            uint64_t addr, vec;
+            uint64_t vec;
 
             ia32_vmread(VMX_POSTED_INTERRUPT_NOTIFICATION_VECTOR_ENCODE, &vec);
 
@@ -886,8 +880,9 @@ static api_error_code_e md_vp_element_vmcs_wr_handle(md_field_id_t field_id, md_
                                                  VMX_POSTED_INTERRUPT_NOTIFICATION_VECTOR_ENCODE);
             }
 
-            ia32_vmread(VMX_POSTED_INTERRUPT_DESCRIPTOR_ADDRESS_FULL_ENCODE, &addr);
+            uint64_t addr;
 
+            ia32_vmread(VMX_POSTED_INTERRUPT_DESCRIPTOR_ADDRESS_FULL_ENCODE, &addr);
 
             if (addr == (-1ULL))
             {
@@ -896,17 +891,18 @@ static api_error_code_e md_vp_element_vmcs_wr_handle(md_field_id_t field_id, md_
             }
         }
 
-        md_ctx.tdvps_ptr->management.shadow_pinbased_exec_ctls = (uint32_t)pinbased_exec_ctls.raw;
+        md_ctx.tdvps_ptr->management.shadow_pinbased_exec_ctls[0] = (uint32_t)pinbased_exec_ctls.raw;
 
         break;
     }
     case VMX_POSTED_INTERRUPT_DESCRIPTOR_ADDRESS_FULL_ENCODE:
     {
-        md_ctx.tdvps_ptr->management.shadow_pid_hpa = *wr_value;
+        md_ctx.tdvps_ptr->management.shadow_pid_hpa[0] = *wr_value;
         break;
     }
     case VMX_POSTED_INTERRUPT_NOTIFICATION_VECTOR_ENCODE:
     {
+
         // although 'wr_value' is of type 'uint_64' and could never be negative, the first condition is here for code-completeness
         if (*wr_value < POSTED_INTERRUPT_NOTFICATION_VECTOR_MIN || *wr_value > POSTED_INTERRUPT_NOTFICATION_VECTOR_MAX)
         {
@@ -1180,6 +1176,8 @@ static api_error_code_e md_vp_element_l2_vmcs_wr_handle(md_field_id_t field_id, 
                     wr_mask, new_ctls.raw);
             return TDX_METADATA_FIELD_VALUE_NOT_VALID;
         }
+
+
         break;
     }
     case VMX_GUEST_SHARED_EPT_POINTER_FULL_ENCODE:
@@ -1379,9 +1377,9 @@ static api_error_code_e md_vp_element_tdvps_wr_handle(md_field_id_t field_id, md
                 }
                 case MD_TDVPS_L2_EXIT_HOST_ROUTING_FIELD_CODE:
                 {
-                    if ((*wr_value != HOST_ROUTED_NONE) &&
-                        (*wr_value != HOST_ROUTED_ASYNC)  &&
-                        (*wr_value != HOST_ROUTED_TDVMCALL))
+                    if ((*wr_value != L2_EXIT_ROUTED_NONE) &&
+                        (*wr_value != L2_EXIT_ROUTED_ASYNC)  &&
+                        (*wr_value != L2_EXIT_ROUTED_TDVMCALL))
                     {
                         return TDX_METADATA_FIELD_VALUE_NOT_VALID;
                     }

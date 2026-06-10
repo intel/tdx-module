@@ -139,28 +139,9 @@ void tdx_td_l2_dispatcher(void)
             break;
         case VMEXIT_REASON_INTERRUPT:
         {
-            l2_exit_route_t routing = td_l2_interrupt_exit(tdx_local_data_ptr, vm_exit_inter_info, vm_id);
-
-            switch (routing)
-            {
-            case L2_EXIT_ROUTE_TD_EXIT:
-                // This is a normal external interrupt, do a TD exit
-                async_tdexit_to_vmm(TDX_SUCCESS, vm_exit_reason,
-                                    vm_exit_qualification.raw, 0, 0, vm_exit_inter_info.raw);
-                break;
-
-            case L2_EXIT_ROUTE_L2_TO_L1_EXIT:
-                // A posted interrupt has been injected by the VM exit handler to L1.
-                // Do an L2->L1 exit so that uCode will process the interrupt.
-                td_l2_to_l1_exit_with_exit_case(TDX_L2_EXIT_PENDING_INTERRUPT, vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info, false);
-                break;
-
-            default:
-                // Resume L2 - mark that there's an interrupt to not advance the guest RIP
-                interrupt_occurred = true;
-                break;
-            }
-
+            // Already handled in the prologue
+            // Resume L2 - mark that there's an interrupt to not advance the guest RIP
+            interrupt_occurred = true;
             break;
         }
         case VMEXIT_REASON_C_STATE_SMI:

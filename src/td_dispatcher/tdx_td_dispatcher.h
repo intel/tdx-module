@@ -115,7 +115,8 @@ void check_pending_voe_on_debug_td_return(void);
  * @param exit_qualification
  * @param category
  */
-void td_generic_ve_exit(vm_vmexit_exit_reason_t vm_exit_reason, uint64_t exit_qualification, ve_category_e category);
+void td_generic_ve_exit(vm_vmexit_exit_reason_t vm_exit_reason, uint64_t exit_qualification,
+                        ve_category_e category, uint64_t apic_data);
 
 /**
  * @brief Handler for all TDCALLs

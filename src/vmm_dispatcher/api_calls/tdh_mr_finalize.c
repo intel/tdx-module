@@ -40,7 +40,7 @@ api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
 {
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
-    tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
+    tdr_t               * tdr_ptr = NULL;            // Pointer to the TDR page (linear address)
     pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
@@ -85,6 +85,12 @@ api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
         goto EXIT;
     }
 
+    if(get_global_data()->update_compatibility && (tdcs_ptr->measurement_fields.mrtd_context_version != CRYPTO_LIB_COMPAT_VERSION))
+    {
+        return_val = TDX_INCOMPATIBLE_MRTD_CONTEXT;
+        goto EXIT;
+    }
+
     // ALL_CHECKS_PASSED:  The instruction is guaranteed to succeed
 
     /**
@@ -92,6 +98,13 @@ api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
      *  SHA384 algorithm requires one last update that compresses the length (in bits)
      *  of the hashed message into the output SHA384 digest.
      */
+
+    if (tdcs_ptr->measurement_fields.mrtd_context_version)
+    {
+        tdcs_ptr->measurement_fields.mrtd_context_version = 0;
+        uint16_t old_val = _lock_xadd_16b(&get_global_data()->td_build_count, (uint16_t)-1);
+        tdx_sanity_check(old_val > 0, FATAL_ERROR_ID_357, 0);
+    }
 
      // preserve VMM's XCR0 state
     get_local_data()->vmm_xcr0_state = ia32_xgetbv(0);

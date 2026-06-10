@@ -664,7 +664,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
     tdx_module_local_t  * local_data_ptr = get_local_data();
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
-    tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
+    tdr_t               * tdr_ptr = NULL;            // Pointer to the TDR page (linear address)
     pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
@@ -870,6 +870,9 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
 
     // restore VMM's XCR0 state
     ia32_xsetbv(0, local_data_ptr->vmm_xcr0_state);
+
+    tdcs_ptr->measurement_fields.mrtd_context_version = CRYPTO_LIB_COMPAT_VERSION;
+    (void)_lock_xadd_16b(&global_data_ptr->td_build_count, 1);
 
     // Zero the RTMR hash values
     basic_memset_to_zero(tdcs_ptr->measurement_fields.rtmr, (SIZE_OF_SHA384_HASH_IN_QWORDS<<3)*NUM_RTMRS);

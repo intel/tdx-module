@@ -39,6 +39,7 @@
 #include "memory_handlers/sept_manager.h"
 #include "td_dispatcher/vm_exits/td_vmexit.h"
 #include "helpers/virt_msr_helpers.h"
+#include "helpers/ipi_helpers.h"
 
 static void load_xmms_by_mask(tdvps_t* tdvps_ptr, uint16_t xmm_select)
 {
@@ -596,6 +597,14 @@ void td_vmexit_to_vmm(uint8_t vcpu_state, uint8_t last_td_exit, uint64_t scrub_m
     // The TD is dead, no need so save its state.
     if (!is_td_dead)
     {
+
+        bool_t imm_resume_hint = update_vcpu_state_details_on_td_exit(tdcs_ptr,
+                tdvps_ptr, tdvps_ptr->management.curr_vm);
+
+        td_exit_qualification_t exit_qual = { .raw = tdx_local_data_ptr->vmm_regs.rcx };
+        exit_qual.imm_resume_hint = imm_resume_hint;
+        tdx_local_data_ptr->vmm_regs.rcx = exit_qual.raw;
+
         // 1.  Save any guest state that it has not saved as part of the common guest-side operation, e.g.,
         //     the extended state per TDCS.XFAM
         save_guest_td_state_before_td_exit(tdcs_ptr, tdx_local_data_ptr);
@@ -715,6 +724,9 @@ static void td_l2_to_l1_exit_internal(api_error_code_e tdexit_case, vm_vmexit_ex
     tdvps_ptr->guest_state.gpr_state.r13 = extended_exit_qualification;
     tdvps_ptr->guest_state.gpr_state.r14 = 0;
     tdvps_ptr->guest_state.gpr_state.r15 = 0;
+
+    // We are leaving L2, update TDVPS.VCPU_STATE_DETAILS while the VMCS is still active
+    update_vcpu_intr_state(tdvps_ptr, curr_vm);
 
     // Make L1 the current VM
     tdvps_ptr->management.curr_vm = 0;

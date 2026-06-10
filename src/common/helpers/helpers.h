@@ -273,17 +273,17 @@ _STATIC_INLINE_ void* map_pa_with_hkid(void* pa, uint16_t hkid, mapping_type_t m
     return map_pa((void*) pa_with_hkid.raw, mapping_type);
 }
 
+_STATIC_INLINE_ void* map_pa_with_global_hkid(void* pa, mapping_type_t mapping_type)
+{
+    uint16_t tdx_global_hkid = get_global_data()->hkid;
+    return map_pa_with_hkid(pa, tdx_global_hkid, mapping_type);
+}
+
 _STATIC_INLINE_ void* map_pa_with_hkid_with_memtype(void* pa, uint16_t hkid, mapping_type_t mapping_type, bool_t is_wb_memtype)
 {
     pa_t temp_pa = { .raw_void = pa };
     pa_t pa_with_hkid = set_hkid_to_pa(temp_pa, hkid);
     return map_pa_with_memtype((void*)pa_with_hkid.raw_void, mapping_type, is_wb_memtype);
-}
-
-_STATIC_INLINE_ void* map_pa_with_global_hkid(void* pa, mapping_type_t mapping_type)
-{
-    uint16_t tdx_global_hkid = get_global_data()->hkid;
-    return map_pa_with_hkid(pa, tdx_global_hkid, mapping_type);
 }
 
 _STATIC_INLINE_ void* map_pa_with_global_hkid_uncached(void* pa, mapping_type_t mapping_type)
@@ -901,6 +901,19 @@ api_error_type check_and_walk_private_gpa_to_leaf(
         );
 
 /**
+ * @brief Return true if gpa_page_info is a legal and aligned GPA.
+ *        - Reserved bits are 0
+ *        - Level is between specified minimum and maximum
+ *        - Aligned to 1 << 12 + 9 * 'level'
+ * @param gpa_page_info - Input page_info_api_input_t structure that will be checkd
+ * @param min_level - Minimal allowed level for the gpa_page_info
+ * @param max_level - Maximum allowed level for the gpa_page_info
+ *
+ * @return true or false
+ */
+bool_t verify_page_info_input(page_info_api_input_t gpa_page_info, ept_level_t min_level, ept_level_t max_level);
+
+/**
  * @brief Checks a GPA to be valid, and GPA.SHARED bit == 0, translates it and returns requested
  *        EPT entry, and the reached walking level.
  *
@@ -921,30 +934,15 @@ api_error_type check_and_walk_private_gpa_to_leaf(
  *
  * @return Error code that states the reason of failure
  */
-api_error_type lock_sept_check_and_walk_private_gpa_to_leaf(
-        tdcs_t* tdcs_p,
-        uint64_t operand_id,
-        pa_t gpa,
-        uint16_t hkid,
-        lock_type_t lock_type,
-        ia32e_sept_t** sept_entry_ptr,
-        ept_level_t* level,
-        ia32e_sept_t* cached_sept_entry,
-        bool_t* is_sept_locked
-        );
-
-/**
- * @brief Return true if gpa_page_info is a legal and aligned GPA.
- *        - Reserved bits are 0
- *        - Level is between specified minimum and maximum
- *        - Aligned to 1 << 12 + 9 * 'level'
- * @param gpa_page_info - Input page_info_api_input_t structure that will be checkd
- * @param min_level - Minimal allowed level for the gpa_page_info
- * @param max_level - Maximum allowed level for the gpa_page_info
- *
- * @return true or false
- */
-bool_t verify_page_info_input(page_info_api_input_t gpa_page_info, ept_level_t min_level, ept_level_t max_level);
+api_error_type lock_sept_check_and_walk_private_gpa_to_leaf(tdcs_t* tdcs_p,
+                                                            uint64_t operand_id,
+                                                            pa_t gpa,
+                                                            uint16_t hkid,
+                                                            lock_type_t lock_type,
+                                                            ia32e_sept_t** sept_entry_ptr,
+                                                            ept_level_t* level,
+                                                            ia32e_sept_t* cached_sept_entry,
+                                                            bool_t* is_sept_locked);
 
 /**
  * @brief Returns the page size per given ept_level
@@ -1208,7 +1206,7 @@ _STATIC_INLINE_ void set_seam_vmcs_as_active(void)
     // Set the SEAM VMCS as the current VMCS
     // SEAM VMCS addr: seamrr_base + page_size + (lp_id * page_size)
     uint64_t seam_vmcs_pa = get_global_data()->seamrr_base +
-                            (TDX_PAGE_SIZE_IN_BYTES * (get_local_data()->lp_info.lp_id + 1));
+                            (TDX_PAGE_SIZE_IN_BYTES * (get_local_data()->lp_info.x2apic_id + 1));
 
     ia32_vmptrld((vmcs_ptr_t*)seam_vmcs_pa);
 
@@ -1989,29 +1987,6 @@ uint32_t check_mem_enc_alg(ia32_tme_capability_t tme_capability, ia32_tme_activa
  */
 api_error_type check_td_in_correct_build_state(tdr_t *tdr_p);
 
-/**
- * @brief Called by TDH.SYS.SHUTDOWN to populate handoff data with values of some
- *        variables for the next TDX module
- *
- * @param hv - requested handoff version
- * @param size - max size of data buffer, in bytes
- * @param data - pointer to handoff data buffer
- *
- * @return size of handoff data filled in data buffer, in bytes (0 = failure)
- */
-uint32_t prepare_handoff_data(uint16_t hv, uint32_t size, uint8_t* data);
-
-/**
- * @brief Called by TDH.SYS.UPDATE to initialize some variables from the handoff
- *        data prepared by the previous TDX module
- *
- * @param hv - handoff data version
- * @param size - size of handoff data in buffer, in bytes
- * @param data - pointer to handoff data buffer
- *
- */
-void retrieve_handoff_data(uint16_t hv, uint32_t size, uint8_t* data);
-
 _STATIC_INLINE_ uint64_t translate_usec_to_tsc(uint32_t time_usec, uint32_t  tsc_frequency)
 {
     /* Calculation is done in 64-bit to avoid overflow.
@@ -2627,7 +2602,7 @@ _STATIC_INLINE_ api_error_code_e check_no_tdx_io_device_attached(
     const tdr_t *const tdr_ptr,
     const tdcs_t *const tdcs_ptr)
 {
-    if (tdr_ptr->tdx_io_fields.devif_ref_cnt != 0)
+    if (tdr_ptr->tdx_io_fields.tdi_ref_cnt != 0)
     {
         return TDX_TD_HAS_ATTACHED_DEVICES;
     }
@@ -2767,6 +2742,29 @@ api_error_type check_host_interrupt_and_hp_bit(sharex_hp_lock_t* lock, bool_t is
  * @brief Stores host's XCR0 state before usage of AVX and marks AVX regs as 'used'
  */
 void prepare_state_for_avx_usage(void);
+
+/**
+ * @brief Updates the VCPU state details for the L1 guest.
+ *
+ * This function tracks interrupt and NMI status for the TD guest by updating
+ * the vcpu_state_details fields in the TDVPS structure. These fields allow
+ * the VMM to efficiently determine guest interrupt state without VM exits.
+ *
+ * @param tdvps_p Pointer to the TD's VCPU State structure
+ * @param update_vnmi Control over vnmi update
+ */
+void update_vcpu_state_details_for_l1(tdvps_t* tdvps_p, bool_t update_vnmi);
+
+/**
+ * @brief Updates the VCPU state details for the L2 guests.
+ *
+ * Similar to the L1 function, but handles interrupt status tracking for
+ * nested virtualization. The L2 state is tracked using different bit positions
+ * in the vcpu_state_details field, with each VM ID getting dedicated bit positions.
+ *
+ * @param tdvps_p Pointer to the TD's VCPU State structure
+ */
+void update_vcpu_state_details_for_l2(tdvps_t* tdvps_p);
 
 tdx_features_enum0_t get_tdx_features_enum0(void);
 

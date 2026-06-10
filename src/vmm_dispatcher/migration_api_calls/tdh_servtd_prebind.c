@@ -98,6 +98,9 @@ api_error_type tdh_servtd_prebind(uint64_t target_tdr_pa, uint64_t servtd_info_h
        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
        goto EXIT;
     }
+
+    lfence();
+
     if (servtd_type_raw > 0xFFFF) // 16-bits field
     {
         return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R9);

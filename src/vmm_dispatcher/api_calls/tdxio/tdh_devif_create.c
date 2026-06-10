@@ -238,10 +238,10 @@ api_error_type tdh_devif_create(
     }
 
     // Update IDE stream info, atomically update reference counter
-    _lock_xadd_64b(&stream_exinfo_ptr->devif_ref_cnt, 1);
+    _lock_xadd_64b(&stream_exinfo_ptr->tdi_ref_cnt, 1);
 
     // Update TDR counters (atomic)
-    _lock_xadd_64b(&tdr_ptr->tdx_io_fields.devif_ref_cnt, 1);
+    _lock_xadd_64b(&tdr_ptr->tdx_io_fields.tdi_ref_cnt, 1);
     _lock_xadd_64b(&tdr_ptr->management_fields.chldcnt, NUM_OF_CHILD_ADD_DEVIF);
 
     // Map DEVIFCS

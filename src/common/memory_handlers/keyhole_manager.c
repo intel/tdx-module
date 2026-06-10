@@ -40,7 +40,7 @@ _STATIC_INLINE_ uint64_t la_from_keyhole_idx(uint16_t keyhole_idx)
     tdx_debug_assert(keyhole_idx < MAX_KEYHOLE_PER_LP);
 
     return get_sysinfo_table()->keyhole_rgn_base +
-            (((uint64_t)get_local_data()->lp_info.lp_id * MAX_KEYHOLE_PER_LP + keyhole_idx) * (uint64_t)0x1000);
+            (((uint64_t)get_local_data()->lp_info.x2apic_id * MAX_KEYHOLE_PER_LP + keyhole_idx) * (uint64_t)0x1000);
 }
 
 _STATIC_INLINE_ uint16_t keyhole_idx_from_la(uint64_t la)
@@ -49,12 +49,12 @@ _STATIC_INLINE_ uint16_t keyhole_idx_from_la(uint64_t la)
     // M keyhole access pages, starting at linear address Vi = Sysinfo.KeyholeRegionBase + i * M * 4K
 
     tdx_debug_assert(la >= (get_sysinfo_table()->keyhole_rgn_base +
-            (get_local_data()->lp_info.lp_id * MAX_KEYHOLE_PER_LP) * 0x1000));
+            (get_local_data()->lp_info.x2apic_id * MAX_KEYHOLE_PER_LP) * 0x1000));
     tdx_debug_assert(la < (get_sysinfo_table()->keyhole_rgn_base +
-            ((get_local_data()->lp_info.lp_id + 1 ) * MAX_KEYHOLE_PER_LP) * 0x1000));
+            ((get_local_data()->lp_info.x2apic_id + 1 ) * MAX_KEYHOLE_PER_LP) * 0x1000));
 
     uint16_t keyhole_idx = (uint16_t)(((la - get_sysinfo_table()->keyhole_rgn_base) / 0x1000) -
-                                      (get_local_data()->lp_info.lp_id * MAX_KEYHOLE_PER_LP));
+                                      (get_local_data()->lp_info.x2apic_id * MAX_KEYHOLE_PER_LP));
 
     tdx_debug_assert(keyhole_idx < MAX_KEYHOLE_PER_LP);
 
@@ -64,7 +64,7 @@ _STATIC_INLINE_ uint16_t keyhole_idx_from_la(uint64_t la)
 static void fill_keyhole_pte(uint16_t keyhole_idx, uint64_t pa, bool_t is_writable, bool_t is_wb_memtype)
 {
     uint64_t lp_keyhole_edit_base = get_sysinfo_table()->keyhole_edit_rgn_base +
-            (uint64_t)(get_local_data()->lp_info.lp_id * MAX_KEYHOLE_PER_LP * sizeof(ia32e_pxe_t));
+            (uint64_t)(get_local_data()->lp_info.x2apic_id * MAX_KEYHOLE_PER_LP * sizeof(ia32e_pxe_t));
 
     ia32e_pxe_t* pte_p = (ia32e_pxe_t*)(lp_keyhole_edit_base + (uint64_t)((uint32_t)keyhole_idx * sizeof(ia32e_pxe_t)));
     ia32e_pxe_t new_pte;

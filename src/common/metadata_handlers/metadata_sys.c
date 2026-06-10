@@ -400,15 +400,15 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
         case MD_SYS_TDX_MODULE_HANDOFF_CLASS_CODE:
             if (entry->field_id.field_code == MD_SYS_MODULE_HV_FIELD_CODE)
             {
-                *element_array = GLOBAL_TDX_MODULE_HV;
+                *element_array = TDX_MODULE_HV;
             }
             else if (entry->field_id.field_code == MD_SYS_MIN_UPDATE_HV_FIELD_CODE)
             {
-                *element_array = GLOBAL_TDX_MIN_UPDATE_HV;
+                *element_array = TDX_MIN_UPDATE_HV;
             }
             else if (entry->field_id.field_code == MD_SYS_NO_DOWNGRADE_FIELD_CODE)
             {
-                *element_array = GLOBAL_TDX_NO_DOWNGRADE;
+                *element_array = TDX_NO_DOWNGRADE;
             }
             else if (entry->field_id.field_code == MD_SYS_NUM_HANDOFF_PAGES_FIELD_CODE)
             {

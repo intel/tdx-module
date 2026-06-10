@@ -44,7 +44,7 @@ api_error_type tdh_mr_extend(uint64_t target_page_gpa, uint64_t target_tdr_pa)
     tdx_module_local_t  * local_data_ptr = get_local_data();
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
-    tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
+    tdr_t               * tdr_ptr = NULL;            // Pointer to the TDR page (linear address)
     pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
@@ -135,6 +135,12 @@ api_error_type tdh_mr_extend(uint64_t target_page_gpa, uint64_t target_tdr_pa)
     {
         return_val = TDX_EPT_ENTRY_NOT_PRESENT;
         TDX_ERROR("EPT entry is not present %llx\n", return_val);
+        goto EXIT;
+    }
+
+    if(get_global_data()->update_compatibility && (tdcs_ptr->measurement_fields.mrtd_context_version != CRYPTO_LIB_COMPAT_VERSION))
+    {
+        return_val = TDX_INCOMPATIBLE_MRTD_CONTEXT;
         goto EXIT;
     }
 

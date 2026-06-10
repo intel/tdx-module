@@ -177,9 +177,9 @@ api_error_type tdh_devif_remove(function_id_reg_t function_id_reg)
         stream_info_ptr->stream_exinfo_pa.raw_void,
         TDX_RANGE_RW);
 
-    _lock_xadd_64b(&stream_exinfo_ptr->devif_ref_cnt, (uint64_t)-1);
+    _lock_xadd_64b(&stream_exinfo_ptr->tdi_ref_cnt, (uint64_t)-1);
     _lock_xadd_64b(&tdr_ptr->management_fields.chldcnt, (uint64_t)NUM_OF_CHILD_REMOVE_DEVIF);
-    _lock_xadd_64b(&tdr_ptr->tdx_io_fields.devif_ref_cnt, (uint64_t)-1);
+    _lock_xadd_64b(&tdr_ptr->tdx_io_fields.tdi_ref_cnt, (uint64_t)-1);
 
     // Update the DEVIFMT leaf entry present bit to 0
     devif_verify_param.devifmt_walk_res.devifmt_path_arr[DEVIFMT_L0]->p = 0;

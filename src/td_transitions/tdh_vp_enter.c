@@ -40,6 +40,7 @@
 #include "td_dispatcher/vm_exits/td_vmexit.h"
 #include "td_transitions/td_exit.h"
 #include "helpers/virt_msr_helpers.h"
+#include "helpers/ipi_helpers.h"
 
 
 _STATIC_INLINE_ void guest_ext_state_load_failure()
@@ -218,17 +219,19 @@ static void save_regs_after_tdvmcall(tdvps_t* tdvps_ptr, tdvmcall_control_t cont
     gprs[1] = control.raw;   // RCX
 }
 
-static void set_l2_exit_host_routing(tdvps_t* tdvps_ptr)
+static void set_l2_exit_host_routing(tdvps_t* tdvps_ptr, l2_exit_reason_e reason)
 {
-    if (tdvps_ptr->management.l2_exit_host_routing == HOST_ROUTED_NONE)
+    if (tdvps_ptr->management.l2_exit_host_routing.routing == L2_EXIT_ROUTED_NONE)
     {
+        tdvps_ptr->management.l2_exit_host_routing.reason = (uint8_t)reason;
+
         if (tdvps_ptr->management.last_td_exit == LAST_EXIT_TDVMCALL)
         {
-            tdvps_ptr->management.l2_exit_host_routing = HOST_ROUTED_TDVMCALL;
+            tdvps_ptr->management.l2_exit_host_routing.routing = L2_EXIT_ROUTED_TDVMCALL;
         }
         else
         {
-            tdvps_ptr->management.l2_exit_host_routing = HOST_ROUTED_ASYNC;
+            tdvps_ptr->management.l2_exit_host_routing.routing = L2_EXIT_ROUTED_ASYNC;
         }
     }
 }
@@ -506,7 +509,7 @@ static api_error_type handle_stepping_filter(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, t
                 // Tag this as L2_EXIT_HOST_ROUTED_*, which is handled below.
                 // This flag remains sticky until actual L1 entry.
                 // If the last TD exit was from L1, we inject a #VE below.
-                set_l2_exit_host_routing(tdvps_ptr);
+                set_l2_exit_host_routing(tdvps_ptr, HOST_ROUTED);
             }
         }
         else // TD notification (#VE or L2->L1 exit) should not be delivered
@@ -526,8 +529,14 @@ _STATIC_INLINE_ void set_l2_to_l1_async_exit_gprs(tdvps_t* tdvps_p, vm_vmexit_ex
 {
     api_error_code_t error_code;
 
-    tdx_debug_assert(tdvps_p->management.l2_exit_host_routing != HOST_ROUTED_NONE);
-    error_code.raw = tdvps_p->management.l2_exit_host_routing == HOST_ROUTED_ASYNC ? TDX_L2_EXIT_HOST_ROUTED_ASYNC : TDX_L2_EXIT_HOST_ROUTED_TDVMCALL;
+    tdx_debug_assert(tdvps_p->management.l2_exit_host_routing.routing != L2_EXIT_ROUTED_NONE);
+
+    if (tdvps_p->management.l2_exit_host_routing.reason == HOST_ROUTED)
+    {
+        error_code.raw = tdvps_p->management.l2_exit_host_routing.routing ==
+                L2_EXIT_ROUTED_ASYNC ? TDX_L2_EXIT_HOST_ROUTED_ASYNC : TDX_L2_EXIT_HOST_ROUTED_TDVMCALL;
+    }
+
     error_code.details_l2 = (uint32_t)exit_reason.raw;
 
     tdvps_p->guest_state.gpr_state.rax = error_code.raw;
@@ -578,7 +587,7 @@ _STATIC_INLINE_ void set_l2_to_l1_async_exit_gprs(tdvps_t* tdvps_p, vm_vmexit_ex
 static api_error_type handle_l2_entry(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, tdvps_t* tdvps_ptr,
         vm_vmexit_exit_reason_t* exit_reason, vmx_exit_qualification_t* exit_qualification, pa_t* faulting_gpa)
 {
-    if (tdvps_ptr->management.l2_exit_host_routing == HOST_ROUTED_NONE)
+    if (tdvps_ptr->management.l2_exit_host_routing.routing == L2_EXIT_ROUTED_NONE)
     {
         // We're reentering into L2.
         // If the L2 was in the middle of IDT vectoring when the VM exit happened, re-inject it as VOE.
@@ -597,11 +606,11 @@ static api_error_type handle_l2_entry(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, tdvps_t*
         exit_reason->raw = VMEXIT_REASON_EXCEPTION_OR_NMI;
         exit_qualification->raw = 0;
 
-        set_l2_exit_host_routing(tdvps_ptr);
+        set_l2_exit_host_routing(tdvps_ptr, HOST_ROUTED);
     }
 
     // Emulate Virtual L2->L1 Exit
-    if (tdvps_ptr->management.l2_exit_host_routing != HOST_ROUTED_NONE)
+    if (tdvps_ptr->management.l2_exit_host_routing.routing != L2_EXIT_ROUTED_NONE)
     {
         // There's a sticky indication of host routing.
         // This means we have a TD entry to L1 after a TD exit from L2, which hasn't been
@@ -631,7 +640,7 @@ static api_error_type handle_l2_entry(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, tdvps_t*
             tdvps_ptr->management.last_td_exit = LAST_EXIT_ASYNC_FAULT;
         }
 
-        if (tdvps_ptr->management.l2_exit_host_routing == HOST_ROUTED_TDVMCALL)
+        if (tdvps_ptr->management.l2_exit_host_routing.routing == L2_EXIT_ROUTED_TDVMCALL)
         {
             // There's a sticky indication of host routing of TDG.VP.VMCALL results.
             // This means we have a TD entry to L1 after a synchronous TD exit from L2, which hasn't been
@@ -662,7 +671,7 @@ static api_error_type handle_l2_entry(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, tdvps_t*
         set_l2_to_l1_async_exit_gprs(tdvps_ptr, *exit_reason, *exit_qualification, *faulting_gpa);
 
         // At this point we can clear the sticky flag, since the saved L1 state indicates the proper exit from L2
-        tdvps_ptr->management.l2_exit_host_routing = HOST_ROUTED_NONE;
+        tdvps_ptr->management.l2_exit_host_routing.routing = L2_EXIT_ROUTED_NONE;
 
         // Make L1 (VM #0) the current VM
         set_vm_vmcs_as_active(tdvps_ptr, 0);
@@ -675,6 +684,7 @@ static api_error_type handle_l2_entry(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, tdvps_t*
 
     return TDX_SUCCESS;
 }
+
 
 api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
 {
@@ -690,7 +700,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
 
     // TDR related variables
     pa_t                  tdr_pa;                      // TDR physical address
-    tdr_t               * tdr_ptr;                     // Pointer to the TDR page (linear address)
+    tdr_t               * tdr_ptr = NULL;              // Pointer to the TDR page (linear address)
     pamt_entry_t        * tdr_pamt_entry_ptr;          // Pointer to the TDR PAMT entry
     bool_t                tdr_locked_flag = false;     // Indicate TDVPR is locked
 
@@ -810,7 +820,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
         }
 
         // RESUME_L1 is sticky; the internal flag is cleared later, only if actual L1 entry happens
-        set_l2_exit_host_routing(tdvps_ptr);
+        set_l2_exit_host_routing(tdvps_ptr, HOST_ROUTED);
     }
 
     // Fail if Arch PEBS is supported and the TD is Perfmon allowed and the VMM did not clear all *_EXT MSRs
@@ -882,6 +892,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
         goto EXIT_FAILURE;
     }
 
+
     if (tdvps_ptr->management.curr_vm != 0)
     {
         return_val = handle_l2_entry(tdr_ptr, tdcs_ptr, tdvps_ptr,
@@ -898,7 +909,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
     else if ((filter_result == FILTER_OK_NOTIFY_EPS_FAULT) && can_inject_epf_ve(exit_qualification, tdvps_ptr))
     {
         tdx_debug_assert(tdvps_ptr->management.curr_vm == 0);
-        tdx_inject_ve((uint32_t)exit_reason.raw, exit_qualification.raw, VE_INFO_ARCH, tdvps_ptr, faulting_gpa.raw, 0);
+        tdx_inject_ve((uint32_t)exit_reason.raw, exit_qualification.raw, VE_INFO_ARCH, tdvps_ptr, faulting_gpa.raw, 0, 0);
     }
 
     /*-------------------------------------------------------------------------------------
@@ -944,6 +955,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
     tdx_debug_assert(op_state_locked_flag);
     release_sharex_lock_hp_sh(&(tdcs_ptr->management_fields.op_state_lock));
     op_state_locked_flag = false;
+
 
     // If the current VCPU to be executed on this LP is not the same as the last one,
     // issue an indirect branch prediction barrier (IBPB) command
@@ -1082,6 +1094,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
     }
 
 EXIT_FAILURE:
+
 
     if (is_sept_locked)
     {

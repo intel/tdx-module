@@ -445,21 +445,14 @@ _STATIC_INLINE_ api_error_type check_enumeration_and_compare_configuration(tdx_m
 _STATIC_INLINE_ void map_fatal_info_pointer(void)
 {
     tdx_module_global_t* global_data = get_global_data();
+    tdx_module_local_t* local_data = get_local_data();
 
-    // only the first thread who reaches here should do the mapping
-    if (LOCK_RET_SUCCESS == acquire_sharex_lock_ex(&global_data->fatal_info_lock))
+    // verify all checks in tdh_sys_init passed and the fatal error info mem should be mapped
+    if ((uint64_t)(-1) != global_data->fatal_info_config_hpa)
     {
-        // verify all checks in tdh_sys_init passed and the fatal error info mem should be mapped
-        if ((uint64_t)(-1) != global_data->fatal_info_config_hpa)
-        {
-            global_data->fatal_info_p = (uint64_t*)map_pa((void*)global_data->fatal_info_config_hpa, TDX_RANGE_RW);
-            get_local_data()->fatal_error_mem_mapped = 1;
-
-            zero_cacheline((void*)global_data->fatal_info_p);
-            global_data->fatal_info_config_hpa = (uint64_t)(-1);
-        }
-
-        release_sharex_lock_ex(&global_data->fatal_info_lock);
+        local_data->fatal_info_p = (uint64_t*)map_pa((void*)global_data->fatal_info_config_hpa, TDX_RANGE_RW);
+        local_data->fatal_error_mem_mapped = 1;
+        zero_cacheline((void*)local_data->fatal_info_p);
     }
 }
 
@@ -657,19 +650,19 @@ api_error_type tdh_sys_lp_init(void)
     // Initialize keyhole
     init_keyhole_state();
 
-    // map the fatal error info memmory if needed
+    // map the fatal error info memmory if needed - only after we initialize the keyhole
     map_fatal_info_pointer();
 
     /**
      * Calc LPID from local_data_ptr
      */
-    tdx_local_data_ptr->lp_info.lp_id = (uint32_t)get_current_thread_num(get_sysinfo_table(), tdx_local_data_ptr);
+    tdx_local_data_ptr->lp_info.x2apic_id = (uint32_t)get_current_thread_num(get_sysinfo_table(), tdx_local_data_ptr);
 
     // This check can only be done after initializing the keyhole
     if (is_smrr_overlap_io_range())
     {
         TDX_ERROR("SMRR %d overlaps IO range\n");
-        tdx_local_data_ptr->lp_info.lp_id = 0;
+        tdx_local_data_ptr->lp_info.x2apic_id = 0;
         retval = TDX_SMRR_OVERLAPS_IORANGE;
         goto EXIT;
     }

@@ -1019,7 +1019,6 @@ api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* en
     // Check that field writes are done only from import flows, so we won't need
     //  to worry about concurrency and atomic writes
     tdx_debug_assert((access_type == MD_IMPORT_IMMUTABLE) || (access_type == MD_IMPORT_MUTABLE));
-
     status = md_td_get_element(field_id, entry, access_type, access_qual, md_ctx,
                                &rd_mask, &wr_mask, &read_value, &elem_ptr);
 

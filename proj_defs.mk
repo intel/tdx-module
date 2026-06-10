@@ -52,40 +52,18 @@ endif # TDX_MODULE_INTERNAL_VER
 ifdef TDX_MODULE_SEAM_MINOR_SVN
  PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=$(TDX_MODULE_SEAM_MINOR_SVN)
 else # TDX_MODULE_SEAM_MINOR_SVN
- PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=6
+ PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=7
 endif # TDX_MODULE_SEAM_MINOR_SVN
 
  #######################################
  PROJ_FLAGS += -DTDX_MODULE_MAJOR_VER=2
  PROJ_FLAGS += -DTDX_MODULE_MINOR_VER=0
- PROJ_FLAGS += -DTDX_MODULE_UPDATE_VER=12
+ PROJ_FLAGS += -DTDX_MODULE_UPDATE_VER=14
  #######################################
 
 ################################################################
 
-################################################################
-## TDX features
 
-
-ifdef TDX_MODULE_HV
-PROJ_FLAGS += -DTDX_MODULE_HV=$(TDX_MODULE_HV)
-else # TDX_MODULE_HV
-PROJ_FLAGS += -DTDX_MODULE_HV=0
-endif # TDX_MODULE_HV
-
-ifdef TDX_MIN_UPDATE_HV
-PROJ_FLAGS += -DTDX_MIN_UPDATE_HV=$(TDX_MIN_UPDATE_HV)
-else # TDX_MIN_UPDATE_HV
-PROJ_FLAGS += -DTDX_MIN_UPDATE_HV=0
-endif # TDX_MIN_UPDATE_HV
-
-ifdef TDX_NO_DOWNGRADE
-PROJ_FLAGS += -DTDX_NO_DOWNGRADE=$(TDX_NO_DOWNGRADE)
-else # TDX_NO_DOWNGRADE
-PROJ_FLAGS += -DTDX_NO_DOWNGRADE=0
-endif # TDX_NO_DOWNGRADE
-
-################################################################
 
 ################################################################
 ## Debug features
@@ -127,8 +105,8 @@ PROJ_FLAGS += -D_NO_IPP_DEPRECATED
 
 #Architecture git data
 ################################################################
-    COMMIT_ID = 9cd87352
-    ARCHITECTURE_BRANCH_NAME = TDX_Module_2.0.12_v0.96
+    COMMIT_ID = f0950101
+    ARCHITECTURE_BRANCH_NAME = TDX_Module_2.0.14_v0.97
     CPUID_EXCEL_VERSION_SUPPORTED = 10
     MSR_EXCEL_VERSION_SUPPORTED = 6
     TDVPS_EXCEL_VERSION_SUPPORTED = 28
@@ -136,7 +114,7 @@ PROJ_FLAGS += -D_NO_IPP_DEPRECATED
     TD_VMCS_EXCEL_VERSION_SUPPORTED = 26
     GLOBAL_SYS_EXCEL_VERSION_SUPPORTED = 2
     ERRORS_VERSION_SUPPORTED = 5
-    OP_STATE_VERSION_SUPPORTED = 2
+    OP_STATE_VERSION_SUPPORTED = 4
     SEPT_STATE_VERSION_SUPPORTED = 6
     L2_VMCS_VERSION_SUPPORTED = 25
 ################################################################

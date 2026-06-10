@@ -38,10 +38,6 @@
 api_error_type tdg_sys_rdall(uint64_t md_list_gpa, md_field_id_t field_id)
 {
     tdx_module_local_t*     local_data_ptr = get_local_data();
-    md_field_id_t           next_field_id;
-
-    md_access_qualifier_t   access_qual = { .raw = 0 };
-    md_context_ptrs_t       md_ctx;
 
     md_list_header_t        *md_list_hdr_p = NULL;
     api_error_type          retval = TDX_SUCCESS;
@@ -78,17 +74,35 @@ api_error_type tdg_sys_rdall(uint64_t md_list_gpa, md_field_id_t field_id)
         goto EXIT;
     }
 
-    // CONTEXT_CODE is implicit
-    field_id.context_code = MD_CTX_SYS;
+    if (is_null_field_id(field_id))
+    {
+        md_list_header_t cached_header = { .raw = get_global_data()->td_guest_cached_system_info[0] };
 
-    md_ctx.tdr_ptr = NULL;
-    md_ctx.tdcs_ptr = NULL;
-    md_ctx.tdvps_ptr = NULL;
+        tdx_memcpy(md_list_hdr_p, _4KB, get_global_data()->td_guest_cached_system_info, cached_header.list_buff_size);
 
-    retval = md_dump_list(MD_CTX_SYS, field_id, md_ctx, md_list_hdr_p, _4KB,
-                          MD_GUEST_RD, access_qual, &next_field_id);
+        local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r8 = MD_FIELD_ID_NA;
 
-    local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r8 = next_field_id.raw;
+        retval = TDX_SUCCESS;
+    }
+    else
+    {
+        md_field_id_t           next_field_id;
+
+        md_access_qualifier_t   access_qual = { .raw = 0 };
+        md_context_ptrs_t       md_ctx;
+
+        // CONTEXT_CODE is implicit
+        field_id.context_code = MD_CTX_SYS;
+
+        md_ctx.tdr_ptr = NULL;
+        md_ctx.tdcs_ptr = NULL;
+        md_ctx.tdvps_ptr = NULL;
+
+        retval = md_dump_list(MD_CTX_SYS, field_id, md_ctx, md_list_hdr_p, _4KB,
+                              MD_GUEST_RD, access_qual, &next_field_id);
+
+        local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r8 = next_field_id.raw;
+    }
 
 EXIT:
 

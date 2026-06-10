@@ -34,6 +34,8 @@
 #include "data_structures/tdx_local_data.h"
 
 
+#define SEPT_SPECIAL_FLAGS_LUT_MUL 1
+
 ///////////////////////////////////////////////////////////////////////////////////
 /// SEPT state masks
 ///////////////////////////////////////////////////////////////////////////////////
@@ -319,7 +321,7 @@ _STATIC_INLINE_ bool_t is_l2_sept_free(const ia32e_sept_t* ept_entry)
 _STATIC_INLINE_ bool_t sept_state_is_live_export_allowed(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     // when NON_BLOCKING_EXPORT_SUPPORTED is disabled in the spreadsheets, field's name would be 'live_export_allowed'
     return sept_special_flags_lookup[idx].write_blocking_live_export_allowed;
 }
@@ -327,28 +329,28 @@ _STATIC_INLINE_ bool_t sept_state_is_live_export_allowed(ia32e_sept_t ept_entry)
 _STATIC_INLINE_ bool_t sept_state_is_paused_export_allowed(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].paused_export_allowed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_re_import_allowed(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].re_import_allowed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_export_cancel_allowed(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].export_cancel_allowed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_import_cancel_allowed(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].import_cancel_allowed;
 }
 
@@ -356,105 +358,105 @@ _STATIC_INLINE_ bool_t sept_state_is_import_cancel_allowed(ia32e_sept_t ept_entr
 _STATIC_INLINE_ bool_t sept_state_is_first_time_export_allowed(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].first_time_export_allowed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_first_time_import_allowed(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].first_time_import_allowed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_exported(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].any_exported;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_exported_and_dirty(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].any_exported_and_dirty;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_exported_and_non_dirty(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].any_exported_and_non_dirty;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_blockedw(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].any_blockedw;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_mapped_or_pending(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].mapped_or_pending;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_pending(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].any_pending;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_pending_inc_mmiol(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].any_pending_incl_mmio;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_pending_and_guest_acceptable(const ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].any_pending_and_guest_acceptable;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_blocked(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].any_blocked;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_tlb_tracking_required(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].tlb_tracking_required;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_guest_accessible_leaf(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].guest_accessible_leaf;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_guest_fully_accessible_leaf(ia32e_sept_t ept_entry)
 {
     uint64_t idx = get_sept_state_lut_index(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].guest_fully_accessible_leaf;
 }
 
 
 _STATIC_INLINE_ bool_t septe_state_encoding_is_seamcall_allowed(uint64_t septe_state_enc, seamcall_leaf_opcode_t leaf_number)
 {
-    tdx_debug_assert(septe_state_enc < (MAX_SEPT_STATE_ENC * 2));
+    tdx_debug_assert(septe_state_enc < (MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL));
     tdx_debug_assert((uint64_t)leaf_number < MAX_SEAMCALL_LEAF);
 
     uint32_t septe_state_enc_index = sept_special_flags_lookup[septe_state_enc].index;
@@ -467,7 +469,7 @@ _STATIC_INLINE_ bool_t septe_state_encoding_is_seamcall_allowed(uint64_t septe_s
 
 _STATIC_INLINE_ bool_t septe_state_encoding_is_tdcall_allowed(uint64_t septe_state_enc, tdcall_leaf_opcode_t leaf_number)
 {
-    tdx_debug_assert(septe_state_enc < (MAX_SEPT_STATE_ENC * 2));
+    tdx_debug_assert(septe_state_enc < (MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL));
     tdx_debug_assert((uint64_t)leaf_number < MAX_TDCALL_LEAF);
 
     uint32_t septe_state_enc_index = sept_special_flags_lookup[septe_state_enc].index;
@@ -524,7 +526,7 @@ _STATIC_INLINE_ bool_t is_ept_pt_mmio(ia32e_sept_t *const ept_entry_ptr)
 }
 
 
-bool_t cmpxchg_keep_masked(ia32e_sept_t* ept_entry, uint64_t expected_val, uint64_t* new_val, uint64_t mask);
+void cmpxchg_keep_masked(ia32e_sept_t* ept_entry, uint64_t expected_val, uint64_t* new_val, uint64_t mask);
 
 void atomically_update_sept_state_keep_masked_bits(ia32e_sept_t* ept_entry, uint64_t new_state, uint64_t mask);
 

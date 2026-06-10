@@ -39,6 +39,7 @@
 #include "td_dispatcher/tdx_td_dispatcher.h"
 #include "td_transitions/td_exit.h"
 #include "helpers/virt_msr_helpers.h"
+#include "helpers/ipi_helpers.h"
 
 static void read_l2_enter_guest_state(tdvps_t* tdvps_ptr, l2_enter_guest_state_t *reg_list_p)
 {
@@ -118,6 +119,7 @@ api_error_type tdg_vp_enter(uint64_t flags, uint64_t reg_list_gpa)
         return TDX_PENDING_INTERRUPT;
     }
 
+
     // If the TD is debuggable, the host VMM can request all L1->L2 entries to be converted to TD exits.
     if (tdvps_p->management.l2_debug_ctls[vm_id].td_exit_on_l1_to_l2)
     {
@@ -133,6 +135,9 @@ api_error_type tdg_vp_enter(uint64_t flags, uint64_t reg_list_gpa)
         tdvps_p->management.l2_enter_guest_state_hpa[vm_id] = NULL_PA;
     }
 
+    // Were leaving L1, update TDVPS.VCPU_STATE_DETAILS while the VMCS is still active
+    update_vcpu_intr_state(tdvps_p, tdvps_p->management.curr_vm);
+
     set_vm_vmcs_as_active(tdvps_p, vm_id);
 
     // Translate soft-translated GPAs, if required
@@ -146,6 +151,7 @@ api_error_type tdg_vp_enter(uint64_t flags, uint64_t reg_list_gpa)
     // ALL CHECKS PASSED:
 
     tdvps_p->management.curr_vm = vm_id;
+
 
     // Before VM entry, update the current VM's VMCS' Guest IA32_PERF_GLOBAL_CTRL
     conditionally_write_vmcs_ia32_perf_global_ctrl_msr(tdcs_p);

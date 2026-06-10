@@ -43,7 +43,7 @@ api_error_type tdh_mng_vpflushdone(uint64_t target_tdr_pa)
 
     // TDR related variables
     pa_t                  tdr_pa = {.raw = target_tdr_pa}; // TDR physical address
-    tdr_t               * tdr_ptr;                         // Pointer to the TDR page (linear address)
+    tdr_t               * tdr_ptr = NULL;                  // Pointer to the TDR page (linear address)
     pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;         // Indicate TDR is locked
 
@@ -102,7 +102,7 @@ api_error_type tdh_mng_vpflushdone(uint64_t target_tdr_pa)
     if (tdr_ptr->management_fields.num_tdcx >= MIN_NUM_TDCS_PAGES)
     {
         // Map the TDCS structure and check the state. No need to lock
-        tdcs_ptr = map_implicit_tdcs(tdr_ptr, TDX_RANGE_RO, false);
+        tdcs_ptr = map_implicit_tdcs(tdr_ptr, TDX_RANGE_RW, false);
         if (op_state_is_any_initialized(tdcs_ptr->management_fields.op_state) &&
             (tdcs_ptr->management_fields.num_assoc_vcpus != 0))
         {
@@ -116,6 +116,24 @@ api_error_type tdh_mng_vpflushdone(uint64_t target_tdr_pa)
         if (return_val != TDX_SUCCESS)
         {
             goto EXIT;
+        }
+
+        if (tdcs_ptr->measurement_fields.mrtd_context_version)
+        {
+            // Set TDCS.MRTD_CONTEXT_VERSION to 0, to indicate TD build is not in progress.
+            tdcs_ptr->measurement_fields.mrtd_context_version = 0;
+            // Unregister the fact that crypto state is in memory while the TD is being built; atomically decrement PL.TD_BUILD_COUNT.
+            uint16_t old_val = _lock_xadd_16b(&global_data_ptr->td_build_count, (uint16_t)-1);
+            tdx_sanity_check(old_val > 0, FATAL_ERROR_ID_364, 0);
+        }
+
+        // Else, either the TD build was done by an old TDX module, or TD build was completed by TDH.MR.FINALIZE.
+        // Unregister all interrupted migration cases; atomically subtract TDCS.MIG_INTERRUPTED_COUNT from PL.MIG_INTERRUPTED_COUNT
+        if ((bool_t)tdcs_ptr->executions_ctl2_fields.field_support_at_init & BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT))
+        {
+            uint16_t old_val = _lock_xadd_16b(&global_data_ptr->mig_interrupted_count, -(tdcs_ptr->migration_fields.mig_interrupted_count));
+            tdx_sanity_check(old_val >= tdcs_ptr->migration_fields.mig_interrupted_count, FATAL_ERROR_ID_366, 0);
+            tdcs_ptr->migration_fields.mig_interrupted_count = 0;
         }
     }
 

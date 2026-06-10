@@ -191,6 +191,13 @@ api_error_type tdh_import_track(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
             goto EXIT;
         }
 
+        if ((bool_t)tdcs_p->executions_ctl2_fields.field_support_at_init & BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT))
+        {
+            uint16_t old_val = _lock_xadd_16b(&get_global_data()->mig_interrupted_count, -(tdcs_p->migration_fields.mig_interrupted_count));
+            tdx_sanity_check(old_val >= tdcs_p->migration_fields.mig_interrupted_count, FATAL_ERROR_ID_365, 0);
+            tdcs_p->migration_fields.mig_interrupted_count = 0;
+        }
+
         // start the out-of-order phase
         tdcs_p->management_fields.op_state = OP_STATE_POST_IMPORT;
     }

@@ -238,12 +238,23 @@ api_error_type tdh_import_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
 
         migsc_p->interrupted_state.valid = false;
 
+        decrement_mig_interrupted_counters(&tdcs_p->migration_fields.mig_interrupted_count, migsc_p,
+                                           (bool_t)tdcs_p->executions_ctl2_fields.field_support_at_init & BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT));
+
         // Check that the same function is resumed with the same parameters
         if ((migsc_p->interrupted_state.func.raw != local_data_ptr->vmm_regs.rax) ||
             (migsc_p->interrupted_state.page_list_info.raw != page_list_info.raw))
         {
             tdcs_p->management_fields.op_state = OP_STATE_FAILED_IMPORT;
             return_val = api_error_fatal(TDX_INVALID_RESUMPTION);
+            goto EXIT;
+        }
+
+        return_val = check_migsc_aes_gcm_context_compatibility_on_import_resume(migsc_p);
+        if (TDX_SUCCESS != return_val)
+        {
+            tdcs_p->management_fields.op_state = OP_STATE_FAILED_IMPORT;
+            return_val = api_error_fatal(return_val);
             goto EXIT;
         }
 
@@ -378,6 +389,13 @@ api_error_type tdh_import_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
                 migsc_p->interrupted_state.field_id.raw = next_field_id.raw;
 
                 migsc_p->interrupted_state.num_processed = page_list_i;
+
+                migsc_p->interrupted_state.aes_gcm_context_version = CRYPTO_LIB_COMPAT_VERSION;
+                if (tdcs_p->executions_ctl2_fields.field_support_at_init & BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT))
+                {
+                    (void)_lock_xadd_16b(&get_global_data()->mig_interrupted_count, 1);
+                    (void)_lock_xadd_16b(&tdcs_p->migration_fields.mig_interrupted_count, 1);
+                }
 
                 local_data_ptr->vmm_regs.rcx = original_rcx;
                 local_data_ptr->vmm_regs.rdx = original_rdx;

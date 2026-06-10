@@ -40,6 +40,7 @@
 #include "memory_handlers/sept_manager.h"
 #include "td_dispatcher/vm_exits/td_vmexit.h"
 #include "td_transitions/td_exit.h"
+#include "helpers/ipi_helpers.h"
 
 void td_rdpmc_exit(vm_vmexit_exit_reason_t vm_exit_reason, uint64_t  vm_exit_qualification)
 {
@@ -155,7 +156,7 @@ bool_t td_cr_access_exit(vmx_exit_qualification_t vm_exit_qualification)
             }
             else if (status == CR_ACCESS_NON_ARCH)
             {
-                tdx_inject_ve(VMEXIT_REASON_CR_ACCESS, vm_exit_qualification.raw, status_category, tdvps_p, 0, 0);
+                tdx_inject_ve(VMEXIT_REASON_CR_ACCESS, vm_exit_qualification.raw, status_category, tdvps_p, 0, 0, 0);
                 return true;
             }
 
@@ -255,7 +256,7 @@ void tdx_ept_misconfig_exit_to_vmm(pa_t gpa)
 }
 
 void tdx_inject_ve(uint64_t vm_exit_reason, uint64_t exit_qualification,
-                   ve_category_e category, tdvps_t* tdvps_p, uint64_t gpa, uint64_t gla)
+                   ve_category_e category, tdvps_t* tdvps_p, uint64_t gpa, uint64_t gla, uint64_t apic_data)
 {
     bool_t ve_info_mapped = false;
     tdvps_ve_info_t* ve_info_p;
@@ -289,6 +290,12 @@ void tdx_inject_ve(uint64_t vm_exit_reason, uint64_t exit_qualification,
         ve_info_p->ve_category = (uint8_t)category;
         ve_info_p->instruction_length = (uint32_t)length;
         ve_info_p->instruction_information = (uint32_t)info;
+
+        uint64_t guest_inter_state;
+        ia32_vmread(VMX_GUEST_INTERRUPTIBILITY_ENCODE, &guest_inter_state);
+        ve_info_p->interruptibility_state = (uint32_t)guest_inter_state;
+
+        UNUSED(apic_data);
 
         ve_info_p->valid = (uint32_t)VE_INFO_CONTENTS_VALID;
 
@@ -372,3 +379,4 @@ void async_tdexit_ept_violation(pa_t gpa, ept_level_t req_level, ia32e_sept_t se
 
     tdx_ept_violation_exit_to_vmm(gpa, vm_exit_reason, exit_qual.raw, eeq.raw);
 }
+

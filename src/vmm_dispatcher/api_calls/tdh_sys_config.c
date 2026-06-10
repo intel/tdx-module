@@ -743,9 +743,9 @@ static api_error_type check_and_set_tdmrs(tdmr_info_entry_t tdmr_info_copy[MAX_T
 }
 
 api_error_type tdh_sys_config(uint64_t tdmr_info_array_pa,
-                             uint64_t num_of_tdmr_entries,
-                             sys_config_options_t sysconfig_options
-                             )
+                              uint64_t num_of_tdmr_entries,
+                              sys_config_options_t sysconfig_options
+                              )
 {
     // Temporary Variables
 

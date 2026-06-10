@@ -52,7 +52,7 @@ api_error_type tdh_vp_addcx(uint64_t target_tdcx_pa, uint64_t target_tdvpr_pa)
 
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
-    tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
+    tdr_t               * tdr_ptr = NULL;            // Pointer to the TDR page (linear address)
     pamt_entry_t        * tdr_pamt_entry_ptr;        // Pointer to the TDR PAMT entry
     bool_t                tdr_locked_flag = false;   // Indicate TDVPR is locked
 

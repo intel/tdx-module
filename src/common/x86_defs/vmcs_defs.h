@@ -314,6 +314,29 @@ typedef union vmx_exit_qualification_s {
         uint64_t reserved1                  : 51; // Bits 13-63
     } notification;
 
+    struct
+    {
+        uint64_t access_offset : 12; // If the APIC - access VM exit is due to a linear access,
+                                     // the offset of access within the APIC page. Undefined if
+                                     // the APIC - access VM exit is due a guest physical access
+        uint64_t access_type : 4;    // Access type :
+                                     //  0 = linear access for a data read during instruction execution
+                                     //  1 = linear access for a data write during instruction execution
+                                     //  2 = linear access for an instruction fetch
+                                     //  3 = linear access(read or write) during event delivery
+                                     //  10 = guest - physical access during event delivery
+                                     //  15 = guest - physical access for an instruction fetch or during
+                                     //      instruction execution
+                                     //
+                                     //  Other values not used
+        uint64_t guest_access : 1;   // If the APIC - access VM exit is due to a guest - physical access,
+                                     // this bit is set if the access was asynchronous to instruction
+                                     // execution and not part of event delivery. (The bit is set if the
+                                     // access is related to trace output by Intel PT otherwise this bit
+                                     // is cleared
+        uint64_t reserved1 : 47;
+    } apic_access;
+
     uint64_t  raw;
 
 } vmx_exit_qualification_t;
@@ -644,7 +667,10 @@ typedef union vmx_instruction_info_u
 #define PID_PIR_BITS                    256
 #define PID_PIR_DWORDS                  (PID_PIR_BITS / (sizeof(uint32_t) * 8))
 
-typedef union posted_intr_descriptor_u
+#define PID_ON_BIT                      0
+#define PID_SN_BIT                      1
+
+typedef union pidsc_u
 {
     PACKED struct
     {
@@ -653,15 +679,19 @@ typedef union posted_intr_descriptor_u
         {
             struct
             {
-                uint8_t outstanding_notification : 1,
-                        _reserved                : 7;
+                uint8_t on :        1,
+                        sn :        1,
+                        _reserved : 6;
             };
-            uint8_t on_byte;
+            uint16_t on_word;
         };
+        uint8_t  nv;
+        uint8_t  reserved;
+        uint32_t ndst;
     };
     uint64_t raw[8];
-} posted_intr_descriptor_t;
-tdx_static_assert(sizeof(posted_intr_descriptor_t) == (PID_BIT_SIZE / 8), posted_intr_descriptor_t);
+} pidsc_t;
+tdx_static_assert(sizeof(pidsc_t) == (PID_BIT_SIZE / 8), pidsc_t);
 
 #define VMX_GUEST_ES_SELECTOR_ENCODE  0x0800ULL
 #define VMX_GUEST_ES_ARBYTE_ENCODE  0x4814ULL
@@ -891,5 +921,7 @@ tdx_static_assert(sizeof(posted_intr_descriptor_t) == (PID_BIT_SIZE / 8), posted
 #define VMX_HLATP_FULL_ENCODE  0x2040
 #define VMX_IA32_SPEC_CTRL_MASK 0x204A
 #define VMX_IA32_SPEC_CTRL_SHADOW 0x204C
+#define VMX_PID_POINTER_TABLE_ADDRESS 0x2042
+#define VMX_LAST_PID_POINTER_INDEX_CODE 0x0008
 
 #endif /* SRC_COMMON_X86_DEFS_VMCS_DEFS_H_ */

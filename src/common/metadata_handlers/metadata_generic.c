@@ -223,6 +223,8 @@ uint32_t md_find_entry_idx(const md_lookup_t* lookup_table, uint32_t num_of_entr
         return MD_NO_ENTRY_IDX;
     }
 
+    lfence();
+
     return i;
 }
 
@@ -1115,21 +1117,21 @@ static api_error_code_e md_write_sequence(md_sequence_t* sequence_ptr, md_contex
     // Subtract the sequence header size from remaining buffer
     buff_size -= sizeof(md_field_id_t);
 
+    if (sequence_ptr->sequence_header.write_mask_valid)
+    {
+        // First element after the header will be the write mask, if write mask is valid
+        wr_mask = sequence_ptr->element[0];
+        sequence_idx++;
+        buff_size -= sizeof(uint64_t);
+    }
+    else
+    {
+        wr_mask = (uint64_t)-1;
+    }
+
     for (uint32_t i = 0; i < num_fields; i++)
     {
         entry = &lkp_iter->lookup_table[lkp_iter->table_idx];
-
-        if (sequence_ptr->sequence_header.write_mask_valid)
-        {
-            // First element after the header will be the write mask, if write mask is valid
-            wr_mask = sequence_ptr->element[0];
-            sequence_idx++;
-            buff_size -= sizeof(uint64_t);
-        }
-        else
-        {
-            wr_mask = (uint64_t)-1;
-        }
 
         // Check that there's enough remaining size for the minimal sequence (1 field)
         if ((uint64_t)buff_size < ((uint64_t)entry->num_of_elem * sizeof(uint64_t)))
@@ -1200,7 +1202,7 @@ api_error_code_e md_write_list(md_context_code_e ctx_code, md_field_id_t expecte
     next_field_id->raw = MD_FIELD_ID_NA;
 
     // Check the list header
-    if ((list_header_ptr->num_sequences == 0) || (list_header_ptr->reserved != 0))
+    if ((list_header_ptr->num_sequences == 0) || (list_header_ptr->reserved != 0) || (list_header_ptr->list_buff_size < sizeof(md_list_header_t)))
     {
         return api_error_with_operand_id(TDX_INVALID_METADATA_LIST_HEADER, 0xFFFF);
     }

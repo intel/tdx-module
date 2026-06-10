@@ -86,7 +86,7 @@ void td_ept_violation_exit(vmx_exit_qualification_t exit_qualification, vm_vmexi
         if (tdcs_p->executions_ctl_fields.config_flags.maxgpa_virt)
         {
             tdx_inject_ve(vm_exit_reason.raw, exit_qualification.raw, VE_INFO_RESERVED_GPA_BITS,
-                            tdx_local_data_ptr->vp_ctx.tdvps, gpa.raw, gla);
+                            tdx_local_data_ptr->vp_ctx.tdvps, gpa.raw, gla, 0);
         }
         else
         {
@@ -132,7 +132,7 @@ void td_ept_violation_exit(vmx_exit_qualification_t exit_qualification, vm_vmexi
                 uint64_t gla;
                 ia32_vmread(VMX_VM_EXIT_GUEST_LINEAR_ADDRESS_ENCODE, &gla);
                 tdx_inject_ve(vm_exit_reason.raw, exit_qualification.raw, VE_INFO_PENDING,
-                                tdx_local_data_ptr->vp_ctx.tdvps, gpa.raw, gla);
+                                tdx_local_data_ptr->vp_ctx.tdvps, gpa.raw, gla, 0);
                 return;
             }
         }

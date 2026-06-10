@@ -169,7 +169,7 @@ typedef struct tdr_tdx_io_fields_s
      * Number of device interfaces attached to the TD (i.e.DEVIFCS owned by the TD)
      * This TDR page can be reclaimed only if this counter is 0
      */
-    uint64_t devif_ref_cnt;
+    uint64_t tdi_ref_cnt;
 } tdr_tdx_io_fields_t;
 
 #define SIZE_OF_IO_FIELDS        sizeof(tdr_tdx_io_fields_t)
@@ -204,6 +204,13 @@ tdx_static_assert(sizeof(tdr_t) == TDX_PAGE_SIZE_IN_BYTES, tdr_t);
 
 #define MAX_VCPUS_PER_TD        1376
 
+typedef enum
+{
+    FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT = 4
+
+}field_support_at_init_e;
+
+#define FIELD_SUPPORT_AT_INIT_INITIALIZATION_VALUE (BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT))
 
 #define MEM_SCAN_CONFIG_PAGES             2
 
@@ -411,7 +418,10 @@ typedef union
     struct
     {
         uint64_t ept_violation_on_l2_sept_walk_failure : 1; // bit 0:  ept violation td exit if a tdcall flow fails l2 ept walk
-        uint64_t reserved                              : 63;
+        uint64_t hint_on_vintr_pending                 : 1;
+        uint64_t hint_on_vintr_in_service              : 1;
+        uint64_t hint_on_vnmi_pending                  : 1;
+        uint64_t reserved                              : 60;
     };
     uint64_t  raw;
 } vm_ctls_t;
@@ -584,8 +594,8 @@ typedef struct tdcs_measurement_fields_s
     sharex_hp_lock_t rtmr_lock; /**< Controls concurrent access to the RTMR array */
 
     bool_t         last_teeinfo_hash_valid;
-
-    uint8_t        reserved_0[45];
+    uint8_t        reserved_0[43];
+    uint16_t       mrtd_context_version;
     /**
      * Holds the context of an incremental SHA384 calculation on this TD
      */
@@ -634,11 +644,12 @@ typedef struct tdcs_migration_fields_s
     uint8_t           mem_scan_qualifier;
     uint8_t           mem_scan_state;
     uint64_t          mem_scan_control_page_hpas[MEM_SCAN_CONFIG_PAGES];
-
-    uint8_t           reserved_1[128];
+    uint8_t           reserved_1[16];
+    uint16_t          mig_interrupted_count;
+    uint8_t           reserved_2[110];
 } tdcs_migration_fields_t;
-tdx_static_assert(sizeof(tdcs_migration_fields_t) == 384, tdcs_migration_fields_t);
 
+tdx_static_assert(sizeof(tdcs_migration_fields_t) == 384, tdcs_migration_fields_t);
 /**
  * @struct tdcs_virt_msrs_t
  *
@@ -727,11 +738,21 @@ typedef struct tdcs_execution_control2_field_s
     feature_paravirt_ctls_t      feature_paravirt_ctls;
     uint64_t                     filtered_events_count[MAX_VMS];
     uint16_t                     event_filters_num;
-    uint32_t                     field_support_at_td_init;
+    uint32_t                     field_support_at_init;
     uint64_t                     blocked_count;
     uint64_t                     pending_blocked_count;
     uint64_t                     mem_count;
-    uint8_t                      reserved1[352];
+    uint8_t                      intr_config_state[MAX_VMS];
+    uint16_t                     pidpt_num_pages[MAX_VMS];
+    uint16_t                     pidpt_num_entries[MAX_VMS];
+    pa_t                         pidpt_hpa[MAX_VMS];
+    uint32_t                     pir_mask[MAX_VMS][PID_PIR_DWORDS];
+    uint8_t                      wakeup_virt_vector[MAX_VMS];
+    uint8_t                      main_nv[MAX_VMS];
+    uint8_t                      shr_nv[MAX_VMS];
+    bool_t                       main_nv_shared[MAX_VMS];
+    uint8_t                      pid_mode[MAX_VMS];
+    uint8_t                      reserved1[148];
 } tdcs_execution_control2_field_t;
 tdx_static_assert(sizeof(tdcs_execution_control2_field_t) == 512, tdcs_execution_control2_field_t);
 
@@ -766,6 +787,15 @@ tdx_static_assert(sizeof(tdcs_tdxio_fields_t) == TDX_PAGE_SIZE_IN_BYTES / 2, tdc
 #if (MAX_POSSIBLE_CPUID_LOOKUP < MAX_NUM_CPUID_LOOKUP)
 #error "Invalid number of MAX_POSSIBLE_CPUID_LOOKUP"
 #endif // (MAX_POSSIBLE_CPUID_LOOKUP < MAX_NUM_CPUID_LOOKUP)
+
+typedef enum intr_config_state_e
+{
+    INTR_CONFIG_NONE         = 0,
+    INTR_CONFIG_IN_PROGRESS  = 1,
+    INTR_CONFIG_DONE         = 2,
+    INTR_CONFIG_MIGRATED     = 3,
+    INTR_CONFIG_LEGACY       = 4
+} intr_config_state_t;
 
 /**
  * @struct tdcs_t

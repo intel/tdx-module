@@ -115,24 +115,7 @@ _STATIC_INLINE_ void ia32_hlt( uint64_t leaf, uint64_t id )
 	_ASM_VOLATILE_ ("hlt" :: "a"(leaf), "b"(id): "memory") ;
 }
 
-/**
- * @brief Call UD2 instruction
- */
-_STATIC_INLINE_ void ia32_ud2( void )
-{
-    _ASM_VOLATILE_ ("ud2" ::: "memory") ;
-}
 
-/**
- * @brief Induce GP exception
- */
-_STATIC_INLINE_ void ia32_gp(void)
-{
-    _ASM_VOLATILE_(
-        "movq $0x8000000000000000, %%rax\n"
-        "movq $0, (%%rax)\n"
-        ::: "memory", "rax");
-}
 
 /**
  * @brief Induce SEAM shutdown by jumping to linear address 0 (long mode)
@@ -573,6 +556,11 @@ _STATIC_INLINE_ void _lock_or_16b(uint16_t *mem, uint16_t quantum)
     _ASM_VOLATILE_ ("lock; orw %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
 }
 
+_STATIC_INLINE_ void _lock_or_32b(uint32_t *mem, uint32_t quantum)
+{
+    _ASM_VOLATILE_ ("lock; or %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
+}
+
 _STATIC_INLINE_ void _lock_or_64b(uint64_t *mem, uint64_t quantum)
 {
     _ASM_VOLATILE_ ("lock; orq %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
@@ -593,11 +581,27 @@ _STATIC_INLINE_ void _lock_xor_16b(uint16_t *mem, uint16_t quantum)
     _ASM_VOLATILE_ ("lock; xorw %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
 }
 
+_STATIC_INLINE_ bool_t _lock_bts_16b(volatile uint16_t* mem, uint16_t bit)
+{
+    bool_t result;
+
+    _ASM_VOLATILE_ ("lock; btsw %2, %0; adc %1,%1" : "=m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
+    return result;
+}
+
 _STATIC_INLINE_ bool_t _lock_bts_32b(volatile uint32_t* mem, uint32_t bit)
 {
     bool_t result;
 
     _ASM_VOLATILE_ ("lock; bts %2, %0; adc %1,%1" : "=m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
+    return result;
+}
+
+_STATIC_INLINE_ bool_t _lock_btr_16b(volatile uint16_t* mem, uint16_t bit)
+{
+    bool_t result;
+
+    _ASM_VOLATILE_ ("lock; btrw %2, %0; adc %1,%1" : "=m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
     return result;
 }
 
@@ -665,11 +669,6 @@ _STATIC_INLINE_ bool_t bit_scan_reverse64(uint64_t value, uint64_t* msb_position
     return (value != 0);
 }
 
-_STATIC_INLINE_ void bts_32b(volatile uint32_t* mem, uint32_t bit)
-{
-    _ASM_VOLATILE_ ("bts %1, %0;" : "=m" ( *mem ) : "a"(bit) : "cc" , "memory");
-}
-
 _STATIC_INLINE_ void btr_32b(volatile uint32_t* mem, uint32_t bit)
 {
     _ASM_VOLATILE_ ("btr %1, %0;" : "=m" ( *mem ) : "a"(bit) : "cc" , "memory");
@@ -701,28 +700,6 @@ _STATIC_INLINE_ void ia32_clflushopt(volatile void *p)
     _ASM_VOLATILE_ ("clflushopt (%0)" :: "r"(p));
 }
 
-_STATIC_INLINE_ void clear_xmms(void)
-{
-    _ASM_VOLATILE_ (
-         // XOR the existing XMM's
-            "pxor %%xmm0, %%xmm0\n"
-            "pxor %%xmm1, %%xmm1\n"
-            "pxor %%xmm2, %%xmm2\n"
-            "pxor %%xmm3, %%xmm3\n"
-            "pxor %%xmm4, %%xmm4\n"
-            "pxor %%xmm5, %%xmm5\n"
-            "pxor %%xmm6, %%xmm6\n"
-            "pxor %%xmm7, %%xmm7\n"
-            "pxor %%xmm8, %%xmm8\n"
-            "pxor %%xmm9, %%xmm9\n"
-            "pxor %%xmm10, %%xmm10\n"
-            "pxor %%xmm11, %%xmm11\n"
-            "pxor %%xmm12, %%xmm12\n"
-            "pxor %%xmm13, %%xmm13\n"
-            "pxor %%xmm14, %%xmm14\n"
-            "pxor %%xmm15, %%xmm15\n"
-        :::);
-}
 
 _STATIC_INLINE_ void store_xmms_in_buffer(uint128_t xmms[16])
 {

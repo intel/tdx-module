@@ -98,6 +98,8 @@ static td_msr_access_status_t rd_wr_msr_generic_checks(uint32_t msr_addr, bool_t
         return construct_msr_status_with_ve_category(TD_MSR_ACCESS_MSR_NON_ARCH_EXCEPTION, VE_INFO_NON_CONFIG_PARAVIRT);
     }
 
+    lfence();
+
     if ((vm_id > 0) &&
         get_msr_bitmap_bit((uint8_t*)tdvps_p->l2_vm_ctrl[vm_id-1].l2_shadow_msr_bitmaps, msr_addr, wr))
     {
@@ -159,12 +161,12 @@ static uint16_t rd_wr_msr_generic_case(uint32_t msr_addr, bool_t wr, tdcs_t* tdc
     }
     else if (action == MSR_ACTION_GP_OR_VE_BY_DCA)
     {
-        return !tdcs_p->executions_ctl_fields.cpuid_flags.dca_supported ?
+        return !is_dca_supported_in_tdcs(tdcs_p) ?
             TD_MSR_ACCESS_GP : construct_msr_status_with_ve_category(TD_MSR_ACCESS_MSR_NON_ARCH_EXCEPTION, VE_INFO_CONFIG_PARAVIRT);
     }
     else if (action == MSR_ACTION_GP_OR_VE_BY_TSC_DEADLINE)
     {
-        return !tdcs_p->executions_ctl_fields.cpuid_flags.tsc_deadline_supported ?
+        return !is_tsc_deadline_supported_in_tdcs(tdcs_p) ?
             TD_MSR_ACCESS_GP : construct_msr_status_with_ve_category(TD_MSR_ACCESS_MSR_NON_ARCH_EXCEPTION, VE_INFO_CONFIG_PARAVIRT);
     }
     else if (action == MSR_ACTION_GP_OR_VE_BY_MTRR)
@@ -194,12 +196,12 @@ static uint16_t rd_wr_msr_generic_case(uint32_t msr_addr, bool_t wr, tdcs_t* tdc
     }
     else if (action == MSR_ACTION_GP_OR_VE_BY_TME)
     {
-        return !tdcs_p->executions_ctl_fields.cpuid_flags.tme_supported ?
+        return !is_tme_supported_in_tdcs(tdcs_p) ?
             TD_MSR_ACCESS_GP : construct_msr_status_with_ve_category(TD_MSR_ACCESS_MSR_NON_ARCH_EXCEPTION, VE_INFO_CONFIG_PARAVIRT);
     }
     else if (action == MSR_ACTION_GP_OR_VE_BY_PCONFIG)
     {
-        return !tdcs_p->executions_ctl_fields.cpuid_flags.pconfig_supported ?
+        return !is_pconfig_supported_in_tdcs(tdcs_p) ?
             TD_MSR_ACCESS_GP : construct_msr_status_with_ve_category(TD_MSR_ACCESS_MSR_NON_ARCH_EXCEPTION, VE_INFO_CONFIG_PARAVIRT);
     }
     else if (action == MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES)

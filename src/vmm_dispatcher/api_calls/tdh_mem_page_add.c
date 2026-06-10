@@ -47,7 +47,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     tdx_module_local_t  * local_data_ptr = get_local_data();
     // TDR related variables
     pa_t                  tdr_pa;                    // TDR physical address
-    tdr_t               * tdr_ptr;                   // Pointer to the TDR page (linear address)
+    tdr_t               * tdr_ptr = NULL;            // Pointer to the TDR page (linear address)
     pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
@@ -171,6 +171,12 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     if (return_val != TDX_SUCCESS)
     {
         TDX_ERROR("Failed to check/lock/map the new TD page - error = %llx\n", return_val);
+        goto EXIT;
+    }
+
+    if(get_global_data()->update_compatibility && (tdcs_ptr->measurement_fields.mrtd_context_version != CRYPTO_LIB_COMPAT_VERSION))
+    {
+        return_val = TDX_INCOMPATIBLE_MRTD_CONTEXT;
         goto EXIT;
     }
 

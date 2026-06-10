@@ -36,17 +36,17 @@ bool_t is_valid_initial_iommu_state(void)
     vtbar_t *vtbar_ptr = NULL;
     hiop_info_t *hiop_info_ptr = NULL;
     socket_io_info_t *socket_io_info_ptr = NULL;
-    iommu_config_t *iommu_config_ptr = NULL;
 
     ests0_reg_t ests0_reg = {.raw = 0};
     iommu_id_t iommu_id = {.raw = 0};
 
-    tdx_module_global_t *tdx_global_data_ptr = get_global_data();
-
-    if (!tdx_global_data_ptr->tdx_io_supported)
+    if (!get_global_data()->tdx_io_supported)
     {
         return true;
     }
+    uint64_t prev_wac_val = 0;
+
+    enable_seam_sai_generation();
 
     for (uint8_t socket_id = 0; socket_id < NUM_OF_SOCKETS; socket_id++)
     {
@@ -67,24 +67,41 @@ bool_t is_valid_initial_iommu_state(void)
                 socket_io_info_ptr,
                 hiop_info_ptr);
 
-            ests0_reg.raw = vtbar_read_reg64(vtbar_ptr, VTBAR_ESTS0_REG_OFFSET);
+            // Set SEAM only write access SAI policy for VTBAR (ECMD and GCMD are now write protected)
+            prev_wac_val = set_seam_mode_wac(
+                socket_io_info_ptr,
+                vtbar_ptr,
+                IOMMU_WAC);
 
-            free_la(vtbar_ptr);
+            ests0_reg.raw = vtbar_read_reg64(vtbar_ptr, VTBAR_ESTS0_REG_OFFSET);
 
             if (ests0_reg.tms != 0) // IOMMU is in TDX mode
             {
-                // When in TDX mode, check that IOMMU state is configured
-                iommu_id.hiop_id = hiop_id;
-                iommu_config_ptr = &tdx_global_data_ptr->iommu_configs[iommu_id.raw];
+                // Remove SAI policy from VRBAR
+                remove_seam_mode_wac(
+                    socket_io_info_ptr,
+                    vtbar_ptr,
+                    IOMMU_WAC,
+                    prev_wac_val);
 
-                if (iommu_config_ptr->state != IOMMU_STATE_CONFIGURED)
-                {
-                    return false;
-                }
+                free_la(vtbar_ptr);
+                disable_seam_sai_generation();
+
+                return false;
             }
+
+            // Remove SAI policy from VRBAR
+            remove_seam_mode_wac(
+                socket_io_info_ptr,
+                vtbar_ptr,
+                IOMMU_WAC,
+                prev_wac_val);
+
+            free_la(vtbar_ptr);
         };
     };
 
+    disable_seam_sai_generation();
     return true;
 }
 

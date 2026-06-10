@@ -50,6 +50,7 @@ SRC_DIRS += include/
 
 SRC_DIRS := $(foreach dir,$(SRC_DIRS),$(PROJ_DIR)/$(dir))
 
+
 VPATH := $(SRC_DIRS)
 
 # Source and headers files
@@ -73,6 +74,7 @@ CRYPTO_LIB_PATH         := $(CRYPTO_LIB_BUILD_PATH)/lib
 CRYPTO_LIB_FILENAME     := libippcp_s_l9.a
 CRYPTO_LIB              := -lippcp_s_l9
 
+
 # Headers include path
 INCLUDE_PATH := -I$(PROJ_DIR)/include -I$(CRYPTO_LIB_BUILD_PATH)/include -I$(PROJ_DIR)/src -I$(PROJ_DIR)/src/common
 
@@ -83,3 +85,4 @@ PAD_BINARY_PY := $(TOOLS_DIR)/pad_binary/pad_binary.py
 #Python scripts
 AUTO_GEN_PATH := $(PROJ_DIR)/include/auto_gen_2_0
 TPA_HASH_PARSER := $(TOOLS_DIR)/tpa_hash_parser.py
+

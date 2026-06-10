@@ -45,7 +45,7 @@ typedef struct PACKED lp_info_s
     uint32_t  lp;     /**< number of lp in package and core context */
     uint32_t  core;   /**< number of core in package context */
     uint32_t  pkg;    /**< number of package */
-    uint32_t  lp_id;  /**< The unique sequential index of the current lp in the platform */
+    uint32_t  x2apic_id;  /**< The unique sequential index of the current lp in the platform */
 } lp_info_t;
 
 
@@ -243,6 +243,8 @@ typedef struct tdx_module_local_s
     uint64_t              vmm_ia32_perf_global_ctrl;
     uint64_t              guest_rcx_on_td_entry;
 
+    // fatal error diagnostics
+    uint64_t*             fatal_info_p;
     uint8_t               fatal_error_mem_mapped;
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE

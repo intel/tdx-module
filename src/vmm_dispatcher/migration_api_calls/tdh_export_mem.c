@@ -336,11 +336,8 @@ static gpa_list_entry_status_t handle_operation(gpa_list_entry_t gpa_list_entry,
                                 extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, vm, sept_entry_level, page_gpa.raw, *l2_septe_ptrs[vm]);
                                 fatal_error(FATAL_ERROR_ID_354, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
                             }
-        
-                            if (l2_septe_ptrs[vm] != NULL)
-                            {
-                                sept_l2_unblockw(l2_septe_ptrs[vm]);
-                            }
+
+                            sept_l2_unblockw(l2_septe_ptrs[vm]);
                         }
                     }
                 }
@@ -468,6 +465,7 @@ static api_error_type finish_entry_processing(uint64_t* entry_num, gpa_list_info
             migsc_p->interrupted_state.mac_list_pa[1] = mac_list_pa[1];
             migsc_p->interrupted_state.l2_attr_list_pa.raw = l2_attr_list_pa.raw;
             migsc_p->mbmd.mem.header.mig_epoch = tdcs_p->migration_fields.mig_epoch;
+            migsc_p->interrupted_state.aes_gcm_context_version = 0;
         }
     }
     else

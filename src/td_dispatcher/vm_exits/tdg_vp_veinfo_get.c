@@ -33,6 +33,8 @@
 #include "data_structures/tdx_tdvps.h"
 #include "accessors/data_accessors.h"
 
+#define MAX_TDG_VP_VEINFO_GET_VERSION 2
+
 api_error_type tdg_vp_veinfo_get(uint8_t version)
 {
     // TDX Local data
@@ -47,8 +49,8 @@ api_error_type tdg_vp_veinfo_get(uint8_t version)
     local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r9 = 0;
     local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r10 = 0;
 
-    // TDG.VP.VEINFO.GET supports version 1.  Other version checks are done by the TDCALL dispatcher.
-    if (version > 1)
+    // TDG.VP.VEINFO.GET supports version 1 or 2.  Other version checks are done by the TDCALL dispatcher.
+    if (version > MAX_TDG_VP_VEINFO_GET_VERSION)
     {
         TDX_ERROR("version %d is not supported by TDG.VP.VEINFO.GET\n", version);
         return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
@@ -63,6 +65,15 @@ api_error_type tdg_vp_veinfo_get(uint8_t version)
         goto EXIT;
     }
     
+#if MAX_TDG_VP_VEINFO_GET_VERSION >= 2
+    // V0 & V1 do not modify the R11 and R12
+    if (version >= 2)
+    {
+        local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r11 = 0;
+        local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r12 = 0;
+    }
+#endif // MAX_TDG_VP_VEINFO_GET_VERSION >= 2
+
     exit_reason_and_ve_category_t exit_reason_and_ve_category = { .raw = 0 };
     exit_reason_and_ve_category.exit_reason = (uint32_t)local_data_ptr->vp_ctx.tdvps->ve_info.exit_reason;
     if (version > 0)
@@ -73,9 +84,16 @@ api_error_type tdg_vp_veinfo_get(uint8_t version)
     // Retrieve the data from the VE_INFO and put into output registers
     local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.rcx = exit_reason_and_ve_category.raw;
     local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.rdx = local_data_ptr->vp_ctx.tdvps->ve_info.exit_qualification;
-    local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r8 = local_data_ptr->vp_ctx.tdvps->ve_info.gla;
+
+    {
+        local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r8 = local_data_ptr->vp_ctx.tdvps->ve_info.gla;
+    }
     local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r9 = local_data_ptr->vp_ctx.tdvps->ve_info.gpa;
     local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r10 = local_data_ptr->vp_ctx.tdvps->ve_info.inst_len_and_info;
+    if (version >= 2)
+    {
+        local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.r12 = local_data_ptr->vp_ctx.tdvps->ve_info.interruptibility_state;
+    }
 
     // Mark VE info as free
     local_data_ptr->vp_ctx.tdvps->ve_info.valid = 0ULL;

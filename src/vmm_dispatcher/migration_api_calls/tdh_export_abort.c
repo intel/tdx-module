@@ -235,6 +235,13 @@ api_error_type tdh_export_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
         ALL_CHECKS_PASSED:  The function is guaranteed to succeed
     ---------------------------------------------------------------*/
 
+    if ((bool_t)tdcs_p->executions_ctl2_fields.field_support_at_init & BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT))
+    {
+        uint16_t old_val = _lock_xadd_16b(&get_global_data()->mig_interrupted_count, -(tdcs_p->migration_fields.mig_interrupted_count));
+        tdx_sanity_check(old_val >= tdcs_p->migration_fields.mig_interrupted_count, FATAL_ERROR_ID_367, 0);
+        tdcs_p->migration_fields.mig_interrupted_count = 0;
+    }
+    
     /* Terminate the export session
     */
 

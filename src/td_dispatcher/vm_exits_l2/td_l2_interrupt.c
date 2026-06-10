@@ -40,17 +40,17 @@
 #include "memory_handlers/sept_manager.h"
 #include "td_dispatcher/vm_exits_l2/td_l2_vmexit.h"
 #include "td_transitions/td_exit.h"
-
+#include "helpers/ipi_helpers.h"
 
 static l2_exit_route_t handle_l2_posted_interrupt(tdvps_t* tdvps_p, uint16_t vm_id)
 {
-    posted_intr_descriptor_t* pid_p;
+    pidsc_t* pid_p;
 
     // Read and map L1 PID address.  A shadow copy was stored in TDVPS when the L1 VMCS field was written.
-    pid_p = map_pa((void*)tdvps_p->management.shadow_pid_hpa, TDX_RANGE_RW);
+    pid_p = map_pa((void*)tdvps_p->management.shadow_pid_hpa[0], TDX_RANGE_RW);
 
     // Atomically clear the ON bit in the PID
-    _lock_and_8b(&pid_p->on_byte, (uint8_t)~0x1);
+    _lock_and_16b(&pid_p->on_word, (uint16_t)~0x1);
 
     // Write EOI to the Local APIC.
     // Note: This code assumes local APIC works in x2APIC mode.
@@ -121,8 +121,9 @@ static l2_exit_route_t handle_l2_posted_interrupt(tdvps_t* tdvps_p, uint16_t vm_
     return L2_EXIT_ROUTE_L2_TO_L1_EXIT;
 }
 
-l2_exit_route_t td_l2_interrupt_exit(tdx_module_local_t* tdx_local_data_ptr,
-                                     vmx_exit_inter_info_t vm_exit_inter_info, uint16_t vm_id)
+static l2_exit_route_t td_l2_interrupt_exit_internal(tdx_module_local_t* tdx_local_data_ptr,
+                                                     vmx_exit_inter_info_t vm_exit_inter_info,
+                                                     uint16_t vm_id)
 {
     tdvps_t* tdvps_p = tdx_local_data_ptr->vp_ctx.tdvps;
 
@@ -131,7 +132,7 @@ l2_exit_route_t td_l2_interrupt_exit(tdx_module_local_t* tdx_local_data_ptr,
     // Check the L1 VCPU's process posted interrupts pin-based execution control.
     // A shadow copy was stored in TDVPS when the L1 VMCS field was written.
     // If PID is not enabled then TD-exit to the host VMM.
-    vmx_pinbased_ctls_t shadow_pinbased_exec_ctls = { .raw = tdvps_p->management.shadow_pinbased_exec_ctls };
+    vmx_pinbased_ctls_t shadow_pinbased_exec_ctls = { .raw = tdvps_p->management.shadow_pinbased_exec_ctls[0] };
 
     if (!shadow_pinbased_exec_ctls.process_posted_interrupts)
     {
@@ -155,5 +156,35 @@ l2_exit_route_t td_l2_interrupt_exit(tdx_module_local_t* tdx_local_data_ptr,
     // If not, resume L2 VM; the interrupt will be delivered later.
 
     return handle_l2_posted_interrupt(tdvps_p, vm_id);
+}
+
+l2_exit_route_t td_l2_interrupt_exit(tdx_module_local_t* tdx_local_data_ptr,
+                                     vmx_exit_inter_info_t vm_exit_inter_info,
+                                     vm_vmexit_exit_reason_t vm_exit_reason,
+                                     vmx_exit_qualification_t vm_exit_qualification,
+                                     uint16_t vm_id)
+{
+    l2_exit_route_t routing = td_l2_interrupt_exit_internal(tdx_local_data_ptr, vm_exit_inter_info, vm_id);
+
+    switch (routing)
+    {
+    case L2_EXIT_ROUTE_TD_EXIT:
+        // This is a normal external interrupt, do a TD exit
+        async_tdexit_to_vmm(TDX_SUCCESS, vm_exit_reason,
+                            vm_exit_qualification.raw, 0, 0, vm_exit_inter_info.raw);
+        break;
+
+    case L2_EXIT_ROUTE_L2_TO_L1_EXIT:
+        // A posted interrupt has been injected by the VM exit handler to L1.
+        // Do an L2->L1 exit so that uCode will process the interrupt.
+        td_l2_to_l1_exit_with_exit_case(TDX_L2_EXIT_PENDING_INTERRUPT, vm_exit_reason, vm_exit_qualification, 0, vm_exit_inter_info, false);
+        break;
+
+    default:
+        // Nothing to do
+        break;
+    }
+
+    return routing;
 }
 

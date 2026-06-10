@@ -72,14 +72,13 @@ _STATIC_INLINE_ bool_t get_vtbar_iommu(
 }
 
 /**
- * @brief Verifies the initial IOMMU state. Called from TDH.SYS.INIT
- *        Checks on all IOMMUs:
- *                  - Not in the TDX mode
- *                  - Their state is CONFIGURED.
+ * @brief Verifies the initial IOMMU state:
+ *        - IOMMU entries are not in TDX mode
  *
  * @return bool_t
  */
-bool_t is_valid_initial_iommu_state(void);
+
+ bool_t is_valid_initial_iommu_state(void);
 
 /**
  * @brief Add T_IQPAGE/IQCTXPAGE continuously

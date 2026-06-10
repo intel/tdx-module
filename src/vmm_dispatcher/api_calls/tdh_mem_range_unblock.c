@@ -96,6 +96,7 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
         goto EXIT;
     }
 
+
     if (!verify_page_info_input(gpa_mappings, LVL_PT, tdcs_ptr->executions_ctl_fields.eptp.fields.ept_pwl))
     {
         TDX_ERROR("Input GPA page info (0x%llx) is not valid\n", gpa_mappings.raw);
@@ -114,7 +115,8 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
                                                       &sept_entry_ptr,
                                                       &sept_level_entry,
                                                       &sept_entry_copy,
-                                                      &sept_locked_flag);
+                                                      &sept_locked_flag,
+                                                      false);
     if (return_val != TDX_SUCCESS)
     {
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
@@ -157,7 +159,7 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
         op_state_is_tlb_tracking_required(tdcs_ptr->management_fields.op_state))
     {
         // Get the PAMT entry of the unblocked page
-        if (is_secure_ept_leaf_entry(&sept_entry_copy))
+        if (is_secure_ept_leaf_entry(&sept_entry_copy, false))
         {
             // Get unblocked page HPA PAMT entry
             unblocked_page_pa.raw = leaf_ept_entry_to_hpa(sept_entry_copy, page_gpa.raw, sept_level_entry);
@@ -223,10 +225,15 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
     epte_val.raw = sept_entry_copy.raw;
 
     sept_unblock(&epte_val);
+
     sept_lock_release_local(&epte_val);
 
     // Write the whole 64-bit EPT entry in a single operation
-    atomic_mem_write_64b(&sept_entry_ptr->raw, epte_val.raw);
+    {
+        atomically_update_sept_state_keep_tdhp(sept_entry_ptr, epte_val.raw);
+    }
+
+
     septe_locked_flag = false;
 
 EXIT:
@@ -244,7 +251,7 @@ EXIT:
 
     if (sept_locked_flag)
     {
-        release_sharex_lock_ex(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_ex(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
         if (sept_entry_ptr != NULL)
         {
             free_la(sept_entry_ptr);

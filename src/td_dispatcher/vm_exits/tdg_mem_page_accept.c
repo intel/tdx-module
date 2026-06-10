@@ -182,9 +182,9 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
 
     ept_level_t ept_level = req_accept_level;
     return_val = walk_private_gpa(tdcs_p, page_gpa, tdr_p->key_management_fields.hkid,
-                                  &sept_entry_ptr, &ept_level, &sept_entry_copy);
+                                  &sept_entry_ptr, &ept_level, &sept_entry_copy, false);
 
-    bool_t is_leaf = is_secure_ept_leaf_entry(&sept_entry_copy);
+    bool_t is_leaf = is_secure_ept_leaf_entry(&sept_entry_copy, false);
 
     api_error_type error = TDX_OPERAND_BUSY;
     tdaccept_failure_type_t fail_type = check_tdaccept_failure((return_val != TDX_SUCCESS), is_leaf, sept_entry_ptr,
@@ -268,14 +268,17 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
         // Clearing the TDP bit relies of specific encoding of the SEPT entry state.
         // The following assertions verify this.
 
-        if (is_sept_pending(&sept_entry_copy))
         {
-            sept_update_state(&sept_entry_copy, SEPT_STATE_MAPPED_MASK);
+            if (is_sept_pending(&sept_entry_copy))
+            {
+                sept_update_state(&sept_entry_copy, SEPT_STATE_MAPPED_MASK, false, true);
+            }
+            else
+            {
+                sept_update_state(&sept_entry_copy, SEPT_STATE_EXP_DIRTY_MASK, false, true);
+            }
         }
-        else
-        {
-            sept_update_state(&sept_entry_copy, SEPT_STATE_EXP_DIRTY_MASK);
-        }
+
 
         for (uint16_t vm_id = 1; vm_id <= tdcs_p->management_fields.num_l2_vms; vm_id++)
         {
@@ -300,7 +303,7 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
         }
     }
 
-    atomic_mem_write_64b(&sept_entry_ptr->raw, sept_entry_copy.raw);
+    atomically_update_sept_state_keep_tdhp(sept_entry_ptr, sept_entry_copy.raw);
     sept_lock_release(sept_entry_ptr);
     sept_entry_locked_flag = false;
 

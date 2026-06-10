@@ -137,7 +137,7 @@ api_error_type tdh_servtd_prebind(uint64_t target_tdr_pa, uint64_t servtd_info_h
             }
         }
     }
-#endif // (MAX_SERVTDS>1)
+#endif // (MAX_SERVTDS > 1)
 
     if (tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].state == SERVTD_BOUND)
     {

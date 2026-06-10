@@ -86,7 +86,7 @@ void pamt_inc_nl_page_count(pamt_non_leaf_entry_t* pamt_nl_entry)
     {
         uint64_t prev_count = _lock_xadd_16b((uint16_t*)&pamt_nl_entry->second_quadword, 1);
         prev_count &= PAMT_NL_PAGE_COUNT_MASK;
-        tdx_sanity_check(prev_count != 512, FATAL_ERROR_ID_342, 0);
+        tdx_sanity_check(prev_count != 512, FATAL_ERROR_ID_351, 0);
     }
 }
 
@@ -350,7 +350,7 @@ api_error_code_e pamt_walk(pa_t pa, pamt_block_t pamt_block, lock_type_t leaf_lo
     pamt_entry_t* pamt_2mb = NULL;
     pamt_entry_t* pamt_4kb = NULL;
 
-    pamt_entry_t* ret_entry_pp = NULL;
+    pamt_entry_t* ret_entry_pp = (void*)NULL_PA;
 
     target_size = walk_to_target_size ? target_size : PT_4KB;
 
@@ -369,7 +369,7 @@ api_error_code_e pamt_walk(pa_t pa, pamt_block_t pamt_block, lock_type_t leaf_lo
     // Acquire PAMT 1GB entry lock as shared
     if ((retval = acquire_sharex_lock_hp(&pamt_1gb->entry_lock, TDX_LOCK_SHARED, is_guest)) != TDX_SUCCESS)
     {
-        goto EXIT_FAILURE_NO_LOCKS;
+        goto EXIT;
     }
 
     // Return pamt_1g entry if it is currently a leaf entry
@@ -449,20 +449,10 @@ EXIT_FAILURE_RELEASE_ALL:
 EXIT_FAILURE_RELEASE_ROOT:
     // Release PAMT 1GB shared lock
     release_sharex_lock_hp_sh(&pamt_1gb->entry_lock);
-EXIT_FAILURE_NO_LOCKS:
-    free_la(pamt_1gb);
-    if (pamt_2mb)
-    {
-        free_la(pamt_2mb);
-    }
-    if (pamt_4kb)
-    {
-        free_la(pamt_4kb);
-    }
 
 EXIT:
 
-    if (ret_entry_pp != NULL)
+    if (ret_entry_pp != (void*)NULL_PA)
     {
         pamt_walk_result->pamt_walk_path[PT_1GB] = pamt_1gb;
         pamt_walk_result->pamt_walk_path[PT_2MB] = pamt_2mb;
@@ -472,6 +462,18 @@ EXIT:
                 (leaf_lock_type == TDX_LOCK_EXCLUSIVE) ? TDX_RANGE_RW : TDX_RANGE_RO);
 
         pamt_walk_result->valid = true;
+    }
+    else
+    {
+        free_la(pamt_1gb);
+        if (pamt_2mb)
+        {
+            free_la(pamt_2mb);
+        }
+        if (pamt_4kb)
+        {
+            free_la(pamt_4kb);
+        }
     }
 
     return retval;

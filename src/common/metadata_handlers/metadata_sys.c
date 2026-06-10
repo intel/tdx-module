@@ -117,44 +117,7 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
             }
             else if (entry->field_id.field_code == MD_SYS_TDX_FEATURES0_FIELD_CODE)
             {
-                tdx_features_enum0_t tdx_features_0;
-
-                tdx_features_0.raw = 0;
-                tdx_features_0.td_migration = 1;
-                tdx_features_0.service_td = 1;
-                tdx_features_0.partitioned_td_migration = 1;
-                tdx_features_0.td_preserving = 1;
-                tdx_features_0.tdg_vp_rdwr = 1;
-                tdx_features_0.relaxed_mem_mng_concurrency = 1;
-                tdx_features_0.cpuid_virt_guest_ctrl = 1;
-                tdx_features_0.local_attestation = global_data->seamverifyreport_available;
-                tdx_features_0.td_partitioning = 1;
-                tdx_features_0.td_entry_enhancements = 1;
-                tdx_features_0.host_priority_locks = 1;
-                if (is_not_gnr_a0_stepping())
-                {
-                    tdx_features_0.config_ia32_arch_cap = 1;
-                }
-                tdx_features_0.no_rbp_mod = 1;
-                tdx_features_0.pending_ept_violation_v2 = 1;
-                tdx_features_0.l2_tlb_invd_opt = 1;
-                tdx_features_0.fms_config = 1;
-                tdx_features_0.topology_enum = 1;
-                tdx_features_0.ve_reduction = 1;
-                tdx_features_0.event_filtering = 1;
-                tdx_features_0.icssd = 1;
-                tdx_features_0.fixed_ctr12_prof = 1;
-                tdx_features_0.maxpa_virt = 1;
-                tdx_features_0.maxgpa_virt = 1;
-                tdx_features_0.fatal_diagnostics = 1;
-                tdx_features_0.cpuid2_virt = 1;
-                tdx_features_0.enhanced_event_filtering = 0;
-                tdx_features_0.tdx_io = get_sysinfo_table()->mcheck_fields.io_sys_info_table_version > 0? 1: 0;
-                tdx_features_0.tdx_connect_partitioning = tdx_features_0.tdx_io;
-                tdx_features_0.dynamic_pamt = 1;
-                tdx_features_0.import_page_status = 1;
-
-                *element_array = tdx_features_0.raw;
+                *element_array = get_tdx_features_enum0().raw;
             }
             else
             {

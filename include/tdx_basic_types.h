@@ -44,11 +44,11 @@ typedef signed short int       int16_t;
 typedef signed int             int32_t;
 typedef signed long long int   int64_t;
 
-#else // __cplusplus_CTE_BUILD_!__cplusplus
+#else // (!defined(__cplusplus) || defined(CTE_BUILD))
 
 #include <cstdint>
 
-#endif // __cplusplus_CTE_BUILD_!__cplusplus
+#endif // (!defined(__cplusplus) || defined(CTE_BUILD))
 
 ////////////////////////////////////////////////////////////////////////////
 // Boolean and true/false definitions.
@@ -68,7 +68,7 @@ typedef uint8_t                  bool_t;
 #   define false ((bool_t)0)
 #endif // false
 
-#else // __cplusplus
+#else
 typedef bool                  bool_t;
 #endif //__cplusplus
 
@@ -114,6 +114,7 @@ typedef union
 ///////////////////////////////////////////////////////////////////////////
 
 #define MIN(A,B) ( (A) < (B) ? (A) : (B) )
+#define MAX(A,B) ( (A) > (B) ? (A) : (B) )
 
 #endif // __TDX_BASIC_TYPES_H_INCLUDED__
 

@@ -38,6 +38,9 @@
 
 api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa)
 {
+    api_error_type return_val = TDX_OPERAND_INVALID;
+
+
     // Local data for return values
     tdx_module_local_t  * local_data_ptr = get_local_data();
 
@@ -58,8 +61,6 @@ api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa)
     bool_t                  septe_locked_flag = false;  // Indicate SEPTE is locked
 
     uint64_t old_value;
-
-    api_error_type return_val = TDX_OPERAND_INVALID;
 
     // Input register operands
     tdr_pa.raw = target_tdr_pa;
@@ -133,7 +134,8 @@ api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa)
                                                   &page_sept_entry_ptr,
                                                   &page_level_entry,
                                                   &page_sept_entry_copy,
-                                                  &sept_locked_flag);
+                                                  &sept_locked_flag,
+                                                  false);
     if (return_val != TDX_SUCCESS)
     {
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
@@ -181,20 +183,20 @@ api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa)
     switch (page_sept_entry_copy.raw & SEPT_STATE_ENCODING_MASK)
     {
         case SEPT_STATE_BLOCKEDW_MASK:
-            sept_update_state(&new_septe, SEPT_STATE_MAPPED_MASK);
+            sept_update_state(&new_septe, SEPT_STATE_MAPPED_MASK, false, false);
             new_septe.w = 1;
             break;
         case SEPT_STATE_EXP_BLOCKEDW_MASK:
         case SEPT_STATE_EXP_DIRTY_BLOCKEDW_MASK:
-            sept_update_state(&new_septe, SEPT_STATE_EXP_DIRTY_MASK);
+            sept_update_state(&new_septe, SEPT_STATE_EXP_DIRTY_MASK, false, false);
             new_septe.w = 1;
             break;
         case SEPT_STATE_PEND_BLOCKEDW_MASK:
-            sept_update_state(&new_septe, SEPT_STATE_PEND_MASK);
+            sept_update_state(&new_septe, SEPT_STATE_PEND_MASK, false, false);
             break;
         case SEPT_STATE_PEND_EXP_BLOCKEDW_MASK:
         case SEPT_STATE_PEND_EXP_DIRTY_BLOCKEDW_MASK:
-            sept_update_state(&new_septe, SEPT_STATE_PEND_EXP_DIRTY_MASK);
+            sept_update_state(&new_septe, SEPT_STATE_PEND_EXP_DIRTY_MASK, false, false);
             break;
         default:
         {
@@ -227,7 +229,7 @@ api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa)
         }
     }
 
-    atomic_mem_write_64b(&page_sept_entry_ptr->raw, new_septe.raw);
+    atomically_update_sept_state_keep_tdhp(page_sept_entry_ptr, new_septe.raw);
 
     /*---------------------------------------------------------------
        ALL_CHECKS_PASSED:  The function is guaranteed to succeed
@@ -250,7 +252,7 @@ EXIT:
 
     if (sept_locked_flag)
     {
-        release_sharex_lock_sh(&tdcs_p->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_p->executions_ctl_fields.secure_ept_lock);
         if (page_sept_entry_ptr != NULL)
         {
             free_la(page_sept_entry_ptr);

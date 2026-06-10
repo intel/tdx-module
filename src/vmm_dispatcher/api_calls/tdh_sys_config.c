@@ -744,7 +744,8 @@ static api_error_type check_and_set_tdmrs(tdmr_info_entry_t tdmr_info_copy[MAX_T
 
 api_error_type tdh_sys_config(uint64_t tdmr_info_array_pa,
                              uint64_t num_of_tdmr_entries,
-                             sys_config_options_t sysconfig_options)
+                             sys_config_options_t sysconfig_options
+                             )
 {
     // Temporary Variables
 
@@ -812,6 +813,7 @@ api_error_type tdh_sys_config(uint64_t tdmr_info_array_pa,
         retval = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
         goto EXIT;
     }
+
 
     tdx_global_data_ptr->kot.entries[hkid].state = KOT_STATE_HKID_RESERVED;
     tdx_global_data_ptr->hkid = hkid;

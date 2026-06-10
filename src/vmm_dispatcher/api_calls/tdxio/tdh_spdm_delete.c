@@ -19,6 +19,7 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.
 //
 // SPDX-License-Identifier: MIT
+
 /**
  * @file tdh_spdm_delete.c
  * @brief TDHSPDMDELETE API handler

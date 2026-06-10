@@ -65,8 +65,10 @@ api_error_type check_and_map_gpa_list(gpa_list_info_t gpa_list_info, gpa_list_en
     pa_t               gpa_list_pa;
     api_error_type     return_val;
 
-    if (!((gpa_list_info.reserved_0 == 0) && (gpa_list_info.format <= GPA_LIST_FORMAT_MAX) &&
-          (gpa_list_info.first_entry <= gpa_list_info.last_entry)))
+    if (!((gpa_list_info.reserved_0 == 0) && (gpa_list_info.first_entry <= gpa_list_info.last_entry) &&
+        ((gpa_list_info.format == GPA_LIST_FORMAT_GPA_ONLY)
+            || (gpa_list_info.format == GPA_LIST_FORMAT_GPA_AND_ATTR)
+         )))
     {
         return TDX_OPERAND_INVALID;
     }

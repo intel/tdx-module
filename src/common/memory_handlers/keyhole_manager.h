@@ -45,7 +45,7 @@
 
 #if MAX_KEYHOLE_PER_LP >= UNDEFINED_IDX
     #error MAX_KEYHOLE_PER_LP is too big
-#endif // MAX_KEYHOLE_PER_LP>=...
+#endif // MAX_KEYHOLE_PER_LP >= UNDEFINED_IDX
 
 #define STATIC_KEYHOLE_IDX_TDR            0
 #define STATIC_KEYHOLE_IDX_TDCS           (STATIC_KEYHOLE_IDX_TDR + 1)

@@ -46,6 +46,7 @@ api_error_type tdh_sys_update(void)
     bool_t global_locked_flag = false;
     api_error_type ret_val = TDX_OPERAND_INVALID;
 
+
     // Acquire an exclusive lock to the whole TDX-SEAM module
     if (acquire_sharex_lock_ex(&global_data->global_lock) != LOCK_RET_SUCCESS)
     {

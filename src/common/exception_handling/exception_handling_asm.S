@@ -73,9 +73,9 @@ tdx_fault_wrapper:
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE
     EXCEPTION_HANDLER(tdx_handler_with_errc, 8)         // Vector 8 - #DF
-#else
+#else // DEBUGFEATURE_TDX_DBG_TRACE
     EXCEPTION_HANDLER(tdx_unsupported_handler, 8)       // Vector 8 - #DF
-#endif
+#endif // DEBUGFEATURE_TDX_DBG_TRACE
 
     EXCEPTION_HANDLER(tdx_handler_no_errc, 9)           // Vector 9
     EXCEPTION_HANDLER(tdx_handler_with_errc, 10)        // Vector 10
@@ -85,9 +85,9 @@ tdx_fault_wrapper:
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE
     EXCEPTION_HANDLER(tdx_handler_with_errc, 14)        // Vector 14 - #PF
-#else
+#else // DEBUGFEATURE_TDX_DBG_TRACE
     EXCEPTION_HANDLER(tdx_unsupported_handler, 14)      // Vector 14 - #PF
-#endif
+#endif // DEBUGFEATURE_TDX_DBG_TRACE
 
     EXCEPTION_HANDLER(tdx_handler_no_errc, 15)          // Vector 15
     EXCEPTION_HANDLER(tdx_handler_no_errc, 16)          // Vector 16

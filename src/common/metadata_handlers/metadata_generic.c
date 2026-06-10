@@ -64,7 +64,6 @@ _STATIC_INLINE_ bool_t is_special_l2_vmcs_field_id(md_field_id_t field_id)
 
     return false;
 }
-
 _STATIC_INLINE_ bool_t is_equal_field_id(md_field_id_t field_id1, md_field_id_t field_id2)
 {
     return ((field_id1.field_code == field_id2.field_code) &&

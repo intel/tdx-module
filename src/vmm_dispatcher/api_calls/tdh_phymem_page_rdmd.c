@@ -151,7 +151,9 @@ api_error_type tdh_phymem_page_rdmd(uint64_t target_page_pa)
         local_data_ptr->vmm_regs.rdx = get_pamt_entry_owner(&pamt_entry).raw; // Shift to get TDR HPA
     }
 
-    if ((pamt_entry.pt == PT_REG) || (pamt_entry.pt == PT_EPT) || (pamt_entry.pt == PT_IOMMU_MT))
+    if ((pamt_entry.pt == PT_REG) || (pamt_entry.pt == PT_EPT)
+        || (pamt_entry.pt == PT_IOMMU_MT)
+        )
     {
         local_data_ptr->vmm_regs.r9 = pamt_entry.bepoch.raw;
     }

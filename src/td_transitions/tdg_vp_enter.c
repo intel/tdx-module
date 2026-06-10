@@ -203,6 +203,7 @@ api_error_type tdg_vp_enter(uint64_t flags, uint64_t reg_list_gpa)
         conditionally_write_vmcs_ia32_spec_ctrl_shadow(tdcs_p, tdvps_p->guest_msr_state.ia32_spec_ctrl);
     }
 
+
     // Restore the guest GPRs and enter the guest TD
     if (tdvps_p->management.vm_launched[vm_id] == true)
     {

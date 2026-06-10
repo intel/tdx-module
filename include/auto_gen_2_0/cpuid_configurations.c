@@ -696,9 +696,9 @@ const cpuid_config_return_values_t xfam_mask_0x7_0x0[XCR0_MAX_VALID_BIT + 1] = {
 const cpuid_config_return_values_t xfam_mask_0x7_0x1[XCR0_MAX_VALID_BIT + 1] = {
 
     [2]={ .eax = 0x800010 , .edx = 0x430  } ,
-    [5]={ .eax = 0x21  } ,
-    [6]={ .eax = 0x21  } ,
-    [7]={ .eax = 0x21  } ,
+    [5]={ .eax = 0x20  } ,
+    [6]={ .eax = 0x20  } ,
+    [7]={ .eax = 0x20  } ,
     [17]={ .eax = 0x200000  } ,
     [18]={ .eax = 0x200000  } ,
 

@@ -155,7 +155,20 @@ static bool_t is_epf_expected(tdr_t* tdr_p, tdcs_t* tdcs_p, pa_t gpa)
     walk_result = gpa_translate(eptp, gpa, true, hkid, access_rights,
                                     &page_hpa, &ept_entry_copy, &accumulated_rwx);
 
-    return ((walk_result != EPT_WALK_SUCCESS) && (walk_result != EPT_WALK_CONVERTIBLE_VIOLATION));
+    bool_t is_shared = get_gpa_shared_bit(gpa.raw, tdcs_p->executions_ctl_fields.gpaw);
+
+    bool_t is_epf_expected = ((walk_result != EPT_WALK_SUCCESS) && (walk_result != EPT_WALK_CONVERTIBLE_VIOLATION));
+
+    if (!is_shared && (walk_result == EPT_WALK_VIOLATION))
+    {
+        if (sept_state_is_any_pending_and_guest_acceptable((ia32e_sept_t)ept_entry_copy.raw) &&
+            !tdcs_p->executions_ctl_fields.td_ctls.pending_ve_disable)
+        {
+            is_epf_expected = false;
+        }
+    }
+
+    return is_epf_expected;
 }
 
 bool_t can_inject_epf_ve(vmx_exit_qualification_t last_exit_qualification, tdvps_t* tdvps_p)
@@ -356,7 +369,7 @@ stepping_filter_e td_entry_stepping_filter(pa_t* faulting_gpa, tdvps_t* tdvps_p,
     }
 
     // Acquire Secure-EPT lock as exclusive
-    if (acquire_sharex_lock_ex(&tdcs_p->executions_ctl_fields.secure_ept_lock) != LOCK_RET_SUCCESS)
+    if (acquire_sharex_lock_hp_sh(&tdcs_p->executions_ctl_fields.secure_ept_lock, false) != TDX_SUCCESS)
     {
         return FILTER_FAIL_SEPT_TREE_BUSY;
     }
@@ -370,7 +383,7 @@ stepping_filter_e td_entry_stepping_filter(pa_t* faulting_gpa, tdvps_t* tdvps_p,
         if (is_epf_expected(tdr_p, tdcs_p, last_epf_gpa))
         {
             *faulting_gpa = last_epf_gpa;
-            release_sharex_lock_ex(&tdcs_p->executions_ctl_fields.secure_ept_lock);
+            release_sharex_lock_hp_sh(&tdcs_p->executions_ctl_fields.secure_ept_lock);
             *is_sept_tree_locked = false;
             return FILTER_FAIL_TDENTER_EPFS;
         }

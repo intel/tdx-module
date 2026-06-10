@@ -128,7 +128,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
 
     // SEPT and walk to find entry
     return_val = walk_private_gpa(tdcs_ptr, page_gpa, tdr_ptr->key_management_fields.hkid,
-                                  &page_sept_entry_ptr, &page_level_entry, &page_sept_entry_copy);
+                                  &page_sept_entry_ptr, &page_level_entry, &page_sept_entry_copy, true);
 
     if (return_val != TDX_SUCCESS)
     {
@@ -187,7 +187,9 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
         SEPT_PERMISSIONS_RWX,
         td_page_pa,
         tdr_ptr->key_management_fields.hkid,
-        SEPT_STATE_MAPPED_MASK);
+        SEPT_STATE_MAPPED_MASK,
+        false,
+        false);
 
     /**
      *  Update the TD measurements with the API string and page GPA
@@ -226,6 +228,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
 
     // restore VMM's XCR0 state
     ia32_xsetbv(0, local_data_ptr->vmm_xcr0_state);
+
 
     // Increment TDR child count
     tdr_ptr->management_fields.chldcnt++;

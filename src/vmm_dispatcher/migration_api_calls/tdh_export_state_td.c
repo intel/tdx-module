@@ -68,6 +68,7 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
     md_field_id_t      next_field_id;
 
     api_error_type     return_val = TDX_OPERAND_INVALID;
+    api_error_type        tmp_return_val = TDX_OPERAND_INVALID;
 
     md_list_t          md_list;
 
@@ -346,7 +347,8 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
             }
 
             // Check for a pending interrupt
-            if (is_interrupt_pending_host_side())
+            tmp_return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock,true);
+            if (TDX_SUCCESS != tmp_return_val)
             {
                 // There is a pending interrupt.  Save the state for the next invocation.
                 migsc_p->interrupted_state.valid = true;
@@ -356,8 +358,8 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
                 migsc_p->interrupted_state.field_id.raw = next_field_id.raw;
 
                 migsc_p->interrupted_state.num_processed = page_list_i;
+                return_val = tmp_return_val;
 
-                return_val = TDX_INTERRUPTED_RESUMABLE;
             }
             else
             {
@@ -369,7 +371,8 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
 
     local_data_ptr->vmm_regs.rdx = (uint64_t)page_list_i;
 
-    if (return_val != TDX_INTERRUPTED_RESUMABLE)
+    if (return_val != TDX_INTERRUPTED_RESUMABLE &&
+        return_val != TDX_INTERRUPTED_BUSY)
     {
         return_val = TDX_SUCCESS;
     }

@@ -19,6 +19,7 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.
 //
 // SPDX-License-Identifier: MIT
+
 /**
  * @file tdh_mmio_mt_add.c
  * @brief TDHMMIOMTADD API handler

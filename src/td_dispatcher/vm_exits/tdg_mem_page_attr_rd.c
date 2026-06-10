@@ -73,7 +73,7 @@ api_error_type tdg_mem_page_attr_rd(pa_t page_gpa)
     // Check SEPT and walk to find entry
     // Ignore success/failure indication - this is handled by the check below.
     page_sept_entry_ptr = secure_ept_walk(tdcs_ptr->executions_ctl_fields.eptp, page_gpa,
-                                tdr_ptr->key_management_fields.hkid, &page_level_entry, &page_sept_entry_copy, false);
+                                tdr_ptr->key_management_fields.hkid, &page_level_entry, &page_sept_entry_copy, false, false, false);
 
     // Create a copy of the SEPT entry and mark it locally as locked (guest-side only).
     return_val = sept_lock_acquire_guest(page_sept_entry_ptr);
@@ -130,7 +130,8 @@ api_error_type tdg_mem_page_attr_rd(pa_t page_gpa)
          * of its own, so provide them based on the L1 state.
          */
         gpa_attr.attr_arr[vm_id] = l2_sept_get_gpa_attr(l2_septe_ptr, sept_state_is_any_blockedw(page_sept_entry_copy), 
-            sept_state_is_any_pending_inc_mmiol(page_sept_entry_copy));
+            sept_state_is_any_pending_inc_mmiol(page_sept_entry_copy)
+            );
 
         free_la(l2_septe_ptr);
     }

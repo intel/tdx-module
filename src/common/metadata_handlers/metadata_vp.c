@@ -468,7 +468,8 @@ static uint64_t md_vp_get_element_special_rd_handle(md_field_id_t field_id, md_a
             case VMX_PAUSE_LOOP_EXITING_GAP_ENCODE:
             {
                 if ((access_type == MD_GUEST_RD) || (access_type == MD_GUEST_WR)
-                        || (access_type == MD_EXPORT_MUTABLE))
+                        || (access_type == MD_EXPORT_MUTABLE)
+                        )
                 {
                     read_value = md_ctx.tdvps_ptr->management.shadow_ple_gap[vm_id];
                 }
@@ -479,7 +480,8 @@ static uint64_t md_vp_get_element_special_rd_handle(md_field_id_t field_id, md_a
             case VMX_PAUSE_LOOP_EXITING_WINDOW_ENCODE:
             {
                 if ((access_type == MD_GUEST_RD) || (access_type == MD_GUEST_WR)
-                        || (access_type == MD_EXPORT_MUTABLE))
+                        || (access_type == MD_EXPORT_MUTABLE)
+                        )
                 {
                     read_value = md_ctx.tdvps_ptr->management.shadow_ple_window[vm_id];
                 }
@@ -1114,7 +1116,8 @@ static api_error_code_e md_vp_element_l2_vmcs_wr_handle(md_field_id_t field_id, 
     case VMX_PAUSE_LOOP_EXITING_WINDOW_ENCODE:
     {
         if (access_type == MD_GUEST_WR
-                || access_type == MD_IMPORT_MUTABLE)
+                || access_type == MD_IMPORT_MUTABLE
+            )
         {
             // On writes by L1 VMM and on import, save the original value (in virtual TSC ticks) as a shadow
             // and convert to native TSC ticks.

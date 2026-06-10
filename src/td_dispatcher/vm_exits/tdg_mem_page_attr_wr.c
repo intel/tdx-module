@@ -97,7 +97,8 @@ static api_error_type get_all_l2_sept_entries(tdr_t *tdr_ptr, tdcs_t *tdcs_ptr, 
             // Get the L2 attributes.  L2 SEPT entry does not hold BLOCKEDW or PENDING indications
             // of its own, so provide them based on the L1 state.
             single_vm_curr_gpa_attr = l2_sept_get_gpa_attr(l2_septe_ptr[vm_id], sept_state_is_any_blockedw(l1_sept_entry_copy),
-                sept_state_is_any_pending_inc_mmiol(l1_sept_entry_copy));
+                sept_state_is_any_pending_inc_mmiol(l1_sept_entry_copy)
+            );
 
             // Prepare the updated attributes
             new_gpa_attr->attr_arr[vm_id].raw = single_vm_curr_gpa_attr.raw & ~attr_mask.attr_arr[vm_id].raw;
@@ -106,7 +107,9 @@ static api_error_type get_all_l2_sept_entries(tdr_t *tdr_ptr, tdcs_t *tdcs_ptr, 
             if (is_gpa_attr_present(new_gpa_attr->attr_arr[vm_id]))
             {
                 // Check if the updated L2 attributes are legal
-                if (!is_gpa_attr_legal(new_gpa_attr->attr_arr[vm_id], is_ept_pt_mmio(&l1_sept_entry_copy)))
+                if (!is_gpa_attr_legal(new_gpa_attr->attr_arr[vm_id]
+                    , is_ept_pt_mmio(&l1_sept_entry_copy)
+                    ))
                 {
                     // Don't abort yet.  Continue to loop on all VMs to collect the current attributes
                     attribute_status = TDX_PAGE_ATTR_INVALID;
@@ -118,7 +121,9 @@ static api_error_type get_all_l2_sept_entries(tdr_t *tdr_ptr, tdcs_t *tdcs_ptr, 
         else if (is_gpa_attr_present(single_vm_masked_gpa_attr))
         {
             // Check if the updated L2 attributes are legal
-            if (!is_gpa_attr_legal(single_vm_masked_gpa_attr, is_ept_pt_mmio(&l1_sept_entry_copy)))
+            if (!is_gpa_attr_legal(single_vm_masked_gpa_attr
+                , is_ept_pt_mmio(&l1_sept_entry_copy)
+                ))
             {
                 // Don't abort yet.  Continue to loop on all VMs to collect the current attributes
                 attribute_status = TDX_PAGE_ATTR_INVALID;
@@ -181,22 +186,22 @@ api_error_type tdg_mem_page_attr_wr(
 
     gpa_attr_t attr_mask = attr_flags.gpa_attr;
 
-    gpa_mapping_and_flags_t gpa_mapping_and_flags = {.raw = 0};
+    gpa_mapping_and_flags_t gpa_mapping_and_flags = { .raw = 0 };
 
     // GPA and SEPT related variables
-    pa_t page_gpa = {.raw = 0};                        // Target page GPA
-    ia32e_sept_t *page_sept_entry_ptr = NULL;          // SEPT entry of the page
+    pa_t page_gpa = { .raw = 0 };                        // Target page GPA
+    ia32e_sept_t* page_sept_entry_ptr = NULL;          // SEPT entry of the page
     ia32e_sept_t page_sept_entry_copy;                 // Cached SEPT entry of the page
     ept_level_t page_level_entry = gpa_mappings.level; // SEPT entry level of the page
     bool_t is_sept_locked = false;
 
-    ia32e_sept_t *l2_septe_ptr[MAX_VMS] = {NULL};
+    ia32e_sept_t* l2_septe_ptr[MAX_VMS] = { NULL };
 
-    tdx_module_local_t *local_data_ptr = get_local_data();
+    tdx_module_local_t* local_data_ptr = get_local_data();
 
-    tdcs_t *tdcs_ptr = local_data_ptr->vp_ctx.tdcs;
-    tdr_t *tdr_ptr = local_data_ptr->vp_ctx.tdr;
-    tdvps_t *tdvps_ptr = local_data_ptr->vp_ctx.tdvps;
+    tdcs_t* tdcs_ptr = local_data_ptr->vp_ctx.tdcs;
+    tdr_t* tdr_ptr = local_data_ptr->vp_ctx.tdr;
+    tdvps_t* tdvps_ptr = local_data_ptr->vp_ctx.tdvps;
 
     tdx_sanity_check(tdcs_ptr != NULL, FATAL_ERROR_ID_262, 0);
     tdx_sanity_check(tdr_ptr != NULL, FATAL_ERROR_ID_263, 1);
@@ -250,13 +255,13 @@ api_error_type tdg_mem_page_attr_wr(
 
     // SEPT and walk to find entry
     return_val = walk_private_gpa(tdcs_ptr, page_gpa, tdr_ptr->key_management_fields.hkid,
-                                  &page_sept_entry_ptr, &page_level_entry, &page_sept_entry_copy);
+                                  &page_sept_entry_ptr, &page_level_entry, &page_sept_entry_copy, false);
     if (return_val != TDX_SUCCESS)
     {
         // Do an TD exit and notify the host VMM.
         // Normally, the host VMM is expected to demote the page and re-enter the TD
         async_tdexit_ept_violation(page_gpa, gpa_mappings.level, page_sept_entry_copy,
-                                   page_level_entry, page_sept_entry_ptr, VMX_EEQ_ATTR_WR);
+            page_level_entry, page_sept_entry_ptr, VMX_EEQ_ATTR_WR);
     }
 
     // Lock the SEPT entry in memory
@@ -273,7 +278,7 @@ api_error_type tdg_mem_page_attr_wr(
     // Read the SEPT entry
     page_sept_entry_copy.raw = page_sept_entry_ptr->raw;
 
-    if (!is_secure_ept_leaf_entry(&page_sept_entry_copy) && !is_sept_free(&page_sept_entry_copy))
+    if (!is_secure_ept_leaf_entry(&page_sept_entry_copy, false) && !is_sept_free(&page_sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_PAGE_SIZE_MISMATCH, page_level_entry);
         goto EXIT;
@@ -287,7 +292,7 @@ api_error_type tdg_mem_page_attr_wr(
         sept_lock_release(page_sept_entry_ptr);
 
         async_tdexit_ept_violation(page_gpa, gpa_mappings.level, page_sept_entry_copy,
-                                   page_level_entry, page_sept_entry_ptr, VMX_EEQ_ATTR_WR);
+            page_level_entry, page_sept_entry_ptr, VMX_EEQ_ATTR_WR);
     }
 
     // Step 1:  L1 attributes (currently none)
@@ -296,7 +301,7 @@ api_error_type tdg_mem_page_attr_wr(
     // Step 2:  Walk the L2 SEPT trees, get to the L2 SEPT entries and check the validity
     //          of the combined attributes to be written
     return_val = get_all_l2_sept_entries(tdr_ptr, tdcs_ptr, tdvps_ptr, page_sept_entry_copy, page_sept_entry_ptr,
-                    page_level_entry, page_gpa, l2_septe_ptr, attr_mask, &new_gpa_attr);
+        page_level_entry, page_gpa, l2_septe_ptr, attr_mask, &new_gpa_attr);
     if (return_val != TDX_SUCCESS)
     {
         if (return_val == TDX_PAGE_ATTR_INVALID)
@@ -319,7 +324,9 @@ api_error_type tdg_mem_page_attr_wr(
             {
                 if (is_gpa_attr_present(new_gpa_attr.attr_arr[vm_id]))
                 {
-                    l2_sept_update_gpa_attr(l2_septe_ptr[vm_id], new_gpa_attr.attr_arr[vm_id]);
+                    {
+                        l2_sept_update_gpa_attr(l2_septe_ptr[vm_id], new_gpa_attr.attr_arr[vm_id]);
+                    }
                 }
                 else
                 {
@@ -343,7 +350,8 @@ api_error_type tdg_mem_page_attr_wr(
             sept_l2_set_leaf_given_hpa_with_hkid(l2_septe_ptr[vm_id], new_gpa_attr.attr_arr[vm_id],
                                                  set_hkid_to_pa(sept_get_pa(&page_sept_entry_copy), tdr_ptr->key_management_fields.hkid),
                                                  sept_state_is_any_pending_inc_mmiol(page_sept_entry_copy),
-                                                 is_ept_pt_mmio(&page_sept_entry_copy));
+                                                 is_ept_pt_mmio(&page_sept_entry_copy)
+                                                 );
 
             sept_set_aliased(page_sept_entry_ptr, vm_id);
         }
@@ -356,6 +364,10 @@ api_error_type tdg_mem_page_attr_wr(
 
             // Currently there is no need to invalidate soft-translated GPAs, they are all in the L1 context
         }
+    }
+
+    {
+        sept_update_state(page_sept_entry_ptr, page_sept_entry_copy.raw, false, true);
     }
 
     // Update the return values

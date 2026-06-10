@@ -135,16 +135,30 @@
 
 #define L2_SEPT_STATE_ENCODING_WO_R_MASK  (L2_SEPT_STATE_ENCODING_MASK & ~(BIT(SEPT_ENTRY_R_BIT_POSITION)))
 
-#define SEPT_CONVERT_TO_ENCODING(ept_entry)  ( ((uint64_t)(ept_entry).state_encoding.state_encoding_0) |   \
-                                               (((uint64_t)(ept_entry).state_encoding.state_encoding_1_4) << 1ULL) |  \
-                                               (((uint64_t)(ept_entry).state_encoding.state_encoding_5_6) << 5ULL) )
+#define SEPT_CONVERT_TO_ENCODING_WO_D(ept_entry) ((((uint64_t)(ept_entry).state_encoding.state_encoding_1_4) << 1ULL) |  \
+                                                  (((uint64_t)(ept_entry).state_encoding.state_encoding_5_6) << 5ULL))
+
+#define SEPT_CONVERT_TO_ENCODING(ept_entry) (((uint64_t)(ept_entry).state_encoding.state_encoding_0) |   \
+                                             SEPT_CONVERT_TO_ENCODING_WO_D(ept_entry))
+
+
+_STATIC_INLINE_ uint64_t get_sept_state_lut_index(ia32e_sept_t ept_entry)
+{
+	uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
+
+    {
+        idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
+    }
+
+    return idx;
+}
 
 #define SEPT_STATE_ENC_TO_MASK(e)            ( ((BIT(0) & (e)) << SEPT_ENTRY_D_BIT_POSITION) | \
                                                (((BITS(4,1) & (e)) >> 1) << SEPT_ENTRY_TDEX_BIT_POSITION) |\
                                                (((BITS(6,5) & (e)) >> 5) << SEPT_ENTRY_IPAT_TDMEM_BIT_POSITION))
 
-#define L2_SEPT_STATE_ENC_TO_MASK(e)         ( ((BIT(0) & (e)) << SEPT_ENTRY_TDB_BIT_POSITION) | \
-                                               (((BITS(2, 1) & (e)) >> 1) << SEPT_ENTRY_IPAT_TDMEM_BIT_POSITION))
+#define L2_SEPT_STATE_ENC_TO_MASK(e)         (((BIT(0) & (e)) << SEPT_ENTRY_TDB_BIT_POSITION) | \
+                                              (((BITS(2, 1) & (e)) >> 1) << SEPT_ENTRY_IPAT_TDMEM_BIT_POSITION))
 
 #define L2_SEPT_CONVERT_TO_ENCODING(l2_ept_entry)  ( ((uint64_t)(l2_ept_entry).l2_encoding.tdb) |   \
                                                     (((uint64_t)(l2_ept_entry).l2_encoding.ipat_tdmem) << 1ULL) |  \
@@ -190,6 +204,8 @@ tdx_static_assert((SEPT_STATE_PEND_EXP_DIRTY_MASK == (SEPT_STATE_EXP_DIRTY_MASK 
 #define SEPTE_INIT_VALUE        (SEPT_STATE_FREE_MASK | BIT(SEPT_ENTRY_SVE_BIT_POSITION))
 #define SEPTE_L2_INIT_VALUE     (SEPT_STATE_L2_FREE_MASK)
 
+uint64_t get_ept_entry_idx(pa_t gpa, ept_level_t lvl);
+
 ///////////////////////////////////////////////////////////////////////////////////
 /// SEPT state queries
 ///////////////////////////////////////////////////////////////////////////////////
@@ -209,8 +225,15 @@ _STATIC_INLINE_ bool_t is_sept_pending(const ia32e_sept_t* ept_entry)
     return ((ept_entry->raw & SEPT_STATE_ENCODING_MASK) == SEPT_STATE_PEND_MASK);
 }
 
+_STATIC_INLINE_ bool_t is_sept_pending_wo_d_mask(const ia32e_sept_t* ept_entry)
+{
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_PEND_MASK);
+}
+
 _STATIC_INLINE_ bool_t is_sept_blocked(const ia32e_sept_t* ept_entry)
 {
+    // Bit D is X
     return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_TDP_MASK) == SEPT_STATE_BLOCKED_MASK);
 }
 
@@ -231,13 +254,16 @@ _STATIC_INLINE_ bool_t is_sept_removed(const ia32e_sept_t* ept_entry)
 
 _STATIC_INLINE_ bool_t is_sept_blockedw(const ia32e_sept_t* ept_entry)
 {
+    // Bit D is X
     return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_TDP_MASK) == SEPT_STATE_BLOCKEDW_MASK);
 }
 
-_STATIC_INLINE_ bool_t is_sept_exported_blocked(const ia32e_sept_t* ept_entry)
+_STATIC_INLINE_ bool_t is_sept_exported_blockedw(const ia32e_sept_t* ept_entry)
 {
     return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_TDP_MASK) == SEPT_STATE_EXP_BLOCKEDW_MASK);
 }
+
+
 _STATIC_INLINE_ bool_t is_sept_mmio_mapped(ia32e_sept_t* ept_entry)
 {
     return ((ept_entry->raw & SEPT_STATE_ENCODING_MASK) == SEPT_STATE_MMIO_MAPPED_MASK);
@@ -253,6 +279,16 @@ _STATIC_INLINE_ bool_t is_sept_nl_mapped(const ia32e_sept_t* ept_entry)
     return ((ept_entry->raw & SEPT_STATE_ENCODING_MASK) == SEPT_STATE_NL_MAPPED_MASK);
 }
 
+_STATIC_INLINE_ bool_t is_sept_nl_blocked(const ia32e_sept_t* ept_entry)
+{
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_MASK) == SEPT_STATE_NL_BLOCKED_MASK);
+}
+
+_STATIC_INLINE_ bool_t is_l2_sept_nl_mapped(const ia32e_sept_t* ept_entry)
+{
+    return ((ept_entry->raw & L2_SEPT_STATE_ENCODING_MASK) == SEPT_STATE_L2_NL_MAPPED_MASK);
+}
+
 _STATIC_INLINE_ bool_t is_l2_sept_nl_blocked(const ia32e_sept_t* ept_entry)
 {
     return ((ept_entry->raw & L2_SEPT_STATE_ENCODING_MASK) == SEPT_STATE_L2_NL_BLOCKED_MASK);
@@ -261,7 +297,8 @@ _STATIC_INLINE_ bool_t is_l2_sept_nl_blocked(const ia32e_sept_t* ept_entry)
 _STATIC_INLINE_ bool_t is_l2_sept_blocked(const ia32e_sept_t* ept_entry)
 {
     return ((ept_entry->raw & L2_SEPT_STATE_ENCODING_WO_R_MASK) == SEPT_STATE_L2_BLOCKED_MASK)
-        || ((ept_entry->raw & L2_SEPT_MMIO_STATE_ENCODING_MASK) == SEPT_STATE_L2_MMIO_BLOCKED_MASK);
+        || ((ept_entry->raw & L2_SEPT_MMIO_STATE_ENCODING_MASK) == SEPT_STATE_L2_MMIO_BLOCKED_MASK)
+        ;
 }
 
 _STATIC_INLINE_ bool_t is_l2_sept_mapped(const ia32e_sept_t* ept_entry)
@@ -281,148 +318,143 @@ _STATIC_INLINE_ bool_t is_l2_sept_free(const ia32e_sept_t* ept_entry)
 
 _STATIC_INLINE_ bool_t sept_state_is_live_export_allowed(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
-    return sept_special_flags_lookup[idx].live_export_allowed;
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
+    // when NON_BLOCKING_EXPORT_SUPPORTED is disabled in the spreadsheets, field's name would be 'live_export_allowed'
+    return sept_special_flags_lookup[idx].write_blocking_live_export_allowed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_paused_export_allowed(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].paused_export_allowed;
-}
-
-_STATIC_INLINE_ bool_t sept_state_is_re_export_allowed(ia32e_sept_t ept_entry)
-{
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
-    return sept_special_flags_lookup[idx].re_export_allowed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_re_import_allowed(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].re_import_allowed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_export_cancel_allowed(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].export_cancel_allowed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_import_cancel_allowed(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].import_cancel_allowed;
 }
 
 
 _STATIC_INLINE_ bool_t sept_state_is_first_time_export_allowed(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].first_time_export_allowed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_first_time_import_allowed(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].first_time_import_allowed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_exported(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].any_exported;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_exported_and_dirty(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].any_exported_and_dirty;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_exported_and_non_dirty(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].any_exported_and_non_dirty;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_blockedw(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].any_blockedw;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_mapped_or_pending(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].mapped_or_pending;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_pending(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].any_pending;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_pending_inc_mmiol(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].any_pending_incl_mmio;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_pending_and_guest_acceptable(const ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].any_pending_and_guest_acceptable;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_blocked(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].any_blocked;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_tlb_tracking_required(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].tlb_tracking_required;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_guest_accessible_leaf(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].guest_accessible_leaf;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_guest_fully_accessible_leaf(ia32e_sept_t ept_entry)
 {
-    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
-    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * 2);
     return sept_special_flags_lookup[idx].guest_fully_accessible_leaf;
 }
 
+
 _STATIC_INLINE_ bool_t septe_state_encoding_is_seamcall_allowed(uint64_t septe_state_enc, seamcall_leaf_opcode_t leaf_number)
 {
-    tdx_debug_assert(septe_state_enc < (MAX_SEPT_STATE_ENC));
+    tdx_debug_assert(septe_state_enc < (MAX_SEPT_STATE_ENC * 2));
     tdx_debug_assert((uint64_t)leaf_number < MAX_SEAMCALL_LEAF);
 
     uint32_t septe_state_enc_index = sept_special_flags_lookup[septe_state_enc].index;
@@ -435,7 +467,7 @@ _STATIC_INLINE_ bool_t septe_state_encoding_is_seamcall_allowed(uint64_t septe_s
 
 _STATIC_INLINE_ bool_t septe_state_encoding_is_tdcall_allowed(uint64_t septe_state_enc, tdcall_leaf_opcode_t leaf_number)
 {
-    tdx_debug_assert(septe_state_enc < (MAX_SEPT_STATE_ENC));
+    tdx_debug_assert(septe_state_enc < (MAX_SEPT_STATE_ENC * 2));
     tdx_debug_assert((uint64_t)leaf_number < MAX_TDCALL_LEAF);
 
     uint32_t septe_state_enc_index = sept_special_flags_lookup[septe_state_enc].index;
@@ -448,19 +480,19 @@ _STATIC_INLINE_ bool_t septe_state_encoding_is_tdcall_allowed(uint64_t septe_sta
 
 _STATIC_INLINE_ bool_t sept_state_is_seamcall_leaf_allowed(seamcall_leaf_opcode_t current_leaf, ia32e_sept_t ept_entry)
 {
-    uint64_t sept_state_enc = SEPT_CONVERT_TO_ENCODING(ept_entry);
+    uint64_t sept_state_enc = get_sept_state_lut_index(ept_entry);
     return septe_state_encoding_is_seamcall_allowed(sept_state_enc, current_leaf);
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_tdcall_leaf_allowed(tdcall_leaf_opcode_t current_leaf, ia32e_sept_t ept_entry)
 {
-    uint64_t sept_state_enc = SEPT_CONVERT_TO_ENCODING(ept_entry);
+    uint64_t sept_state_enc = get_sept_state_lut_index(ept_entry);
     return septe_state_encoding_is_tdcall_allowed(sept_state_enc, current_leaf);
 }
 
 _STATIC_INLINE_ uint32_t sept_get_arch_state(ia32e_sept_t ept_entry)
 {
-    return sept_special_flags_lookup[SEPT_CONVERT_TO_ENCODING(ept_entry)].public_state;
+    return sept_special_flags_lookup[get_sept_state_lut_index(ept_entry)].public_state;
 }
 
 _STATIC_INLINE_ uint32_t l2_sept_get_arch_state(ia32e_sept_t l2_ept_entry)
@@ -491,37 +523,21 @@ _STATIC_INLINE_ bool_t is_ept_pt_mmio(ia32e_sept_t *const ept_entry_ptr)
     return ept_entry_ptr->ipat_tdmem == 0;
 }
 
-_STATIC_INLINE_ void sept_update_state(ia32e_sept_t* ept_entry, sept_state_mask_t state)
+
+bool_t cmpxchg_keep_masked(ia32e_sept_t* ept_entry, uint64_t expected_val, uint64_t* new_val, uint64_t mask);
+
+void atomically_update_sept_state_keep_masked_bits(ia32e_sept_t* ept_entry, uint64_t new_state, uint64_t mask);
+
+_STATIC_INLINE_ void atomically_update_sept_state_keep_tdhp(ia32e_sept_t* ept_entry, uint64_t new_state)
 {
-    ia32e_sept_t new_septe;
-
-    new_septe.raw = (ept_entry->raw & ~SEPT_STATE_ENCODING_MASK) | (state & SEPT_STATE_ENCODING_MASK);
-    sept_set_mt_from_ipat_tdmem(&new_septe);
-    new_septe.supp_ve = 1;
-
-    // Write the new value in a single 64-bit write
-    atomic_mem_write_64b(&ept_entry->raw, new_septe.raw);
+    static const uint64_t tdhp_mask = BIT(SEPT_ENTRY_TDHP_BIT_POSITION);
+    atomically_update_sept_state_keep_masked_bits(ept_entry, new_state, tdhp_mask);
 }
 
-_STATIC_INLINE_ void sept_l2_update_state(ia32e_sept_t* ept_entry, sept_state_mask_t state)
-{
-    ia32e_sept_t new_septe;
 
-    uint64_t final_mask = L2_SEPT_STATE_ENCODING_MASK;
+void sept_update_state(ia32e_sept_t* ept_entry, sept_state_mask_t state, bool_t keep_ad, bool_t keep_tdhp);
 
-    if ((state == SEPT_STATE_L2_MAPPED_MASK) ||
-        (state == SEPT_STATE_L2_BLOCKED_MASK)
-        || (state == SEPT_STATE_L2_MMIO_MAPPED_MASK) ||
-        (state == SEPT_STATE_L2_MMIO_BLOCKED_MASK))
-    {
-        final_mask = L2_SEPT_STATE_ENCODING_WO_R_MASK;
-    }
-
-    new_septe.raw = (ept_entry->raw & ~final_mask) | (state & final_mask);
-
-    // Write the new value in a single 64-bit write
-    atomic_mem_write_64b(&ept_entry->raw, new_septe.raw);
-}
+void sept_l2_update_state(ia32e_sept_t* ept_entry, sept_state_mask_t state);
 
 // Reserved for future expansion
 _STATIC_INLINE_ gpa_attr_single_vm_t sept_get_gpa_attr(const ia32e_sept_t ept_entry)
@@ -548,34 +564,10 @@ _STATIC_INLINE_ gpa_attr_single_vm_t sept_get_gpa_attr(const ia32e_sept_t ept_en
  * @param is_mmio
  * @return void
  */
-_STATIC_INLINE_ void l2_sept_update_gpa_attr(
-    ia32e_sept_t *const l2_sept_entry_ptr,
-    const gpa_attr_single_vm_t gpa_attr_single_vm)
-{
-    l2_sept_entry_ptr->l2_encoding.r = gpa_attr_single_vm.r;
-    l2_sept_entry_ptr->l2_encoding.w = gpa_attr_single_vm.w;
-    l2_sept_entry_ptr->l2_encoding.x = gpa_attr_single_vm.xs;
-    l2_sept_entry_ptr->l2_encoding.xu = gpa_attr_single_vm.xu;
-    l2_sept_entry_ptr->l2_encoding.vgp = gpa_attr_single_vm.vgp;
-    l2_sept_entry_ptr->l2_encoding.pwa = gpa_attr_single_vm.pwa;
-    l2_sept_entry_ptr->l2_encoding.sss = gpa_attr_single_vm.sss;
-    l2_sept_entry_ptr->l2_encoding.sve = gpa_attr_single_vm.sve;
-    l2_sept_entry_ptr->l2_encoding.mt0_tdrd = 0;
+void l2_sept_update_gpa_attr(ia32e_sept_t* const l2_sept_entry_ptr, const gpa_attr_single_vm_t gpa_attr_single_vm);
 
-    if (is_l2_sept_blocked(l2_sept_entry_ptr))
-    {
-        l2_sept_entry_ptr->l2_encoding.mt0_tdrd = l2_sept_entry_ptr->l2_encoding.r;
-        l2_sept_entry_ptr->l2_encoding.r = 0;
-        l2_sept_entry_ptr->l2_encoding.tdwr = l2_sept_entry_ptr->l2_encoding.w;
-        l2_sept_entry_ptr->l2_encoding.w = 0;
-        l2_sept_entry_ptr->l2_encoding.mt1_tdxs = l2_sept_entry_ptr->l2_encoding.x;
-        l2_sept_entry_ptr->l2_encoding.x = 0;
-        l2_sept_entry_ptr->l2_encoding.mt2_tdxu = l2_sept_entry_ptr->l2_encoding.xu;
-        l2_sept_entry_ptr->l2_encoding.xu = 0;
-        l2_sept_entry_ptr->l2_encoding.tdpwa = l2_sept_entry_ptr->l2_encoding.pwa;
-        l2_sept_entry_ptr->l2_encoding.pwa = 0;
-    }
-}
+// Same as above, use atomically_update_sept_state_keep_ad() to update the entry while not modifying A and D bits
+void l2_sept_update_gpa_attr_keep_ad(ia32e_sept_t* const l2_sept_entry_ptr, const gpa_attr_single_vm_t gpa_attr_single_vm);
 
 /**
  * @brief
@@ -732,10 +724,11 @@ _STATIC_INLINE_ bool_t sept_state_is_any_aliased(const ia32e_sept_t ept_entry)
 ///////////////////////////////////////////////////////////////////////////////////
 _STATIC_INLINE_ void set_remove_and_release_locks_for_import(ia32e_sept_t *sept_entry, const tdcs_t *tdcs_p)
 {
-        atomic_mem_write_64b(&sept_entry->raw, SEPT_STATE_REMOVED_MASK | (1ULL << SEPT_ENTRY_SVE_BIT_POSITION));
-        sept_entry->mig_epoch_valid = 1;
-        sept_entry->mig_epoch = tdcs_p->migration_fields.mig_epoch;
+    atomic_mem_write_64b(&sept_entry->raw, SEPT_STATE_REMOVED_MASK | (1ULL << SEPT_ENTRY_SVE_BIT_POSITION));
+    sept_entry->mig_epoch_valid = 1;
+    sept_entry->mig_epoch = tdcs_p->migration_fields.mig_epoch;
 }
+
 
 _STATIC_INLINE_ void septe_set_free_or_removed_and_release_locks(ia32e_sept_t *sept_entry, const tdcs_t *tdcs_p)
 {
@@ -784,9 +777,12 @@ _STATIC_INLINE_ bool_t is_ept_leaf_entry(const ia32e_ept_t * ept_entry, ept_leve
  *
  * @return True if entry is a leaf, False otherwise
  */
-_STATIC_INLINE_ bool_t is_secure_ept_leaf_entry(const ia32e_sept_t * ept_entry)
+_STATIC_INLINE_ bool_t is_secure_ept_leaf_entry(const ia32e_sept_t * ept_entry, bool_t is_l2_entry)
 {
-    return (ept_entry->leaf == 1);
+    UNUSED(is_l2_entry);
+    {
+        return (ept_entry->leaf == 1);
+    }
 }
 
 /**
@@ -798,7 +794,7 @@ _STATIC_INLINE_ bool_t is_secure_ept_leaf_entry(const ia32e_sept_t * ept_entry)
  * @param state_encoding the new sept entry state
  */
 void sept_set_leaf_and_release_locks_given_hpa_and_hkid(ia32e_sept_t * ept_entry, uint64_t attributes, pa_t page_pa,
-                                                        uint16_t hkid, uint64_t state_encoding);
+                                                        uint16_t hkid, uint64_t state_encoding, bool_t keep_ad, bool_t keep_tdhp);
 
 /**
  * @brief Map a SEPT leaf entry - with a taken entry lock.
@@ -811,7 +807,7 @@ void sept_set_leaf_and_release_locks_given_hpa_and_hkid(ia32e_sept_t * ept_entry
  * @param state_encoding the new sept entry state
  */
 void sept_set_leaf_and_keep_lock_given_hpa_and_hkid(ia32e_sept_t * ept_entry, uint64_t attributes, pa_t page_pa,
-                                                    uint16_t hkid, uint64_t state_encoding);
+                                                    uint16_t hkid, uint64_t state_encoding, bool_t keep_ad, bool_t keep_tdhp);
 
 /**
  * @brief Map a SEPT leaf entry - with a taken entry lock.
@@ -824,13 +820,13 @@ void sept_set_leaf_and_keep_lock_given_hpa_and_hkid(ia32e_sept_t * ept_entry, ui
  * @param sept_ve_disable Value to set for SVE bit in EPT entry
  */
 void sept_set_leaf_and_keep_lock_given_hpa_with_hkid(ia32e_sept_t * ept_entry, uint64_t attributes,
-                                                    pa_t page_pa, uint64_t state_encoding);
+                                                    pa_t page_pa, uint64_t state_encoding, bool_t keep_ad, bool_t keep_tdhp);
 
 /**
  * @brief Identical to sept_set_leaf_and_release_locks, but assumes that the current entry is unlocked
  */
 void sept_set_leaf_unlocked_entry_given_hpa_and_hkid(ia32e_sept_t * ept_entry, uint64_t attributes, pa_t page_pa,
-                                                     uint16_t hkid, uint64_t state_encoding);
+                                                     uint16_t hkid, uint64_t state_encoding, bool_t keep_ad, bool_t keep_tdhp);
 
 /**
  * @brief Map a SEPT non-leaf entry
@@ -839,7 +835,7 @@ void sept_set_leaf_unlocked_entry_given_hpa_and_hkid(ia32e_sept_t * ept_entry, u
  * @param page_pa_with_hkid Physical address to map in entry
  * @param lock Whether acquire entry lock or not
  */
-void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t page_pa_with_hkid, bool_t lock);
+void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t page_pa_with_hkid, bool_t lock, bool_t set_d_bit);
 
 /**
  * @brief Set an L2 secure EPT leaf entry.
@@ -858,7 +854,9 @@ void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t
  * @param is_l2_blocked
  */
 void sept_l2_set_leaf_given_hpa_with_hkid(ia32e_sept_t* l2_sept_entry_ptr, gpa_attr_single_vm_t gpa_attr_single_vm,
-                                            pa_t pa, bool_t is_l2_blocked, bool_t is_mmio);
+                                          pa_t pa, bool_t is_l2_blocked
+                                          , bool_t is_mmio
+);
 
 /**
  * @brief Map a L2 SEPT non-leaf entry - releases all lock on current entry
@@ -867,7 +865,8 @@ void sept_l2_set_leaf_given_hpa_with_hkid(ia32e_sept_t* l2_sept_entry_ptr, gpa_a
  * @param page_pa Physical address to map in entry
  * @param page_pa hkid that will be assembled to the entry
  */
-void sept_l2_set_mapped_non_leaf_given_hpa_and_hkid(ia32e_sept_t * ept_entry, pa_t page_pa, uint16_t hkid);
+void sept_l2_set_mapped_non_leaf_given_hpa_and_hkid(ia32e_sept_t * ept_entry, pa_t page_pa, uint16_t hkid
+                                                    );
 
 /** @brief Cleanup the SEPT entry if the page is PENDING
  *         For 2MB leaf entries, zero out the INIT_COUNTER (bits 20:12)
@@ -878,7 +877,7 @@ _STATIC_INLINE_ void sept_cleanup_if_pending(ia32e_sept_t* ept_entry, ept_level_
 {
     if (sept_state_is_any_pending_and_guest_acceptable(*ept_entry) && (level == LVL_PD))
     {
-        tdx_debug_assert(is_secure_ept_leaf_entry(ept_entry));
+        tdx_debug_assert(is_secure_ept_leaf_entry(ept_entry, false));
         ept_entry->accept_counter = 0;
     }
 }
@@ -892,27 +891,7 @@ _STATIC_INLINE_ void sept_cleanup_if_pending(ia32e_sept_t* ept_entry, ept_level_
  *          - Clear SVE if PENDING
  * @param ept_entry - Pointer to SEPT entry to be unblocked
  */
-_STATIC_INLINE_ void sept_unblock(ia32e_sept_t* ept_entry)
-{
-    switch (ept_entry->raw & SEPT_STATE_ENCODING_MASK)
-    {
-        case SEPT_STATE_NL_BLOCKED_MASK:
-            sept_update_state(ept_entry, SEPT_STATE_NL_MAPPED_MASK);
-            ept_entry->raw |= SEPT_PERMISSIONS_RWX;
-            break;
-        case SEPT_STATE_BLOCKED_MASK:
-            sept_update_state(ept_entry, SEPT_STATE_MAPPED_MASK);
-            ept_entry->raw |= SEPT_PERMISSIONS_RWX;
-            break;
-        case SEPT_STATE_PEND_BLOCKED_MASK:
-            sept_update_state(ept_entry, SEPT_STATE_PEND_MASK);
-            // Permission bits remain all-0
-            break;
-        default:
-            // The SEPT entry was not blocked, do nothing
-            break;
-    }
-}
+void sept_unblock(ia32e_sept_t* ept_entry);
 
 /**
  * @brief  Unblock the L2 Secure EPT entry
@@ -1035,7 +1014,7 @@ typedef enum
  */
 ia32e_sept_t* secure_ept_walk(ia32e_eptp_t septp, pa_t gpa, uint16_t private_hkid,
                               ept_level_t* level, ia32e_sept_t* cached_sept_entry,
-                              bool_t l2_sept_guest_side_walk);
+                              bool_t is_l2_walk, bool_t l2_sept_guest_side_walk, bool_t set_d_bit);
 
 /**
  * @brief Generic function used for all (private and shared) GPA translations, imitating the

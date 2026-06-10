@@ -113,7 +113,7 @@ static api_error_type tdh_mem_rd_wr(uint64_t gpa, uint64_t target_tdr_pa,
         goto EXIT;
     }
 
-    if (acquire_sharex_lock(&tdcs_ptr->executions_ctl_fields.secure_ept_lock, TDX_LOCK_SHARED) != LOCK_RET_SUCCESS)
+    if (acquire_sharex_lock_hp(&tdcs_ptr->executions_ctl_fields.secure_ept_lock, TDX_LOCK_SHARED, false) != TDX_SUCCESS)
     {
         return_val = api_error_with_operand_id(TDX_OPERAND_BUSY, OPERAND_ID_SEPT_TREE);
         TDX_ERROR("Failed to acquire SEPT tree lock");
@@ -196,7 +196,7 @@ EXIT:
 
     if (sept_locked_flag)
     {
-        release_sharex_lock_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
         if (sept_entry_ptr != NULL)
         {
             free_la(sept_entry_ptr);

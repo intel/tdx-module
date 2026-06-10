@@ -117,7 +117,8 @@ void tdx_td_l2_dispatcher(void)
 
     stepping_filter_e vmexit_stepping_result;
     vmexit_stepping_result = tdx_td_l1_l2_dispatcher_common_prologue(tdx_local_data_ptr, vm_id, &vm_exit_reason,
-                                    &vm_exit_qualification, &vm_exit_inter_info);
+                                    &vm_exit_qualification, &vm_exit_inter_info
+                                    );
 
     if (vmexit_stepping_result != FILTER_OK_CONTINUE)
     {
@@ -189,17 +190,18 @@ void tdx_td_l2_dispatcher(void)
             {
                 async_tdexit_to_vmm(TDX_NON_RECOVERABLE_TD, vm_exit_reason, vm_exit_qualification.raw, 0, 0, 0);
             }
-
-            // EPT violation is one case where NMI may have been unblocked by an IRET instruction
-            // before the VM exit happened.  NMI unblocking is only applicable is no IDT vectoring is indicated.
-            // Record this so NMI will be re-blocked if L2 will be reentered following a TD exit and TD entry.
-            if (vm_exit_qualification.ept_violation.nmi_unblocking_due_to_iret &&
-                !is_idt_vectoring_info_valid())
             {
-                tdvps_p->management.nmi_unblocking_due_to_iret = true;
-            }
+                // EPT violation is one case where NMI may have been unblocked by an IRET instruction
+                // before the VM exit happened.  NMI unblocking is only applicable is no IDT vectoring is indicated.
+                // Record this so NMI will be re-blocked if L2 will be reentered following a TD exit and TD entry.
+                if (vm_exit_qualification.ept_violation.nmi_unblocking_due_to_iret &&
+                    !is_idt_vectoring_info_valid())
+                {
+                    tdvps_p->management.nmi_unblocking_due_to_iret = true;
+                }
 
-            async_tdexit_to_vmm(TDX_SUCCESS, vm_exit_reason, vm_exit_qualification.raw, 0, 0, 0);
+                async_tdexit_to_vmm(TDX_SUCCESS, vm_exit_reason, vm_exit_qualification.raw, 0, 0, 0);
+            }
 
             break;
 

@@ -19,6 +19,7 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.
 //
 // SPDX-License-Identifier: MIT
+
 /**
  * @file tdh_iq_inv_process.c
  * @brief TDHIQINVPROCESS API handler
@@ -65,7 +66,7 @@ _STATIC_INLINE_ void emulate_wait_complete(
                                                                 &ept_level,
                                                                 &sept_entry_copy,
                                                                 &sept_locked_flag);
-
+    
     if (return_val != TDX_SUCCESS)
     {
         return; // No error, just a silent Status Write drop
@@ -82,7 +83,7 @@ _STATIC_INLINE_ void emulate_wait_complete(
 
     if (sept_locked_flag)
     {
-        release_sharex_lock_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
         free_la(sept_entry);
     }
 }

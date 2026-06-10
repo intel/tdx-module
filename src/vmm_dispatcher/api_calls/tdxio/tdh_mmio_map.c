@@ -19,6 +19,7 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.
 //
 // SPDX-License-Identifier: MIT
+
 /**
  * @file tdh_mmio_map.c
  * @brief TDHMMIOMAP API handler
@@ -150,7 +151,8 @@ api_error_type tdh_mmio_map(
         &page_sept_entry_ptr,
         &page_level_entry,
         &cached_sept_entry,
-        &is_sept_locked);
+        &is_sept_locked,
+        false);
     if (return_val != TDX_SUCCESS)
     {
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
@@ -265,7 +267,9 @@ api_error_type tdh_mmio_map(
         SEPT_PERMISSIONS_NONE,
         mmio_pa,
         tdr_ptr->key_management_fields.hkid,
-        SEPT_STATE_MMIO_PENDING_MASK);
+        SEPT_STATE_MMIO_PENDING_MASK,
+        false,
+        false);
 
     is_host_side_locked = false;
 
@@ -292,7 +296,7 @@ EXIT:
 
     if (is_sept_locked)
     {
-        release_sharex_lock_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
         if (page_sept_entry_ptr != NULL)
         {
             free_la(page_sept_entry_ptr);

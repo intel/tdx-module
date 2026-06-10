@@ -52,7 +52,7 @@ void* memset(void *str, int c, uint32_t n)
 
     return str;
 }
-#endif // __cplusplus
+#endif // (!defined(__cplusplus))
 
 api_error_code_e program_mktme_keys(uint16_t hkid)
 {
@@ -312,8 +312,7 @@ api_error_type check_lock_and_map_explicit_private_4k_hpa(
         page_type_t expected_pt,
         pamt_walk_result_t* pamt_walk_result,
         bool_t* is_locked,
-        void**         la
-        )
+        void**         la)
 {
     api_error_type errc;
 
@@ -606,9 +605,10 @@ static api_error_type check_any_td_state_map_tdcs_and_lock(
         {
             release_sharex_lock_hp(&(tmp_tdcs_p->management_fields.op_state_lock), op_state_lock_type);
         }
+        uint64_t tmp_op_state = (uint64_t)tmp_tdcs_p->management_fields.op_state;
         free_la(tmp_tdcs_p);
         TDX_ERROR("TDCS OP state is not allowed on this SEAMCALL leaf\n");
-        return TDX_OP_STATE_INCORRECT;
+        return api_error_with_operand_id(TDX_OP_STATE_INCORRECT,tmp_op_state);
     }
 
     *tdcs_p = tmp_tdcs_p;
@@ -764,8 +764,8 @@ static api_error_type lock_sept_check_and_walk_internal(
         ia32e_sept_t** sept_entry_ptr,
         ept_level_t* level,
         ia32e_sept_t* cached_sept_entry,
-        bool_t* is_sept_locked
-        )
+        bool_t* is_sept_locked,
+        bool_t set_d_bit)
 {
     bool_t gpaw = tdcs_p->executions_ctl_fields.gpaw;
 
@@ -780,27 +780,27 @@ static api_error_type lock_sept_check_and_walk_internal(
 
     if (lock_type != TDX_LOCK_NO_LOCK)
     {
-        if (acquire_sharex_lock(&tdcs_p->executions_ctl_fields.secure_ept_lock, lock_type) != LOCK_RET_SUCCESS)
+        if (acquire_sharex_lock_hp(&tdcs_p->executions_ctl_fields.secure_ept_lock, lock_type, false) != TDX_SUCCESS)
         {
             return api_error_with_operand_id(TDX_OPERAND_BUSY, OPERAND_ID_SEPT_TREE);
         }
     }
 
     ept_level_t requested_level = *level;
-    *sept_entry_ptr = secure_ept_walk(septp, gpa, hkid, level, cached_sept_entry, false);
+    *sept_entry_ptr = secure_ept_walk(septp, gpa, hkid, level, cached_sept_entry, false, false, set_d_bit);
 
     if (// When we walk to leaf we check that the final entry is a valid, existing leaf
         ((walk_type == SEPT_WALK_TO_LEAF) &&
-        (!is_secure_ept_leaf_entry(cached_sept_entry) || !cached_sept_entry->rwx)) ||
+        (!is_secure_ept_leaf_entry(cached_sept_entry, false) || !cached_sept_entry->rwx)) ||
         // When we walk to level, we just check that we reached requested level
         ((walk_type == SEPT_WALK_TO_LEVEL) && (*level != requested_level)) ||
         // When we walk to leaf-level, check that we reached an actual leaf
-        ((walk_type == SEPT_WALK_TO_LEAF_LEVEL) && !is_secure_ept_leaf_entry(cached_sept_entry))
+        ((walk_type == SEPT_WALK_TO_LEAF_LEVEL) && !is_secure_ept_leaf_entry(cached_sept_entry, false))
        )
     {
         if (lock_type != TDX_LOCK_NO_LOCK)
         {
-            release_sharex_lock(&tdcs_p->executions_ctl_fields.secure_ept_lock, lock_type);
+            release_sharex_lock_hp(&tdcs_p->executions_ctl_fields.secure_ept_lock, lock_type);
         }
 
         free_la(*sept_entry_ptr);
@@ -825,8 +825,8 @@ api_error_type lock_sept_check_and_walk_private_gpa(
         ia32e_sept_t** sept_entry_ptr,
         ept_level_t* level,
         ia32e_sept_t* cached_sept_entry,
-        bool_t* is_sept_locked
-        )
+        bool_t* is_sept_locked,
+        bool_t set_d_bit)
 {
     tdx_debug_assert(lock_type != TDX_LOCK_NO_LOCK);
 
@@ -834,7 +834,7 @@ api_error_type lock_sept_check_and_walk_private_gpa(
                                              lock_type, // Lock the SEPT tree
                                              true,      // Check private GPA validity
                                              SEPT_WALK_TO_LEVEL,     // Walk to requested level
-                                             sept_entry_ptr, level, cached_sept_entry, is_sept_locked);
+                                             sept_entry_ptr, level, cached_sept_entry, is_sept_locked, set_d_bit);
 }
 
 api_error_type lock_sept_check_and_walk_private_gpa_to_leaf(
@@ -846,8 +846,7 @@ api_error_type lock_sept_check_and_walk_private_gpa_to_leaf(
         ia32e_sept_t** sept_entry_ptr,
         ept_level_t* level,
         ia32e_sept_t* cached_sept_entry,
-        bool_t* is_sept_locked
-        )
+        bool_t* is_sept_locked)
 {
     tdx_debug_assert(lock_type != TDX_LOCK_NO_LOCK);
 
@@ -855,7 +854,7 @@ api_error_type lock_sept_check_and_walk_private_gpa_to_leaf(
                                              lock_type, // Lock the SEPT tree
                                              true,      // Check private GPA validity
                                              SEPT_WALK_TO_LEAF,
-                                             sept_entry_ptr, level, cached_sept_entry, is_sept_locked);
+                                             sept_entry_ptr, level, cached_sept_entry, is_sept_locked, false);
 }
 
 api_error_type lock_sept_and_walk_gpa(
@@ -867,8 +866,7 @@ api_error_type lock_sept_and_walk_gpa(
         ia32e_sept_t** sept_entry_ptr,
         ept_level_t* level,
         ia32e_sept_t* cached_sept_entry,
-        bool_t* is_sept_locked
-        )
+        bool_t* is_sept_locked)
 {
     tdx_debug_assert(lock_type != TDX_LOCK_NO_LOCK);
 
@@ -876,7 +874,7 @@ api_error_type lock_sept_and_walk_gpa(
                                              lock_type, // Lock the SEPT tree
                                              false,     // Do not check private GPA validity
                                              SEPT_WALK_TO_LEVEL,     // Walk to requested level
-                                             sept_entry_ptr, level, cached_sept_entry, is_sept_locked);
+                                             sept_entry_ptr, level, cached_sept_entry, is_sept_locked, false);
 }
 
 api_error_type check_and_walk_private_gpa_to_leaf(
@@ -886,8 +884,7 @@ api_error_type check_and_walk_private_gpa_to_leaf(
         uint16_t hkid,
         ia32e_sept_t** sept_entry_ptr,
         ept_level_t* level,
-        ia32e_sept_t* cached_sept_entry
-        )
+        ia32e_sept_t* cached_sept_entry)
 {
     bool_t is_sept_locked;
     *level = LVL_PT;
@@ -897,7 +894,7 @@ api_error_type check_and_walk_private_gpa_to_leaf(
                                              TDX_LOCK_NO_LOCK,  // Do not lock SEPT tree
                                              true,              // Check private GPA validity
                                              SEPT_WALK_TO_LEAF, // Walk to any leaf
-                                             sept_entry_ptr, level, cached_sept_entry, &is_sept_locked);
+                                             sept_entry_ptr, level, cached_sept_entry, &is_sept_locked, false);
 }
 
 api_error_type walk_private_gpa(
@@ -906,8 +903,8 @@ api_error_type walk_private_gpa(
         uint16_t hkid,
         ia32e_sept_t** sept_entry_ptr,
         ept_level_t* level,
-        ia32e_sept_t* cached_sept_entry
-        )
+        ia32e_sept_t* cached_sept_entry,
+        bool_t set_d_bit)
 {
     bool_t is_sept_locked;
 
@@ -916,7 +913,7 @@ api_error_type walk_private_gpa(
                                              TDX_LOCK_NO_LOCK,   // Do not lock SEPT tree
                                              false,              // Do not check private GPA validity
                                              SEPT_WALK_TO_LEVEL, // Walk to requested level
-                                             sept_entry_ptr, level, cached_sept_entry, &is_sept_locked);
+                                             sept_entry_ptr, level, cached_sept_entry, &is_sept_locked, set_d_bit);
 }
 
 uint64_t get_guest_cr0_pe(void)
@@ -1528,7 +1525,8 @@ cr_write_status_e write_guest_cr4(uint64_t value, tdcs_t* tdcs_p
         return CR_ACCESS_GP;
     }
 
-    if (tdcs_p->executions_ctl_fields.td_ctls.reduce_ve)
+    if (
+        tdcs_p->executions_ctl_fields.td_ctls.reduce_ve)
     {
         ia32_cr4_t cr4_read_shadow;
         ia32_vmread(VMX_CR4_READ_SHADOW_ENCODE, &cr4_read_shadow.raw);
@@ -1613,6 +1611,7 @@ bool_t verify_td_config_flags(config_flags_t config_flags)
     {
         return false;
     }
+
 
     return true;
 }
@@ -2698,11 +2697,12 @@ bool_t translate_l2_enter_guest_state_gpa(
     uint64_t hpa;
     uint64_t gpa;
 
-    ia32e_sept_t * sept_entry_ptr = NULL;
-    ia32e_sept_t   sept_entry_copy;
-    ept_level_t    sept_entry_level = LVL_PT;
+    ia32e_sept_t   sept_entry_copy = {.raw = 0};
 
-    api_error_type return_val = TDX_OPERAND_INVALID;
+    ia32e_eptp_t eptp = {.raw = tdcs_ptr->executions_ctl_fields.eptp.raw};
+    uint16_t hkid = tdr_ptr->key_management_fields.hkid;
+    access_rights_t access_rights = { .raw = 0x7 };
+    access_rights_t accumulated_rwx;
 
     tdx_debug_assert(vm_id != 0);
 
@@ -2715,10 +2715,14 @@ bool_t translate_l2_enter_guest_state_gpa(
     {
         gpa = tdvps_ptr->management.l2_enter_guest_state_gpa[vm_id];
 
-        return_val = check_and_walk_private_gpa_to_leaf(tdcs_ptr, OPERAND_ID_RCX, (pa_t)gpa,
-                                          tdr_ptr->key_management_fields.hkid,
-                                          &sept_entry_ptr, &sept_entry_level, &sept_entry_copy);
-        if (return_val != TDX_SUCCESS)
+        if (!check_gpa_validity((pa_t)gpa, tdcs_ptr->executions_ctl_fields.gpaw, PRIVATE_ONLY, tdcs_ptr->executions_ctl_fields.virt_maxpa))
+        {
+            *failed_gpa = gpa;
+            goto EXIT;
+        }
+
+        ept_walk_result_t status = gpa_translate(eptp, (pa_t)gpa, true, hkid, access_rights, (pa_t*)&hpa, (ia32e_ept_t*)&sept_entry_copy, &accumulated_rwx);
+        if (EPT_WALK_SUCCESS != status)
         {
             *failed_gpa = gpa;
             goto EXIT;
@@ -2731,24 +2735,14 @@ bool_t translate_l2_enter_guest_state_gpa(
         }
 
         // Update the HPA
-        hpa = leaf_ept_entry_to_hpa(sept_entry_copy, gpa, sept_entry_level);
         hpa = set_hkid_to_pa((pa_t)hpa, tdr_ptr->key_management_fields.hkid).raw;
         tdvps_ptr->management.l2_enter_guest_state_hpa[vm_id] = hpa;
-
-        if (sept_entry_ptr != NULL)
-        {
-            free_la(sept_entry_ptr);
-            sept_entry_ptr = NULL;
-        }
     }
 
     return true;
 
 EXIT:
-    if (sept_entry_ptr != NULL)
-    {
-        free_la(sept_entry_ptr);
-    }
+
     return false;
 }
 
@@ -2762,11 +2756,12 @@ bool_t translate_gpas(
     uint64_t hpa;
     uint64_t gpa;
 
-    ia32e_sept_t * sept_entry_ptr = NULL;
-    ia32e_sept_t   sept_entry_copy;
-    ept_level_t    sept_entry_level = LVL_PT;
+    ia32e_sept_t   sept_entry_copy = {.raw = 0};
 
-    api_error_type return_val = TDX_OPERAND_INVALID;
+    ia32e_eptp_t eptp = {.raw = tdcs_ptr->executions_ctl_fields.eptp.raw};
+    uint16_t hkid = tdr_ptr->key_management_fields.hkid;
+    access_rights_t access_rights = { .raw = 0x7 };
+    access_rights_t accumulated_rwx;
 
     // Check the VMCS is the correct one
     tdx_debug_assert(vm_id != 0);
@@ -2790,10 +2785,14 @@ bool_t translate_gpas(
     if (hpa == NULL_PA)
     {
         gpa = tdvps_ptr->management.l2_vapic_gpa[vm_id];
-        return_val = check_and_walk_private_gpa_to_leaf(tdcs_ptr, OPERAND_ID_RCX, (pa_t)gpa,
-                                          tdr_ptr->key_management_fields.hkid,
-                                          &sept_entry_ptr, &sept_entry_level, &sept_entry_copy);
-        if (return_val != TDX_SUCCESS)
+        if (!check_gpa_validity((pa_t)gpa, tdcs_ptr->executions_ctl_fields.gpaw, PRIVATE_ONLY, tdcs_ptr->executions_ctl_fields.virt_maxpa))
+        {
+            *failed_gpa = gpa;
+            goto EXIT;
+        }
+
+        ept_walk_result_t status = gpa_translate(eptp, (pa_t)gpa, true, hkid, access_rights, (pa_t*)&hpa, (ia32e_ept_t*)&sept_entry_copy, &accumulated_rwx);
+        if (EPT_WALK_SUCCESS != status)
         {
             *failed_gpa = gpa;
             goto EXIT;
@@ -2806,24 +2805,15 @@ bool_t translate_gpas(
         }
 
         // Update the HPA
-        hpa = leaf_ept_entry_to_hpa(sept_entry_copy, gpa, sept_entry_level);
         hpa = set_hkid_to_pa((pa_t)hpa, tdr_ptr->key_management_fields.hkid).raw;
         tdvps_ptr->management.l2_vapic_hpa[vm_id] = hpa;
         ia32_vmwrite(VMX_VIRTUAL_APIC_PAGE_ADDRESS_FULL_ENCODE, hpa);
-
-        if (sept_entry_ptr != NULL)
-        {
-            free_la(sept_entry_ptr);
-        }
     }
 
     return true;
 
 EXIT:
-    if (sept_entry_ptr != NULL)
-    {
-        free_la(sept_entry_ptr);
-    }
+
     return false;
 }
 
@@ -2901,7 +2891,7 @@ api_error_type l2_sept_walk(tdr_t* tdr_ptr, tdcs_t* tdcs_ptr, uint16_t vm_id, pa
 
     ept_level_t requested_level = *level;
     *l2_septe_ptr = secure_ept_walk(septp, page_gpa, tdr_ptr->key_management_fields.hkid,
-                                    level, &cached_sept_entry, false);
+                                    level, &cached_sept_entry, true, false, false);
 
     if (requested_level != *level)
     {
@@ -2924,7 +2914,7 @@ api_error_type l2_sept_walk_guest_side(
 
     ept_level_t requested_level = *level;
     *l2_septe_ptr = secure_ept_walk(septp, page_gpa, tdr_ptr->key_management_fields.hkid,
-                                    level, cached_l2_sept_entry, true);
+                                    level, cached_l2_sept_entry, true, true, false);
 
     if (requested_level != *level)
     {
@@ -3273,6 +3263,25 @@ api_error_type check_cpuid_1f_and_compute_cpuid_0b(tdcs_t* tdcs_p, bool_t allow_
     return TDX_SUCCESS;
 }
 
+api_error_type check_host_interrupt_and_hp_bit(sharex_hp_lock_t* lock, bool_t is_resumeable)
+{
+    if (is_interrupt_pending_host_side())
+    {
+        if (is_resumeable)
+        {
+            return TDX_INTERRUPTED_RESUMABLE;
+        }
+        else
+        {
+            return TDX_INTERRUPTED_RESTARTABLE;
+        }
+    }
+    else if (is_lock_hp_set(lock))
+    {
+        return TDX_INTERRUPTED_BUSY;
+    }
+    return TDX_SUCCESS;
+}
 
 void prepare_state_for_avx_usage(void)
 {
@@ -3287,3 +3296,46 @@ void prepare_state_for_avx_usage(void)
         ia32_xsetbv(0, TDX_MODULE_XCR0_WITH_AVX);
     }
 }
+
+tdx_features_enum0_t get_tdx_features_enum0(void)
+{
+    tdx_features_enum0_t tdx_features_0;
+
+    tdx_features_0.raw = 0;
+    tdx_features_0.td_migration = 1;
+    tdx_features_0.service_td = 1;
+    tdx_features_0.partitioned_td_migration = 1;
+    tdx_features_0.td_preserving = 1;
+    tdx_features_0.tdg_vp_rdwr = 1;
+    tdx_features_0.relaxed_mem_mng_concurrency = 1;
+    tdx_features_0.cpuid_virt_guest_ctrl = 1;
+    tdx_features_0.local_attestation = get_global_data()->seamverifyreport_available;
+    tdx_features_0.td_partitioning = 1;
+    tdx_features_0.td_entry_enhancements = 1;
+    tdx_features_0.host_priority_locks = 1;
+    if (is_not_gnr_a0_stepping())
+    {
+        tdx_features_0.config_ia32_arch_cap = 1;
+    }
+    tdx_features_0.no_rbp_mod = 1;
+    tdx_features_0.pending_ept_violation_v2 = 1;
+    tdx_features_0.l2_tlb_invd_opt = 1;
+    tdx_features_0.fms_config = 1;
+    tdx_features_0.topology_enum = 1;
+    tdx_features_0.ve_reduction = 1;
+    tdx_features_0.event_filtering = 1;
+    tdx_features_0.icssd = 1;
+    tdx_features_0.fixed_ctr12_prof = 1;
+    tdx_features_0.maxpa_virt = 1;
+    tdx_features_0.maxgpa_virt = 1;
+    tdx_features_0.fatal_diagnostics = 1;
+    tdx_features_0.cpuid2_virt = 1;
+    tdx_features_0.enhanced_event_filtering = 0;
+    tdx_features_0.tdx_io = get_sysinfo_table()->mcheck_fields.io_sys_info_table_version > 0 ? 1 : 0;
+    tdx_features_0.tdx_connect_partitioning = tdx_features_0.tdx_io;
+    tdx_features_0.dynamic_pamt = 1;
+    tdx_features_0.import_page_status = 1;
+
+    return tdx_features_0;
+}
+

@@ -464,12 +464,16 @@ api_error_type tdh_mem_sept_remove(page_info_api_input_t sept_page_info, uint64_
  * @param tdmr_info_array_pa The physical address of an array of TDMR_INFO entries
  * @param num_of_tdmr_entries The number of TDMR_INFO entries in the about buffer
  * @param global_private_hkid TDX-SEAM global private HKID value
+ * @param version
+ * @param enabling_flags TDX module feature enabling flags, formatted similarly to TDX_FEATURES0
+ * @param reserved_r10 must be zero
  *
  * @return Success or Error type
  */
 api_error_type tdh_sys_config(uint64_t tdmr_info_array_pa,
                              uint64_t num_of_tdmr_entries,
-                             sys_config_options_t sysconfig_options);
+                             sys_config_options_t sysconfig_options
+                             );
 
 
 /**
@@ -840,6 +844,7 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
  */
 api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa);
 
+
 /**
  * @brief Shuts down the system and prepared handoff data buffer for the next module
  *
@@ -850,8 +855,10 @@ api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa);
 api_error_type tdh_sys_shutdown(uint64_t hv_input);
 
 /**
- * @brief Finished updating TDX module by retrieving and loading handoff data from the
- *        previous module
+ * @brief Finished updating TDX module by retrieving and loading handoff data from the previous module
+ *
+ * @param version
+ * @param enabling_flags TDX module feature enabling flags, formatted similarly to TDX_FEATURES0
  *
  * @return Success or Error type
  */

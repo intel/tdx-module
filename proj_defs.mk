@@ -27,6 +27,7 @@ PROJ_FLAGS =
 FAULT_SAFE_MAGIC_INDICATOR=0xFF0F0F0F0F0F0FFF
 PROJ_FLAGS += -DFAULT_SAFE_MAGIC_INDICATOR=$(FAULT_SAFE_MAGIC_INDICATOR)
 
+
 ################################################################
 ## Versioning
 
@@ -51,32 +52,20 @@ endif # TDX_MODULE_INTERNAL_VER
 ifdef TDX_MODULE_SEAM_MINOR_SVN
  PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=$(TDX_MODULE_SEAM_MINOR_SVN)
 else # TDX_MODULE_SEAM_MINOR_SVN
- PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=5
+ PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=6
 endif # TDX_MODULE_SEAM_MINOR_SVN
 
-
-#######################################
-PROJ_FLAGS += -DTDX_MODULE_MAJOR_VER=2
-PROJ_FLAGS += -DTDX_MODULE_MINOR_VER=0
-PROJ_FLAGS += -DTDX_MODULE_UPDATE_VER=8
-#######################################
+ #######################################
+ PROJ_FLAGS += -DTDX_MODULE_MAJOR_VER=2
+ PROJ_FLAGS += -DTDX_MODULE_MINOR_VER=0
+ PROJ_FLAGS += -DTDX_MODULE_UPDATE_VER=12
+ #######################################
 
 ################################################################
 
 ################################################################
 ## TDX features
 
-# Default features
-PROJ_FLAGS += -DNO_SPEC_CTRL_VIRT_SUPPORT
-PROJ_FLAGS += -DCONNECT_SUPPORTED
-PROJ_FLAGS += -DDYNAMIC_PAMT_SUPPORT
-PROJ_FLAGS += -DCWF_SUPPORTED
-PROJ_FLAGS += -DPMT_PROF_SUPPORTED
-PROJ_FLAGS += -DPERFMON_MSR_BITMAPS_SUPPORTED
-PROJ_FLAGS += -DNMI_SOURCE_SUPPORTED
-PROJ_FLAGS += -DARCH_PEBS_COEXIST_SUPPORTED
-PROJ_FLAGS += -DPERFMON_NEW_MSRS_SUPPORTED
-PROJ_FLAGS += -DTD_PART_MIGRATION_SUPPORTED
 
 ifdef TDX_MODULE_HV
 PROJ_FLAGS += -DTDX_MODULE_HV=$(TDX_MODULE_HV)
@@ -101,14 +90,17 @@ endif # TDX_NO_DOWNGRADE
 ################################################################
 ## Debug features
 
+
 ifdef DBG_TRACE
 PROJ_FLAGS += -DDEBUGFEATURE_TDX_DBG_TRACE
 endif # DBG_TRACE
+
 
 ################################################################
 
 ################################################################
 ## Miscelaneous features
+
 
 PROJ_FLAGS += -D_NO_IPP_DEPRECATED
 
@@ -117,42 +109,34 @@ PROJ_FLAGS += -D_NO_IPP_DEPRECATED
 ################################################################
 ## TDX-Connect features
 
-PROJ_FLAGS += -DTPA_HASH_Q0=$(shell python $(TPA_HASH_PARSER) Q0 $(TPA_HASH))
-PROJ_FLAGS += -DTPA_HASH_Q1=$(shell python $(TPA_HASH_PARSER) Q1 $(TPA_HASH))
-PROJ_FLAGS += -DTPA_HASH_Q2=$(shell python $(TPA_HASH_PARSER) Q2 $(TPA_HASH))
-PROJ_FLAGS += -DTPA_HASH_Q3=$(shell python $(TPA_HASH_PARSER) Q3 $(TPA_HASH))
-PROJ_FLAGS += -DTPA_HASH_Q4=$(shell python $(TPA_HASH_PARSER) Q4 $(TPA_HASH))
-PROJ_FLAGS += -DTPA_HASH_Q5=$(shell python $(TPA_HASH_PARSER) Q5 $(TPA_HASH))
+
+  PROJ_FLAGS += -DTPA_HASH_Q0=$(shell python $(TPA_HASH_PARSER) Q0 $(TPA_HASH))
+  PROJ_FLAGS += -DTPA_HASH_Q1=$(shell python $(TPA_HASH_PARSER) Q1 $(TPA_HASH))
+  PROJ_FLAGS += -DTPA_HASH_Q2=$(shell python $(TPA_HASH_PARSER) Q2 $(TPA_HASH))
+  PROJ_FLAGS += -DTPA_HASH_Q3=$(shell python $(TPA_HASH_PARSER) Q3 $(TPA_HASH))
+  PROJ_FLAGS += -DTPA_HASH_Q4=$(shell python $(TPA_HASH_PARSER) Q4 $(TPA_HASH))
+  PROJ_FLAGS += -DTPA_HASH_Q5=$(shell python $(TPA_HASH_PARSER) Q5 $(TPA_HASH))
+
+
 
 ################################################################
 
 ################################################################
-## Production-only features
-
-ifdef PRODUCTION_SIGN
-ifndef RELEASE
-  $(error Cannot create production-signed TDX module in non-RELEASE build)
-endif # RELEASE
-PRODUCTION_FLAGS = -DPRODUCTION_SIGN
-else # PRODUCTION_SIGN
-PRODUCTION_FLAGS =
-endif # PRODUCTION_SIGN
-
 ################################################################
 
 
 #Architecture git data
 ################################################################
-COMMIT_ID = 74b9c954
-ARCHITECTURE_BRANCH_NAME = TDX_Module_2.0.04_v0.95M
-CPUID_EXCEL_VERSION_SUPPORTED = 10
-MSR_EXCEL_VERSION_SUPPORTED = 6
-TDVPS_EXCEL_VERSION_SUPPORTED = 28
-TDR_TDCS_EXCEL_VERSION_SUPPORTED = 25
-TD_VMCS_EXCEL_VERSION_SUPPORTED = 26
-GLOBAL_SYS_EXCEL_VERSION_SUPPORTED = 2
-ERRORS_VERSION_SUPPORTED = 5
-OP_STATE_VERSION_SUPPORTED = 2
-SEPT_STATE_VERSION_SUPPORTED = 6
-L2_VMCS_VERSION_SUPPORTED = 25
+    COMMIT_ID = 9cd87352
+    ARCHITECTURE_BRANCH_NAME = TDX_Module_2.0.12_v0.96
+    CPUID_EXCEL_VERSION_SUPPORTED = 10
+    MSR_EXCEL_VERSION_SUPPORTED = 6
+    TDVPS_EXCEL_VERSION_SUPPORTED = 28
+    TDR_TDCS_EXCEL_VERSION_SUPPORTED = 25
+    TD_VMCS_EXCEL_VERSION_SUPPORTED = 26
+    GLOBAL_SYS_EXCEL_VERSION_SUPPORTED = 2
+    ERRORS_VERSION_SUPPORTED = 5
+    OP_STATE_VERSION_SUPPORTED = 2
+    SEPT_STATE_VERSION_SUPPORTED = 6
+    L2_VMCS_VERSION_SUPPORTED = 25
 ################################################################

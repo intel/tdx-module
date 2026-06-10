@@ -113,6 +113,7 @@ api_error_type tdh_mem_sept_remove(page_info_api_input_t gpa_page_info, uint64_t
         goto EXIT;
     }
 
+
     if (!verify_page_info_input(gpa_mappings, LVL_PD, tdcs_ptr->executions_ctl_fields.eptp.fields.ept_pwl))
     {
         TDX_ERROR("Input GPA page info (0x%llx) is not valid\n", gpa_mappings.raw);
@@ -134,7 +135,8 @@ api_error_type tdh_mem_sept_remove(page_info_api_input_t gpa_page_info, uint64_t
                                                       &sept_entry_ptr[0],
                                                       &sept_level_entry,
                                                       &sept_entry_copy,
-                                                      &sept_locked_flag);
+                                                      &sept_locked_flag,
+                                                      false);
     if (return_val != TDX_SUCCESS)
     {
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
@@ -278,7 +280,7 @@ api_error_type tdh_mem_sept_remove(page_info_api_input_t gpa_page_info, uint64_t
         {
             if (vm_id == 0)
             {
-                atomic_mem_write_64b(&sept_entry_ptr[vm_id]->raw, SEPTE_INIT_VALUE);
+                atomically_update_sept_state_keep_tdhp(sept_entry_ptr[vm_id], SEPTE_INIT_VALUE);
             }
             else
             {
@@ -340,7 +342,7 @@ EXIT:
 
     if (sept_locked_flag)
     {
-        release_sharex_lock_ex(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_ex(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
     }
 
     if (tdcs_ptr != NULL)

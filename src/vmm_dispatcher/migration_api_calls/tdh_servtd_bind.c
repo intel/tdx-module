@@ -176,7 +176,7 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
             }
         }
     }
-#endif // (MAX_SERVTDS>1)
+#endif // (MAX_SERVTDS > 1)
 
     // Calculate the service TD's TDINFO_HASH
     if ((return_val = get_teeinfohash(servtd_tdcs_p, servtd_attr.ignore_tdinfo,
@@ -193,7 +193,7 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
         if ((tdcs_p->management_fields.op_state != OP_STATE_UNINITIALIZED) &&
             (tdcs_p->management_fields.op_state != OP_STATE_INITIALIZED))
         {
-            return_val = TDX_OP_STATE_INCORRECT;
+            return_val = api_error_with_operand_id(TDX_OP_STATE_INCORRECT,(uint64_t)tdcs_p->management_fields.op_state);
             goto EXIT;
         }
         tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].type = servtd_type;

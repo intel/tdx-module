@@ -40,7 +40,7 @@ STD_FLAGS = -MD -MP -m64 -Wall -Wextra -fPIC -fno-builtin-memset -fvisibility=hi
 OPT_FLAGS = -Os
 
 # SecV mandatory flags
-SECV_FLAGS = -Wdouble-promotion -Wshadow -Wconversion -Wmissing-prototypes -Wpointer-arith -Wuninitialized -Wunreachable-code -Wunused-function -Werror -D_FORTIFY_SOURCE=2 -fno-zero-initialized-in-bss -fstack-protector-strong
+SECV_FLAGS = -Wdouble-promotion -Wshadow -Wconversion -Wmissing-prototypes -Wpointer-arith -Wuninitialized -Wunreachable-code -Wunused-function -Werror -D_FORTIFY_SOURCE=2 -fno-zero-initialized-in-bss -fstack-protector-strong -Wformat -Wformat-security -Werror=format-security
 
 CET_FLAGS = -mshstk -fcf-protection
 
@@ -55,3 +55,4 @@ LINKER_SCRIPT = $(PROJ_DIR)/tdx_linker_script.lds
 # Linker flags
 LDFLAGS = -Wl,-shared -Wl,-pie -Wl,-e,$(MODULE_ENTRY_POINT) -Wl,-z,relro -Wl,-z,now -Wl,--wrap=__stack_chk_fail \
 		  -disable-red-zone -nostartfiles -Wl,-T,$(LINKER_SCRIPT)
+

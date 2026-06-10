@@ -874,6 +874,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
     // Zero the RTMR hash values
     basic_memset_to_zero(tdcs_ptr->measurement_fields.rtmr, (SIZE_OF_SHA384_HASH_IN_QWORDS<<3)*NUM_RTMRS);
 
+
     tdcs_ptr->management_fields.op_state = OP_STATE_INITIALIZED;
 
 EXIT:

@@ -1040,7 +1040,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
     // FILTER_FAIL_TDENTER_SEPT_BUSY or FILTER_FAIL_TDENTER_EPFS
     if (is_sept_locked)
     {
-        release_sharex_lock_ex(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
     }
 
     if (is_not_gnr_a0_stepping())
@@ -1056,6 +1056,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
 
     // Before VM entry, update the current VM's VMCS' Guest IA32_PERF_GLOBAL_CTRL
     conditionally_write_vmcs_ia32_perf_global_ctrl_msr(tdcs_ptr);
+
 
     local_data_ptr->single_step_def_state.last_entry_tsc = ia32_rdtsc();
 
@@ -1084,7 +1085,7 @@ EXIT_FAILURE:
 
     if (is_sept_locked)
     {
-        release_sharex_lock_ex(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
     }
 
     // Check if we need to load the SEAM VMCS

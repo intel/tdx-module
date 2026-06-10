@@ -37,7 +37,7 @@
 #include "helpers/helpers.h"
 
 
-_STATIC_INLINE_ uint64_t get_ept_entry_idx(pa_t gpa, ept_level_t lvl)
+uint64_t get_ept_entry_idx(pa_t gpa, ept_level_t lvl)
 {
     uint64_t idx = 0;
 
@@ -286,17 +286,17 @@ ept_walk_result_t gpa_translate(ia32e_eptp_t eptp, pa_t gpa, bool_t private_gpa,
         cached_ept_entry->raw = pte->raw; // Atomic copy
         accumulated_rwx->rwx &= cached_ept_entry->present.rwx;
 
-        free_la(pt); // Not needed at that point
-
         // Check misconfiguration conditions
         IF_RARE (!private_gpa && is_shared_ept_entry_misconfigured(cached_ept_entry, current_lvl))
         {
+            free_la(pt);
             return EPT_WALK_MISCONFIGURATION;
         }
 
         // Misconfigurations on Secure EPT are not expected and considered to be fatal errors
         IF_RARE (private_gpa && is_secure_ept_entry_misconfigured((ia32e_sept_t*)cached_ept_entry, current_lvl))
         {
+            free_la(pt);
             extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_eptp(eptp.raw, (uint8_t)current_lvl, gpa.raw, *(ia32e_sept_t*)cached_ept_entry);
             fatal_error(FATAL_ERROR_ID_17, FATAL_INFO_FORMAT_SEPT_EPTP_INFO, &extended_fatal_info);
         }
@@ -305,6 +305,8 @@ ept_walk_result_t gpa_translate(ia32e_eptp_t eptp, pa_t gpa, bool_t private_gpa,
         IF_RARE ((cached_ept_entry->present.rwx == 0) ||
                  ((uint8_t)(access_rights.rwx & cached_ept_entry->present.rwx) != access_rights.rwx))
         {
+            free_la(pt);
+
             if (is_ept_violation_convertible(cached_ept_entry, current_lvl))
             {
                 return EPT_WALK_CONVERTIBLE_VIOLATION;
@@ -318,10 +320,13 @@ ept_walk_result_t gpa_translate(ia32e_eptp_t eptp, pa_t gpa, bool_t private_gpa,
         // Check if leaf is reached - page walk done
         if (is_ept_leaf_entry(cached_ept_entry, current_lvl))
         {
+            free_la(pt); // Not needed at that point
             // Calculate the final HPA
             hpa->raw = leaf_ept_entry_to_hpa((*(ia32e_sept_t*)cached_ept_entry), gpa.raw, current_lvl);
             break;
         }
+
+        free_la(pt); // Not needed at that point
 
         // Cannot continue to next level, this should be the last one
         IF_RARE (current_lvl == LVL_PT)
@@ -346,7 +351,7 @@ ept_walk_result_t gpa_translate(ia32e_eptp_t eptp, pa_t gpa, bool_t private_gpa,
 
 ia32e_sept_t* secure_ept_walk(ia32e_eptp_t septp, pa_t gpa, uint16_t private_hkid,
                               ept_level_t* level, ia32e_sept_t* cached_sept_entry,
-                              bool_t l2_sept_guest_side_walk)
+                              bool_t is_l2_walk, bool_t l2_sept_guest_side_walk, bool_t set_d_bit)
 {
     ia32e_paging_table_t *pt;
     ia32e_sept_t *pte;
@@ -390,7 +395,7 @@ ia32e_sept_t* secure_ept_walk(ia32e_eptp_t septp, pa_t gpa, uint16_t private_hki
         // In any other walk mode, RWX bits are checked
         IF_RARE ((l2_sept_guest_side_walk && is_l2_sept_free(cached_sept_entry)) ||
                  (!l2_sept_guest_side_walk && (cached_sept_entry->rwx == 0))     ||
-                  is_secure_ept_leaf_entry(cached_sept_entry))
+                  is_secure_ept_leaf_entry(cached_sept_entry, is_l2_walk))
         {
             break;
         }
@@ -400,6 +405,8 @@ ia32e_sept_t* secure_ept_walk(ia32e_eptp_t septp, pa_t gpa, uint16_t private_hki
         {
             fatal_error(FATAL_ERROR_ID_45, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
+
+        UNUSED(set_d_bit);
 
         // Continue to next level in the walk
         pt_pa.raw = cached_sept_entry->raw & IA32E_PAGING_STRUCT_ADDR_MASK;
@@ -412,8 +419,25 @@ ia32e_sept_t* secure_ept_walk(ia32e_eptp_t septp, pa_t gpa, uint16_t private_hki
     return pte;
 }
 
+static void sept_state_atomic_write(ia32e_sept_t* ept_entry, uint64_t state, bool_t keep_ad, bool_t keep_tdhp)
+{
+    // Write the new value in a single 64-bit write
+    switch (((uint8_t)keep_ad << 1) | (uint8_t)keep_tdhp)
+    {
+    case 0: // legacy atomic write, no bit preservation
+        atomic_mem_write_64b(&ept_entry->raw, state);
+        break;
+    case 1: // preserve tdhp bit
+        atomically_update_sept_state_keep_tdhp(ept_entry, state);
+        break;
+    default:
+        TDX_ERROR("SEPT state was not updated! sept entry: 0x%llx\n", ept_entry->raw);
+        fatal_error(FATAL_ERROR_ID_353, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
+    }
+}
+
 static void sept_set_leaf_no_lock_internal_given_hpa_with_hkid(ia32e_sept_t * ept_entry, uint64_t attributes, pa_t page_pa,
-                                                                uint64_t state_encoding, bool_t set_lock)
+                                                                uint64_t state_encoding, bool_t set_lock, bool_t keep_ad, bool_t keep_tdhp)
 {
     ia32e_sept_t septe_value = {.raw = attributes};
 
@@ -430,55 +454,57 @@ static void sept_set_leaf_no_lock_internal_given_hpa_with_hkid(ia32e_sept_t * ep
 
     septe_value.supp_ve = 1;
     septe_value.tdel = set_lock ? 1 : 0;
-
-    atomic_mem_write_64b(&ept_entry->raw, septe_value.raw);
+    
+    sept_state_atomic_write(ept_entry, septe_value.raw, keep_ad, keep_tdhp);
 }
 
 static void sept_set_leaf_no_lock_internal_given_hpa_and_hkid(ia32e_sept_t * ept_entry, uint64_t attributes, pa_t page_pa, uint16_t hkid,
-                                                                uint64_t state_encoding, bool_t set_lock)
+                                                                uint64_t state_encoding, bool_t set_lock, bool_t keep_ad, bool_t keep_tdhp)
 {
     sept_set_leaf_no_lock_internal_given_hpa_with_hkid(
         ept_entry,
         attributes,
         set_hkid_to_pa(page_pa, hkid),
         state_encoding,
-        set_lock);
+        set_lock,
+        keep_ad,
+        keep_tdhp);
 }
 
 void sept_set_leaf_and_release_locks_given_hpa_and_hkid(ia32e_sept_t * ept_entry, uint64_t attributes, pa_t page_pa,
-                                                        uint16_t hkid, uint64_t state_encoding)
+                                                        uint16_t hkid, uint64_t state_encoding, bool_t keep_ad, bool_t keep_tdhp)
 {
-    sept_set_leaf_no_lock_internal_given_hpa_and_hkid(ept_entry, attributes, page_pa, hkid, state_encoding, false);
+    sept_set_leaf_no_lock_internal_given_hpa_and_hkid(ept_entry, attributes, page_pa, hkid, state_encoding, false, keep_ad, keep_tdhp);
 }
 
 void sept_set_leaf_and_keep_lock_given_hpa_and_hkid(ia32e_sept_t * ept_entry, uint64_t attributes, pa_t page_pa,
-                                                    uint16_t hkid, uint64_t state_encoding)
+                                                    uint16_t hkid, uint64_t state_encoding, bool_t keep_ad, bool_t keep_tdhp)
 {
     // Sanity check, entry should already be locked
     tdx_sanity_check(ept_entry->tdel, FATAL_ERROR_ID_227, 3);
 
-    sept_set_leaf_no_lock_internal_given_hpa_and_hkid(ept_entry, attributes, page_pa, hkid, state_encoding, true);
+    sept_set_leaf_no_lock_internal_given_hpa_and_hkid(ept_entry, attributes, page_pa, hkid, state_encoding, true, keep_ad, keep_tdhp);
 }
 
 void sept_set_leaf_and_keep_lock_given_hpa_with_hkid(ia32e_sept_t * ept_entry, uint64_t attributes,
-                                                    pa_t page_pa, uint64_t state_encoding)
+                                                    pa_t page_pa, uint64_t state_encoding, bool_t keep_ad, bool_t keep_tdhp)
 {
     // Sanity check, entry should already be locked
     tdx_sanity_check(ept_entry->tdel, FATAL_ERROR_ID_228, 3);
 
-    sept_set_leaf_no_lock_internal_given_hpa_with_hkid(ept_entry, attributes, page_pa, state_encoding, true);
+    sept_set_leaf_no_lock_internal_given_hpa_with_hkid(ept_entry, attributes, page_pa, state_encoding, true, keep_ad, keep_tdhp);
 }
 
 void sept_set_leaf_unlocked_entry_given_hpa_and_hkid(ia32e_sept_t * ept_entry, uint64_t attributes, pa_t page_pa,
-                                                     uint16_t hkid, uint64_t state_encoding)
+                                                     uint16_t hkid, uint64_t state_encoding, bool_t keep_ad, bool_t keep_tdhp)
 {
     // Sanity check: SEPT entry must be unlocked
     tdx_sanity_check(ept_entry->tdel == 0, FATAL_ERROR_ID_229, 4);
 
-    sept_set_leaf_no_lock_internal_given_hpa_and_hkid(ept_entry, attributes, page_pa, hkid, state_encoding, false);
+    sept_set_leaf_no_lock_internal_given_hpa_and_hkid(ept_entry, attributes, page_pa, hkid, state_encoding, false, keep_ad, keep_tdhp);
 }
 
-void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t page_pa_with_hkid, bool_t lock)
+void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t page_pa_with_hkid, bool_t lock, bool_t set_d_bit)
 {
     ia32e_sept_t curr_entry = {.raw = SEPT_PERMISSIONS_RWX | SEPT_STATE_NL_MAPPED_MASK};
 
@@ -489,7 +515,10 @@ void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t
     curr_entry.tdel = lock;
 
     // One aligned assignment to make it atomic
-    atomic_mem_write_64b(&ept_entry->raw, curr_entry.raw);
+    UNUSED(set_d_bit);
+    {
+        atomically_update_sept_state_keep_tdhp(ept_entry, curr_entry.raw);
+    }
 }
 
 /**
@@ -585,7 +614,8 @@ void sept_l2_set_leaf_given_hpa_with_hkid(ia32e_sept_t* l2_sept_entry_ptr, gpa_a
     atomic_mem_write_64b(&l2_sept_entry_ptr->raw, tmp_sept.raw);
 }
 
-void sept_l2_set_mapped_non_leaf_given_hpa_and_hkid(ia32e_sept_t * ept_entry, pa_t page_pa, uint16_t hkid)
+void sept_l2_set_mapped_non_leaf_given_hpa_and_hkid(ia32e_sept_t * ept_entry, pa_t page_pa, uint16_t hkid
+                                                    )
 {
     page_pa = set_hkid_to_pa(page_pa, hkid);
     ia32e_sept_t curr_entry = {.raw = SEPT_PERMISSIONS_RW_XS_XU | SEPT_STATE_L2_NL_MAPPED_MASK};
@@ -615,7 +645,7 @@ void set_arch_septe_details_in_vmm_regs(ia32e_sept_t sept_entry, ept_level_t lev
         detailed_arch_sept_entry.raw = sept_entry.raw;
         sept_cleanup_if_pending(&sept_entry, level);
 
-        if (is_secure_ept_leaf_entry(&detailed_arch_sept_entry))
+        if (is_secure_ept_leaf_entry(&detailed_arch_sept_entry, false))
         {
             detailed_arch_sept_entry.raw &= SEPT_ARCH_ENTRY_LEAF_MASK;
         }
@@ -657,7 +687,7 @@ void set_arch_l2_septe_details_in_vmm_regs(ia32e_sept_t l2_sept_entry, uint16_t 
     {
         // Create the architectural SEPT entry as reported to the user
         detailed_arch_sept_entry.raw = l2_sept_entry.raw;
-        if (is_secure_ept_leaf_entry(&l2_sept_entry))
+        if (is_secure_ept_leaf_entry(&l2_sept_entry, (bool_t)vm_id))
         {
             if (is_debug)
             {
@@ -693,3 +723,132 @@ void set_arch_l2_septe_details_in_vmm_regs(ia32e_sept_t l2_sept_entry, uint16_t 
     local_data_ptr->vmm_regs.rdx = detailed_arch_info.raw;
 }
 
+void sept_update_state(ia32e_sept_t* ept_entry, sept_state_mask_t state, bool_t keep_ad, bool_t keep_tdhp)
+{
+    ia32e_sept_t new_septe;
+
+    {
+        new_septe.raw = (ept_entry->raw & ~SEPT_STATE_ENCODING_MASK) | (state & SEPT_STATE_ENCODING_MASK);
+    }
+    sept_set_mt_from_ipat_tdmem(&new_septe);
+    new_septe.supp_ve = 1;
+
+    sept_state_atomic_write(ept_entry, new_septe.raw, keep_ad, keep_tdhp);
+}
+
+void sept_l2_update_state(ia32e_sept_t* ept_entry, sept_state_mask_t state)
+{
+    ia32e_sept_t new_septe;
+
+    uint64_t final_mask = L2_SEPT_STATE_ENCODING_MASK;
+
+    if ((state == SEPT_STATE_L2_MAPPED_MASK) ||
+        (state == SEPT_STATE_L2_BLOCKED_MASK)
+        || (state == SEPT_STATE_L2_MMIO_MAPPED_MASK) ||
+        (state == SEPT_STATE_L2_MMIO_BLOCKED_MASK)
+        )
+    {
+        final_mask = L2_SEPT_STATE_ENCODING_WO_R_MASK;
+    }
+
+    new_septe.raw = (ept_entry->raw & ~final_mask) | (state & final_mask);
+
+    // Write the new value in a single 64-bit write
+    atomic_mem_write_64b(&ept_entry->raw, new_septe.raw);
+}
+
+void sept_unblock(ia32e_sept_t* ept_entry)
+{
+    uint64_t state_encoding_mask;
+    {
+        state_encoding_mask = SEPT_STATE_ENCODING_MASK;
+    }
+
+    switch (ept_entry->raw & state_encoding_mask)
+    {
+    case SEPT_STATE_NL_BLOCKED_MASK:
+        sept_update_state(ept_entry, SEPT_STATE_NL_MAPPED_MASK, false, false);
+        ept_entry->raw |= SEPT_PERMISSIONS_RWX;
+        break;
+    case SEPT_STATE_BLOCKED_MASK:
+        sept_update_state(ept_entry, SEPT_STATE_MAPPED_MASK, false, false);
+        ept_entry->raw |= SEPT_PERMISSIONS_RWX;
+        break;
+    case SEPT_STATE_PEND_BLOCKED_MASK:
+        sept_update_state(ept_entry, SEPT_STATE_PEND_MASK, false, false);
+        // Permission bits remain all-0
+        break;
+    default:
+        // The SEPT entry was not blocked, do nothing
+        break;
+    }
+}
+
+void l2_sept_update_gpa_attr(ia32e_sept_t* const l2_sept_entry_ptr, const gpa_attr_single_vm_t gpa_attr_single_vm)
+{
+    l2_sept_entry_ptr->l2_encoding.r = gpa_attr_single_vm.r;
+    l2_sept_entry_ptr->l2_encoding.w = gpa_attr_single_vm.w;
+    l2_sept_entry_ptr->l2_encoding.x = gpa_attr_single_vm.xs;
+    l2_sept_entry_ptr->l2_encoding.xu = gpa_attr_single_vm.xu;
+    l2_sept_entry_ptr->l2_encoding.vgp = gpa_attr_single_vm.vgp;
+    l2_sept_entry_ptr->l2_encoding.pwa = gpa_attr_single_vm.pwa;
+    l2_sept_entry_ptr->l2_encoding.sss = gpa_attr_single_vm.sss;
+    l2_sept_entry_ptr->l2_encoding.sve = gpa_attr_single_vm.sve;
+    l2_sept_entry_ptr->l2_encoding.mt0_tdrd = 0;
+
+    if (is_l2_sept_blocked(l2_sept_entry_ptr))
+    {
+        l2_sept_entry_ptr->l2_encoding.mt0_tdrd = l2_sept_entry_ptr->l2_encoding.r;
+        l2_sept_entry_ptr->l2_encoding.r = 0;
+        l2_sept_entry_ptr->l2_encoding.tdwr = l2_sept_entry_ptr->l2_encoding.w;
+        l2_sept_entry_ptr->l2_encoding.w = 0;
+        l2_sept_entry_ptr->l2_encoding.mt1_tdxs = l2_sept_entry_ptr->l2_encoding.x;
+        l2_sept_entry_ptr->l2_encoding.x = 0;
+        l2_sept_entry_ptr->l2_encoding.mt2_tdxu = l2_sept_entry_ptr->l2_encoding.xu;
+        l2_sept_entry_ptr->l2_encoding.xu = 0;
+        l2_sept_entry_ptr->l2_encoding.tdpwa = l2_sept_entry_ptr->l2_encoding.pwa;
+        l2_sept_entry_ptr->l2_encoding.pwa = 0;
+    }
+}
+
+bool_t cmpxchg_keep_masked(ia32e_sept_t* ept_entry, uint64_t expected_val, uint64_t* new_val, uint64_t mask)
+{
+    uint64_t old_value;
+
+    // The following loop is limited if the masked bits can only change concurrently in one
+    // direction, e.g., A or D bits can only be set by the CPU but never cleared, thus for AD bits
+    // the loop will execute at most 3 times.
+    do
+    {
+        // Take the masked bits from the expected value
+        *new_val = (*new_val & ~mask) | (expected_val & mask);
+
+        // Try to update the whole 64-bit value in memory, checking it hasn't changed using an atomic operation
+        old_value = _lock_cmpxchg_64b(expected_val, *new_val, (uint64_t*)ept_entry);
+
+        if (old_value == expected_val)
+        {
+            return true;
+        }
+
+        // If values differ only in the masked bits, try again with those bits taken from the value in memory
+        expected_val = old_value;
+    } while ((old_value & ~mask) == (expected_val & ~mask));
+
+    return false;
+}
+
+
+void atomically_update_sept_state_keep_masked_bits(ia32e_sept_t* ept_entry, uint64_t new_state, uint64_t mask)
+{
+    uint64_t expected_state = ept_entry->raw;
+
+    if (!cmpxchg_keep_masked(ept_entry, expected_state, &new_state, mask))
+    {
+        // Fatal error, the SEPT entry was not as expected
+        fatal_error(FATAL_ERROR_ID_345, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
+    }
+
+    // Write the new value in a single 64-bit write
+    atomic_mem_write_64b(&ept_entry->raw, new_state);
+}

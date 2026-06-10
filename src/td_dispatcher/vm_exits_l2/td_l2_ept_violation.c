@@ -80,7 +80,7 @@ void td_l2_ept_violation_exit(vm_vmexit_exit_reason_t vm_exit_reason, vmx_exit_q
         // Walk the L1 SEPT to locate the leaf entry.  Actual level is returned.
         l1_sept_entry_ptr = secure_ept_walk(tdcs_ptr->executions_ctl_fields.eptp, (pa_t)gpa,
                                             tdr_ptr->key_management_fields.hkid,
-                                            &l1_sept_entry_level, &l1_sept_entry_copy, false);
+                                            &l1_sept_entry_level, &l1_sept_entry_copy, false, false, false);
         
         if (exit_qualification.ept_violation.data_read | exit_qualification.ept_violation.insn_fetch)
         {

@@ -118,7 +118,8 @@ api_error_type tdh_mem_page_relocate(uint64_t source_page_pa,
                                                       &mapped_page_sept_entry_ptr,
                                                       &mapped_page_level_entry,
                                                       &mapped_page_sept_entry_copy,
-                                                      &sept_locked_flag);
+                                                      &sept_locked_flag,
+                                                      false);
     if (return_val != TDX_SUCCESS)
     {
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
@@ -146,7 +147,7 @@ api_error_type tdh_mem_page_relocate(uint64_t source_page_pa,
     mapped_page_sept_entry_copy = *mapped_page_sept_entry_ptr;
 
     // Verify the located entry points is a leaf entry and relocate is allowed
-    if (!is_secure_ept_leaf_entry(&mapped_page_sept_entry_copy) ||
+    if (!is_secure_ept_leaf_entry(&mapped_page_sept_entry_copy, false) ||
         !sept_state_is_seamcall_leaf_allowed(TDH_MEM_PAGE_RELOCATE, mapped_page_sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
@@ -274,10 +275,14 @@ api_error_type tdh_mem_page_relocate(uint64_t source_page_pa,
     ia32e_sept_t epte_val = {.raw = mapped_page_sept_entry_copy.raw};
     target_pa = set_hkid_to_pa(target_pa, tdr_ptr->key_management_fields.hkid);
     epte_val.base = target_pa.full_pa >> 12;
+    
     sept_unblock(&epte_val);
 
     // Write the whole 64-bit EPT entry in a single operation
-    atomic_mem_write_64b(&mapped_page_sept_entry_ptr->raw, epte_val.raw);
+    {
+        atomically_update_sept_state_keep_tdhp(mapped_page_sept_entry_ptr, epte_val.raw);
+    }
+
 
     // Update RCX with the old physical page HPA
     local_data_ptr->vmm_regs.rcx = remove_hkid_from_pa(source_pa).raw;
@@ -314,7 +319,7 @@ EXIT:
 
     if (sept_locked_flag)
     {
-        release_sharex_lock_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
         if (mapped_page_sept_entry_ptr != NULL)
         {
             free_la(mapped_page_sept_entry_ptr);

@@ -164,7 +164,8 @@ void tdx_vmm_dispatcher(void)
         }
     }
 
-    if (SYS_SHUTDOWN == global_data->global_state.sys_state)
+    if ((SYS_SHUTDOWN == global_data->global_state.sys_state)
+       )
     {
         if (leaf_opcode.leaf != TDH_SYS_LP_SHUTDOWN_LEAF)
         {
@@ -296,8 +297,7 @@ void tdx_vmm_dispatcher(void)
     }
     case TDH_MNG_RD_LEAF:
     {
-        local_data->vmm_regs.rax = tdh_mng_rd(local_data->vmm_regs.rcx, local_data->vmm_regs.rdx,
-                                              leaf_opcode.version);
+        local_data->vmm_regs.rax = tdh_mng_rd(local_data->vmm_regs.rcx, local_data->vmm_regs.rdx, leaf_opcode.version);
         break;
     }
     case TDH_MEM_RD_LEAF:
@@ -308,15 +308,14 @@ void tdx_vmm_dispatcher(void)
     case TDH_MNG_WR_LEAF:
     {
         local_data->vmm_regs.rax = tdh_mng_wr(local_data->vmm_regs.rcx,
-                                             local_data->vmm_regs.rdx,
-                                             local_data->vmm_regs.r8,
-                                             local_data->vmm_regs.r9);
+                                              local_data->vmm_regs.rdx,
+                                              local_data->vmm_regs.r8,
+                                              local_data->vmm_regs.r9);
         break;
     }
     case TDH_MEM_WR_LEAF:
     {
-        local_data->vmm_regs.rax = tdh_mem_wr(local_data->vmm_regs.rcx, local_data->vmm_regs.rdx,
-                                                    local_data->vmm_regs.r8);
+        local_data->vmm_regs.rax = tdh_mem_wr(local_data->vmm_regs.rcx, local_data->vmm_regs.rdx, local_data->vmm_regs.r8);
         break;
     }
     case TDH_MEM_PAGE_DEMOTE_LEAF:
@@ -326,8 +325,7 @@ void tdx_vmm_dispatcher(void)
 
         td_handle_and_flags_t target_tdr_and_flags = { .raw = local_data->vmm_regs.rdx };
 
-        local_data->vmm_regs.rax = tdh_mem_page_demote(page_info, target_tdr_and_flags,
-                                                       local_data->vmm_regs.r12, local_data->vmm_regs.r13);
+        local_data->vmm_regs.rax = tdh_mem_page_demote(page_info, target_tdr_and_flags, local_data->vmm_regs.r12, local_data->vmm_regs.r13);
         break;
     }
     case TDH_VP_ENTER_LEAF:
@@ -421,7 +419,8 @@ void tdx_vmm_dispatcher(void)
 
         local_data->vmm_regs.rax = tdh_sys_config(local_data->vmm_regs.rcx,
                                                  local_data->vmm_regs.rdx,
-                                                 sysconfig_options);
+                                                 sysconfig_options
+                                                 );
         break;
     }
     case TDH_SYS_KEY_CONFIG_LEAF:
@@ -476,7 +475,7 @@ void tdx_vmm_dispatcher(void)
     }
     case TDH_SYS_UPDATE_LEAF:
     {
-        local_data->vmm_regs.rax = tdh_sys_update();
+		local_data->vmm_regs.rax = tdh_sys_update();
         break;
     }
     case TDH_MEM_TRACK_LEAF:

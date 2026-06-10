@@ -544,6 +544,12 @@ _STATIC_INLINE_ uint32_t _xchg_32b(uint32_t *mem, uint32_t quantum)
     return quantum;
 }
 
+_STATIC_INLINE_ uint8_t _lock_xadd_8b(uint8_t* mem, uint8_t quantum)
+{
+    _ASM_VOLATILE_("lock; xaddb %2, %0" : "=m" (*mem), "=a"(quantum) : "a"(quantum) : "memory", "cc");
+    return quantum;
+}
+
 _STATIC_INLINE_ uint16_t _lock_xadd_16b(uint16_t *mem, uint16_t quantum)
 {
     _ASM_VOLATILE_ ("lock; xaddw %2, %0" : "=m" ( *mem ), "=a"(quantum) : "a"(quantum) : "memory", "cc");
@@ -565,6 +571,11 @@ _STATIC_INLINE_ uint64_t _lock_xadd_64b(uint64_t *mem, uint64_t quantum)
 _STATIC_INLINE_ void _lock_or_16b(uint16_t *mem, uint16_t quantum)
 {
     _ASM_VOLATILE_ ("lock; orw %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
+}
+
+_STATIC_INLINE_ void _lock_or_64b(uint64_t *mem, uint64_t quantum)
+{
+    _ASM_VOLATILE_ ("lock; orq %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
 }
 
 _STATIC_INLINE_ void _lock_and_8b(uint8_t *mem, uint8_t quantum)

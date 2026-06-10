@@ -1,24 +1,25 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
+
 /**
  * @file tdg_mmio_accept.c
  * @brief TDGMMIOACCEPT API handler
@@ -106,10 +107,11 @@ api_error_type tdg_mmio_accept(
         local_data->vp_ctx.tdr->key_management_fields.hkid,
         &page_sept_entry_ptr,
         &page_level_entry,
-        &cached_sept_entry);
+        &cached_sept_entry,
+        true);
 
     // Read the SEPT entry without locking, it is only used to provide an error indication
-    bool_t is_leaf = is_secure_ept_leaf_entry(&cached_sept_entry);
+    bool_t is_leaf = is_secure_ept_leaf_entry(&cached_sept_entry, false);
 
     if (return_val != TDX_SUCCESS)
     {
@@ -236,7 +238,7 @@ api_error_type tdg_mmio_accept(
     cached_sept_entry.r = 1;
     cached_sept_entry.w = 1;
     cached_sept_entry.x = 1;
-    sept_update_state(&cached_sept_entry, SEPT_STATE_MMIO_MAPPED_MASK);
+    sept_update_state(&cached_sept_entry, SEPT_STATE_MMIO_MAPPED_MASK, false, false);
 
     // Update lock bit before writing the entry
     cached_sept_entry.raw |= BIT(SEPT_ENTRY_TDEL_BIT_POSITION);

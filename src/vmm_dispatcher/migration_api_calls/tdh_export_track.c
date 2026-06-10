@@ -157,7 +157,7 @@ api_error_type tdh_export_track(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
         if (tdcs_p->management_fields.op_state != OP_STATE_PAUSED_EXPORT)
         {
             TDX_ERROR("OP state incorrect %d\n", tdcs_p->management_fields.op_state);
-            return_val = TDX_OP_STATE_INCORRECT;
+            return_val = api_error_with_operand_id(TDX_OP_STATE_INCORRECT,(uint64_t)tdcs_p->management_fields.op_state);
             goto EXIT;
         }
 
@@ -169,6 +169,7 @@ api_error_type tdh_export_track(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
             return_val = TDX_EXPORTED_DIRTY_PAGES_REMAIN;
             goto EXIT;
         }
+
 
         tdcs_p->migration_fields.mig_epoch = MIG_EPOCH_OUT_OF_ORDER;
         tdcs_p->management_fields.op_state = OP_STATE_POST_EXPORT;

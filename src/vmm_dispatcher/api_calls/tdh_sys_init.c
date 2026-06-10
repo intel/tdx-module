@@ -1334,6 +1334,9 @@ _STATIC_INLINE_ void tdx_init_global_data(tdx_module_global_t* tdx_global_data_p
 
     tdx_global_data_ptr->num_rdseed_retries = 6;
     tdx_global_data_ptr->num_rdseed_pauses = 32;
+
+    uint32_t freq = (uint32_t)get_tsc_ratio();
+    tdx_global_data_ptr->twenty_usec_in_tsc = translate_usec_to_tsc(USECOND * 20, freq);
 }
 
 _STATIC_INLINE_ api_error_type tdx_init_stack_canary(void)

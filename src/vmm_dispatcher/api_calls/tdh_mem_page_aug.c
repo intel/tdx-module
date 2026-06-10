@@ -99,6 +99,7 @@ api_error_type tdh_mem_page_aug(page_info_api_input_t gpa_page_info,
         goto EXIT;
     }
 
+
     if (!verify_page_info_input(gpa_mappings, LVL_PT, LVL_PD))
     {
         TDX_ERROR("Input GPA page info (0x%llx) is not valid\n", gpa_mappings.raw);
@@ -117,7 +118,8 @@ api_error_type tdh_mem_page_aug(page_info_api_input_t gpa_page_info,
                                                       &page_sept_entry_ptr,
                                                       &page_level_entry,
                                                       &page_sept_entry_copy,
-                                                      &sept_locked_flag);
+                                                      &sept_locked_flag,
+                                                      true);
     if (return_val != TDX_SUCCESS)
     {
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
@@ -169,13 +171,15 @@ api_error_type tdh_mem_page_aug(page_info_api_input_t gpa_page_info,
     // ALL_CHECKS_PASSED:  The function is guaranteed to succeed
 
     // Update the parent EPT entry with the new TD page HPA and SEPT_PENDING state
-    sept_set_leaf_and_release_locks_given_hpa_and_hkid(
-        page_sept_entry_ptr,
-        SEPT_PERMISSIONS_NONE,
-        td_page_pa,
-        tdr_ptr->key_management_fields.hkid,
-        SEPT_STATE_PEND_MASK);
+    sept_set_leaf_and_release_locks_given_hpa_and_hkid(page_sept_entry_ptr,
+                                                       SEPT_PERMISSIONS_NONE,
+                                                       td_page_pa,
+                                                       tdr_ptr->key_management_fields.hkid,
+                                                       SEPT_STATE_PEND_MASK,
+                                                       false,
+                                                       true);
     septe_locked_flag = false;
+
 
     // Increment TDR child count, use an atomic operation since we have SHARED lock on TDR
     (void)_lock_xadd_64b(&(tdr_ptr->management_fields.chldcnt), 1 << (9 * page_level_entry));
@@ -199,7 +203,7 @@ EXIT:
     }
     if (sept_locked_flag)
     {
-        release_sharex_lock_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
         if (page_sept_entry_ptr != NULL)
         {
             free_la(page_sept_entry_ptr);

@@ -19,3 +19,9 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.                                            
 //                                                                               
 // SPDX-License-Identifier: MIT
+
+/**
+ * @file crypto_stubs.c
+ * @brief Crypto API stubs
+ */
+

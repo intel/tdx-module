@@ -357,7 +357,7 @@ void async_tdexit_ept_violation(pa_t gpa, ept_level_t req_level, ia32e_sept_t se
     eeq_info.req_sept_level = req_level;
     eeq_info.err_sept_level = ept_level;
     eeq_info.err_sept_state = sept_get_arch_state(sept_entry);
-    eeq_info.err_sept_is_leaf = is_secure_ept_leaf_entry(&sept_entry);
+    eeq_info.err_sept_is_leaf = is_secure_ept_leaf_entry(&sept_entry, false);
 
     eeq.type = eeq_type;
     eeq.info = eeq_info.raw;

@@ -439,4 +439,4 @@ bool_t check_and_get_gpa_from_entry(gpa_list_entry_t gpa_entry, bool_t gpaw, pa_
 void copy_mbmd(mbmd_t* mbmd_dst, mbmd_t* mbmd_src);
 
 
-#endif // TD_PART_MIGRATION_SUPPORTED
+#endif /* SRC_COMMON_HELPERS_MIGRATION_H_ */

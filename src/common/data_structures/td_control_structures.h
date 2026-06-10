@@ -204,6 +204,9 @@ tdx_static_assert(sizeof(tdr_t) == TDX_PAGE_SIZE_IN_BYTES, tdr_t);
 
 #define MAX_VCPUS_PER_TD        1376
 
+
+#define MEM_SCAN_CONFIG_PAGES             2
+
 /**
  * @struct tdcs_management_fields_t
  *
@@ -519,7 +522,7 @@ typedef struct tdcs_execution_control_fields_s
      * Copied to each TD VMCS EPTP on TDVPINIT.
      */
     ALIGN(8) ia32e_eptp_t        eptp;
-    ALIGN(2) sharex_lock_t       secure_ept_lock; /**< Protects Secure EPT updates */
+    ALIGN(2) sharex_hp_lock_t    secure_ept_lock; /**< Protects Secure EPT updates */
 
     /**
      * TD-scope TSC offset execution control.
@@ -624,8 +627,15 @@ typedef struct tdcs_migration_fields_s
     uint32_t          num_migrated_vcpus;
     uint256_t         pre_import_uuid;
     sharex_lock_t     mig_lock;
+    sharex_lock_t     mem_scan_lock;
+    uint8_t           num_mem_scan_ranges;
+    uint8_t           num_mem_scan_ranges_completed;
+    uint8_t           mem_scan_operation;
+    uint8_t           mem_scan_qualifier;
+    uint8_t           mem_scan_state;
+    uint64_t          mem_scan_control_page_hpas[MEM_SCAN_CONFIG_PAGES];
 
-    uint8_t           reserved_1[158];
+    uint8_t           reserved_1[128];
 } tdcs_migration_fields_t;
 tdx_static_assert(sizeof(tdcs_migration_fields_t) == 384, tdcs_migration_fields_t);
 
@@ -706,7 +716,7 @@ tdx_static_assert(sizeof(tdcs_service_td_fields_t) == 512, tdcs_service_td_field
  *
  * @brief Holds TDCSs service td fields
  */
-typedef struct PACKED tdcs_execution_control2_field_s
+typedef struct tdcs_execution_control2_field_s
 {
     uint32_t                     cpuid_last_base_leaf;
     uint32_t                     cpuid_last_ext_leaf;
@@ -717,8 +727,11 @@ typedef struct PACKED tdcs_execution_control2_field_s
     feature_paravirt_ctls_t      feature_paravirt_ctls;
     uint64_t                     filtered_events_count[MAX_VMS];
     uint16_t                     event_filters_num;
-
-    uint8_t                      reserved1[382];
+    uint32_t                     field_support_at_td_init;
+    uint64_t                     blocked_count;
+    uint64_t                     pending_blocked_count;
+    uint64_t                     mem_count;
+    uint8_t                      reserved1[352];
 } tdcs_execution_control2_field_t;
 tdx_static_assert(sizeof(tdcs_execution_control2_field_t) == 512, tdcs_execution_control2_field_t);
 
@@ -752,7 +765,7 @@ tdx_static_assert(sizeof(tdcs_tdxio_fields_t) == TDX_PAGE_SIZE_IN_BYTES / 2, tdc
 
 #if (MAX_POSSIBLE_CPUID_LOOKUP < MAX_NUM_CPUID_LOOKUP)
 #error "Invalid number of MAX_POSSIBLE_CPUID_LOOKUP"
-#endif // (MAX_POSSIBLE_CPUID_...
+#endif // (MAX_POSSIBLE_CPUID_LOOKUP < MAX_NUM_CPUID_LOOKUP)
 
 /**
  * @struct tdcs_t

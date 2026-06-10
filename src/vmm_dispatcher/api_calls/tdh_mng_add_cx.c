@@ -167,7 +167,7 @@ api_error_type tdh_mng_add_cx(uint64_t target_tdcx_pa, uint64_t target_tdr_pa)
             if (!op_state_is_seamcall_allowed(TDH_MNG_ADDCX_LEAF, tdcs_p->management_fields.op_state, false))
             {
                 TDX_ERROR("Current OP state is incorrect %d\n", tdcs_p->management_fields.op_state);
-                return_val = TDX_OP_STATE_INCORRECT;
+                return_val = api_error_with_operand_id(TDX_OP_STATE_INCORRECT,(uint64_t)tdcs_p->management_fields.op_state);
                 goto EXIT;
             }
         }

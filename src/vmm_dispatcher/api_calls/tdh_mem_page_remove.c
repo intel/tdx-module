@@ -34,7 +34,6 @@
 #include "memory_handlers/sept_manager.h"
 #include "helpers/helpers.h"
 #include "accessors/ia32_accessors.h"
-#include "accessors/data_accessors.h"
 
 
 api_error_type tdh_mem_page_remove(page_info_api_input_t target_page_info, uint64_t target_tdr_pa)
@@ -96,6 +95,7 @@ api_error_type tdh_mem_page_remove(page_info_api_input_t target_page_info, uint6
         goto EXIT;
     }
 
+
     if (!verify_page_info_input(gpa_mappings, LVL_PT, LVL_PDPT))
     {
         TDX_ERROR("Input GPA page info (0x%llx) is not valid\n", gpa_mappings.raw);
@@ -114,7 +114,8 @@ api_error_type tdh_mem_page_remove(page_info_api_input_t target_page_info, uint6
                                                       &page_sept_entry_ptr,
                                                       &page_level_entry,
                                                       &page_sept_entry_copy,
-                                                      &sept_locked_flag);
+                                                      &sept_locked_flag,
+                                                      false);
     if (return_val != TDX_SUCCESS)
     {
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
@@ -142,7 +143,7 @@ api_error_type tdh_mem_page_remove(page_info_api_input_t target_page_info, uint6
     page_sept_entry_copy = *page_sept_entry_ptr;
 
     // Verify the located entry points is a leaf entry and relocate is allowed
-    if (!is_secure_ept_leaf_entry(&page_sept_entry_copy) ||
+    if (!is_secure_ept_leaf_entry(&page_sept_entry_copy, false) ||
         !sept_state_is_seamcall_leaf_allowed(TDH_MEM_PAGE_REMOVE_LEAF, page_sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
@@ -208,16 +209,20 @@ api_error_type tdh_mem_page_remove(page_info_api_input_t target_page_info, uint6
             extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, vm_id, page_level_entry, page_gpa.raw, *l2_sept_entry_ptr);
             fatal_error(FATAL_ERROR_ID_10, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
         }
-
+        
         atomic_mem_write_64b(&l2_sept_entry_ptr->raw, SEPTE_L2_INIT_VALUE);
 
         free_la(l2_sept_entry_ptr);
     }
 
-    // Atomically set the removed page Secure-EPT entry to SEPT_FREE or REMOVED (if import is in progress)
-    septe_set_free_or_removed_and_release_locks(&page_sept_entry_copy, tdcs_ptr);
-    atomic_mem_write_64b(&page_sept_entry_ptr->raw, page_sept_entry_copy.raw);
+    {
+        // Atomically set the removed page Secure-EPT entry to SEPT_FREE or REMOVED (if import is in progress)
+        septe_set_free_or_removed_and_release_locks(&page_sept_entry_copy, tdcs_ptr);
+    }
+
+    atomically_update_sept_state_keep_tdhp(page_sept_entry_ptr, page_sept_entry_copy.raw);
     septe_locked_flag = false;
+
 
     // Atomically decrement TDR child count by the amount of removed 4KB pages
     (void)_lock_xadd_64b(&tdr_ptr->management_fields.chldcnt, -(1 << (9 * page_level_entry)));
@@ -249,7 +254,7 @@ EXIT:
 
     if (sept_locked_flag)
     {
-        release_sharex_lock_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
         if (page_sept_entry_ptr != NULL)
         {
             free_la(page_sept_entry_ptr);

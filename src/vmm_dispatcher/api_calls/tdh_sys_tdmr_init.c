@@ -40,7 +40,7 @@
 
 #if (((TDMR_PAMT_INIT_COUNT * 16) % 64) != 0)
     #error "TDMR_4K_PAMT_INIT_COUNT is wrong"
-#endif // (((TDMR_PAMT_INIT_CO...
+#endif // (((TDMR_PAMT_INIT_COUNT * 16) % 64) != 0)
 
 // We can initialize bigger ranges for dynamic PAMT
 #define TDMR_4K_DYNAMIC_PAMT_INIT_COUNT _4KB

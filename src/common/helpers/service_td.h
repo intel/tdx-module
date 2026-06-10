@@ -158,6 +158,6 @@ _STATIC_INLINE_ bool_t is_servtd_singleton(uint16_t servtd_type)
     UNUSED(servtd_type);
     return true;
 }
-#endif // (MAX_SERVTDS>1)
+#endif // (MAX_SERVTDS > 1)
 
 #endif /* SRC_COMMON_HELPERS_SERVICE_TD_H_ */

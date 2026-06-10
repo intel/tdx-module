@@ -476,36 +476,39 @@ api_error_type tdh_import_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
         page_list_i++; // Update to the index of the next page in the list
 
         // If we haven't gone through all the pages, check for a pending interrupt
-        if ((page_list_i <= page_list_info.last_entry) && is_interrupt_pending_host_side())
+        if (page_list_i <= page_list_info.last_entry)
         {
-            /*
-             * There are more pages but there is a pending interrupt.
-             * Save the state for next invocation
-             */
-            migsc_p->interrupted_state.valid = true;
-            migsc_p->interrupted_state.func.raw = local_data_ptr->vmm_regs.rax;
-            migsc_p->interrupted_state.page_list_info.raw = page_list_info.raw;
-
-            migsc_p->interrupted_state.field_id.raw = next_field_id.raw;
-
-            migsc_p->interrupted_state.num_processed = page_list_i;
-
-            migsc_p->interrupted_state.tdvpr_pa = tdvpr_pa;
-
-            /*
-             * Update the VCPU state to mark it as being imported. This prevents the VCPU
-             * from being used if the import is not resumed and completed
-             * If the VCPU state was imported as disabled, keep it disabled.
-             */
-            if (tdvps_p->management.vcpu_state != VCPU_DISABLED)
+            return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock,true);
+            if (TDX_SUCCESS != return_val)
             {
-                tdvps_p->management.vcpu_state = VCPU_IMPORT;
-            }
+                /*
+                * There are more pages but there is a pending interrupt.
+                * Save the state for next invocation
+                */
+                migsc_p->interrupted_state.valid = true;
+                migsc_p->interrupted_state.func.raw = local_data_ptr->vmm_regs.rax;
+                migsc_p->interrupted_state.page_list_info.raw = page_list_info.raw;
 
-            local_data_ptr->vmm_regs.rcx = original_rcx;
-            local_data_ptr->vmm_regs.rdx = original_rdx;
-            return_val = TDX_INTERRUPTED_RESUMABLE;
-            goto EXIT;
+                migsc_p->interrupted_state.field_id.raw = next_field_id.raw;
+
+                migsc_p->interrupted_state.num_processed = page_list_i;
+
+                migsc_p->interrupted_state.tdvpr_pa = tdvpr_pa;
+
+                /*
+                * Update the VCPU state to mark it as being imported. This prevents the VCPU
+                * from being used if the import is not resumed and completed
+                * If the VCPU state was imported as disabled, keep it disabled.
+                */
+                if (tdvps_p->management.vcpu_state != VCPU_DISABLED)
+                {
+                    tdvps_p->management.vcpu_state = VCPU_IMPORT;
+                }
+
+                local_data_ptr->vmm_regs.rcx = original_rcx;
+                local_data_ptr->vmm_regs.rdx = original_rdx;
+                goto EXIT;
+            }
         }
     } while ((uint64_t)page_list_i <= page_list_info.last_entry);
 

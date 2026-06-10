@@ -199,6 +199,7 @@ static api_error_type add_l1_and_l2_pages(uint64_t version, tdr_t* tdr_ptr, pa_t
                                           pa_t flagged_sept_page_pa[MAX_VMS],
                                           pamt_walk_result_t sept_page_pamt_walk_result[MAX_VMS],
                                           ia32e_sept_t* page_sept_entry_ptr[MAX_VMS],
+                                          tdcs_t* tdcs_ptr,
                                           uint64_t original_rcx,
                                           uint64_t original_rdx)
 {
@@ -218,7 +219,7 @@ static api_error_type add_l1_and_l2_pages(uint64_t version, tdr_t* tdr_ptr, pa_t
         sept_set_mapped_non_leaf_given_hpa_with_hkid(
             page_sept_entry_ptr[0],
             set_hkid_to_pa(sept_page_pa[0], tdr_ptr->key_management_fields.hkid),
-            true); // Keep locked
+            true, false); // Keep locked
 
         // Nullify the page HPA to indicate it no longer needs to be allocated
         flagged_sept_page_pa[0].raw = NULL_PA;
@@ -231,15 +232,20 @@ static api_error_type add_l1_and_l2_pages(uint64_t version, tdr_t* tdr_ptr, pa_t
         {
             if (!(flagged_sept_page_pa[vm_id].raw & BIT(63)))
             {
-                // There's a new SEPT page (non-NULL and not pre-existing)
-                // Check for a pending interrupt only if at least one SEPT page has been added
-                if ((true == sept_page_added_flag) && is_interrupt_pending_host_side())
+                api_error_type return_val = TDX_SUCCESS;
+                if (true == sept_page_added_flag)
+                {
+                    // There's a new SEPT page (non-NULL and not pre-existing)
+                    // Check for a pending interrupt only if at least one SEPT page has been added
+                    return_val = check_host_interrupt_and_hp_bit(&tdcs_ptr->executions_ctl_fields.secure_ept_lock, true);
+                }
+                
+                if (TDX_SUCCESS != return_val)
                 {
                     // Restore the original RCX and RDX values and terminate the flow
                     local_data_ptr->vmm_regs.rcx = original_rcx;
                     local_data_ptr->vmm_regs.rdx = original_rdx;
-                    TDX_ERROR("Pending interrupt\n");
-                    return TDX_INTERRUPTED_RESUMABLE;
+                    return return_val;
                 }
 
                 init_new_sept_page(tdr_ptr, tdr_pa, sept_page_pa[vm_id],
@@ -249,10 +255,10 @@ static api_error_type add_l1_and_l2_pages(uint64_t version, tdr_t* tdr_ptr, pa_t
                 sept_set_aliased(page_sept_entry_ptr[0], vm_id);
 
                 // Map the new page in the parent table
-                sept_l2_set_mapped_non_leaf_given_hpa_and_hkid(
-                    page_sept_entry_ptr[vm_id],
-                    sept_page_pa[vm_id],
-                    tdr_ptr->key_management_fields.hkid);
+                sept_l2_set_mapped_non_leaf_given_hpa_and_hkid(page_sept_entry_ptr[vm_id],
+                                                               sept_page_pa[vm_id],
+                                                               tdr_ptr->key_management_fields.hkid
+                                                               );
 
                 // Nullify the page HPA to indicate it no longer needs to be allocated
                 flagged_sept_page_pa[vm_id].raw = NULL_PA;
@@ -368,6 +374,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
         goto EXIT;
     }
 
+
     if (!verify_page_info_input(gpa_mappings, LVL_PD, tdcs_ptr->executions_ctl_fields.eptp.fields.ept_pwl))
     {
         TDX_ERROR("Input GPA page info (0x%llx) is not valid\n", gpa_mappings.raw);
@@ -389,7 +396,8 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
                                                       &page_sept_entry_ptr[0],
                                                       &page_level_entry,
                                                       &page_sept_entry_copy,
-                                                      &sept_locked_flag);
+                                                      &sept_locked_flag,
+                                                      false);
     if (return_val != TDX_SUCCESS)
     {
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
@@ -455,7 +463,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
     // Step #3:
     // Add the new L1 and L2 SEPT pages
     return_val = add_l1_and_l2_pages(version, tdr_ptr, tdr_pa, sept_page_pa, flagged_sept_page_pa,
-                                     sept_page_pamt_walk_result, page_sept_entry_ptr, original_rcx, original_rdx);
+                                     sept_page_pamt_walk_result, page_sept_entry_ptr, tdcs_ptr, original_rcx, original_rdx);
 
     if (return_val != TDX_SUCCESS)
     {
@@ -498,7 +506,7 @@ EXIT_NO_GPR_CHANGE:
 
     if (sept_locked_flag)
     {
-        release_sharex_lock_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
     }
 
     if (tdcs_ptr != NULL)

@@ -334,7 +334,7 @@ void basic_memset(uint64_t dst, uint64_t dst_bytes, uint8_t val, uint64_t nbytes
 void basic_memset_to_zero(void * dst, uint64_t nbytes);
 #if (!defined(__cplusplus))
 void* memset(void *str, int c, uint32_t n);
-#endif // __cplusplus
+#endif // (!defined(__cplusplus))
 
 /**
  * @brief Copies source to destination using movdir64b
@@ -720,8 +720,7 @@ api_error_type check_lock_and_map_explicit_private_4k_hpa(
         page_type_t expected_pt,
         pamt_walk_result_t* pamt_walk_result,
         bool_t* is_locked,
-        void**         la
-        );
+        void**         la);
 
 /**
  * @brief Check an explicit page operand for non-shared access semantics, given it HPA, get and
@@ -846,8 +845,8 @@ api_error_type lock_sept_check_and_walk_private_gpa(
         ia32e_sept_t** sept_entry,
         ept_level_t* level,
         ia32e_sept_t* cached_sept_entry,
-        bool_t* is_sept_locked
-        );
+        bool_t* is_sept_locked,
+        bool_t set_d_bit);
 
 /**
  * @brief Translates gpa and returns requested EPT entry, and the reached walking level.
@@ -968,6 +967,7 @@ uint64_t get_page_size_per_level(ept_level_t ept_level);
  *                the walk failed from any reason and couldn't reach the requested level.
  * @param cached_ept_entry - Pointer to a EPT entry parameter. On return contains cached value
  *               of the last sampled EPT entry (even on failure).
+ * @set_d_bit - mark the non-leaf entry as dirty if needed
  *
  * @return Error code that states the reason of failure
  */
@@ -977,8 +977,8 @@ api_error_type walk_private_gpa(
         uint16_t hkid,
         ia32e_sept_t** sept_entry,
         ept_level_t* level,
-        ia32e_sept_t* cached_sept_entry
-        );
+        ia32e_sept_t* cached_sept_entry,
+        bool_t set_d_bit);
 
 /**
  * @brief Checks a GPA to be valid, if shared bit is 1, walks the shared EPT (taken from the TD VMCS)
@@ -1712,6 +1712,7 @@ _STATIC_INLINE_ bool_t op_state_is_export_in_order(op_state_e op_state)
     return state_flags_lookup[op_state].export_in_order;
 }
 
+
 _STATIC_INLINE_ bool_t op_state_is_import_in_order(op_state_e op_state)
 {
     tdx_debug_assert(op_state < NUM_OP_STATES);
@@ -1900,7 +1901,6 @@ api_error_type abort_import_session(
     tdcs_t                  *tdcs_p,
     api_error_type           status,
     uint32_t                 status_details);
-
 /**
  * @brief Generates as 256-bit random value by using RDSEED x86 instruction
  * @param rand - Pointer to output random 256-bit value\
@@ -2375,7 +2375,8 @@ _STATIC_INLINE_ bool_t is_gpa_attr_legal(const gpa_attr_single_vm_t gpa_attr_sin
         || (is_mmio &&
           !(gpa_attr_single_vm.xs == 0 && gpa_attr_single_vm.xu == 0 &&
             gpa_attr_single_vm.vgp == 0 && gpa_attr_single_vm.pwa == 0 &&
-            gpa_attr_single_vm.sss == 0)))
+            gpa_attr_single_vm.sss == 0))
+        )
     {
         TDX_ERROR("Illegal attributes - 0x%llx\n", gpa_attr_single_vm.raw)
         return false;
@@ -2760,9 +2761,14 @@ _STATIC_INLINE_ bool_t is_event_allowed(tdcs_t* tdcs_p, uint16_t evt, uint16_t e
     return false;
 }
 
+api_error_type check_host_interrupt_and_hp_bit(sharex_hp_lock_t* lock, bool_t is_resumeable);
+
 /**
  * @brief Stores host's XCR0 state before usage of AVX and marks AVX regs as 'used'
  */
 void prepare_state_for_avx_usage(void);
+
+tdx_features_enum0_t get_tdx_features_enum0(void);
+
 
 #endif /* SRC_COMMON_HELPERS_HELPERS_H_ */

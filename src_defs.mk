@@ -65,9 +65,7 @@ __ASM_OBJECTS = $(patsubst %.S, %.o, $(notdir $(ASM_SRC_FILES)))
 
 # Libraries
 CRYPTO_LIB_BUILD_FLAVOR := RELEASE
-ifndef CRYPTO_LIB_VERSION
 CRYPTO_LIB_VERSION      := 1.0.1
-endif # CRYPTO_LIB_VERSION
 CRYPTO_LIB_MAIN_DIR     := $(PROJ_DIR)/libs/ipp/cryptography-primitives-$(CRYPTO_LIB_VERSION)
 CRYPTO_LIB_SRC_DIR      := $(CRYPTO_LIB_MAIN_DIR)/sources
 CRYPTO_LIB_BUILD_PATH   := $(CRYPTO_LIB_MAIN_DIR)/_build/.build/$(CRYPTO_LIB_BUILD_FLAVOR)

@@ -36,34 +36,41 @@
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
 
-static void block_sept_entry(ia32e_sept_t* sept_entry, ept_level_t level, pa_t page_gpa, uint64_t target_tdr_pa)
+static void block_sept_entry(tdcs_t* tdcs_p, ia32e_sept_t* sept_entry, ept_level_t level, pa_t page_gpa, uint64_t target_tdr_pa)
 {
     sept_cleanup_if_pending(sept_entry, level);
-    switch (sept_entry->raw & SEPT_STATE_ENCODING_MASK)
+
+    uint64_t state_encoding_mask;
     {
-        case SEPT_STATE_NL_MAPPED_MASK:
-            // No need to save the permission bits
-            sept_update_state(sept_entry, SEPT_STATE_NL_BLOCKED_MASK);
-            // Clean up the permissions to mark as not-present
-            // No need to save the permissions bits as the unlock will set it back defaults
-            sept_entry->raw &= ~SEPT_PERMISSIONS_MASK;
-            break;
-        case SEPT_STATE_MAPPED_MASK:
-        case SEPT_STATE_BLOCKEDW_MASK:
-            // No need to save the L1 permission bits; their values are implicit
-            sept_entry->raw &= ~SEPT_PERMISSIONS_MASK;    // set permissions to NONE
-            sept_update_state(sept_entry, SEPT_STATE_BLOCKED_MASK);
-            break;
-        case SEPT_STATE_PEND_MASK:
-        case SEPT_STATE_PEND_BLOCKEDW_MASK:
-            // No need to save the permission bits
-            sept_update_state(sept_entry, SEPT_STATE_PEND_BLOCKED_MASK);
-            break;
-        default:
-        {
-            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, 0, level, page_gpa.raw, *sept_entry);
-            fatal_error(FATAL_ERROR_ID_12, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
-        }
+        state_encoding_mask = SEPT_STATE_ENCODING_MASK;
+    }
+
+    switch (sept_entry->raw & state_encoding_mask)
+    {
+    case SEPT_STATE_NL_MAPPED_MASK:
+        // No need to save the permission bits
+        sept_update_state(sept_entry, SEPT_STATE_NL_BLOCKED_MASK, false, false);
+        // Clean up the permissions to mark as not-present
+        // No need to save the permissions bits as the unlock will set it back defaults
+        sept_entry->raw &= ~SEPT_PERMISSIONS_MASK;
+        break;
+    case SEPT_STATE_MAPPED_MASK:
+    case SEPT_STATE_BLOCKEDW_MASK:
+        // No need to save the L1 permission bits; their values are implicit
+        sept_entry->raw &= ~SEPT_PERMISSIONS_MASK;    // set permissions to NONE
+        sept_update_state(sept_entry, SEPT_STATE_BLOCKED_MASK, false, false);
+        break;
+		UNUSED(tdcs_p);
+    case SEPT_STATE_PEND_MASK:
+    case SEPT_STATE_PEND_BLOCKEDW_MASK:
+        // No need to save the permission bits
+        sept_update_state(sept_entry, SEPT_STATE_PEND_BLOCKED_MASK, false, false);
+        break;
+    default:
+    {
+        extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, 0, level, page_gpa.raw, *sept_entry);
+        fatal_error(FATAL_ERROR_ID_12, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
+    }
     }
 }
 
@@ -78,7 +85,7 @@ static void block_l2_sept_entry(ia32e_sept_t* l2_sept_entry_ptr, bool_t is_l1_bl
     //     2.2.Else, save the R, W, Xs, Xu and PWA bits to TDRD, TDWR, TDXS, TDXU and TDPWA
     // 3. Clear R, W, Xs, Xu and PWA bits bits to 0
 
-    if (is_secure_ept_leaf_entry(&tmp_ept_entry))
+    if (is_secure_ept_leaf_entry(&tmp_ept_entry, true))
     {
         if (!is_l1_blockedw)
         {
@@ -185,7 +192,8 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
                                                       &page_sept_entry_ptr,
                                                       &page_level_entry,
                                                       &page_sept_entry_copy,
-                                                      &sept_locked_flag);
+                                                      &sept_locked_flag,
+                                                      false);
     if (return_val != TDX_SUCCESS)
     {
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
@@ -233,10 +241,12 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
     ia32e_sept_t new_septe_val;
     new_septe_val.raw = page_sept_entry_copy.raw;
 
-    block_sept_entry(&new_septe_val, sept_level_and_gpa.level, page_gpa, target_tdr_pa);
+    block_sept_entry(tdcs_ptr, &new_septe_val, sept_level_and_gpa.level, page_gpa, target_tdr_pa);
 
     // Update the SEPT entry in memory
-    atomic_mem_write_64b(&page_sept_entry_ptr->raw, new_septe_val.raw);
+    {
+        atomically_update_sept_state_keep_tdhp(page_sept_entry_ptr, new_septe_val.raw);
+    }
 
     // Block any L2 aliases
     // This is done after blocking the L1 SEPT entry.  This way, if there's an EPT violation in an
@@ -274,7 +284,7 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
     td_page_pa.page_4k_num = page_sept_entry_copy.base;
     td_page_pa = set_hkid_to_pa(td_page_pa, tdr_ptr->key_management_fields.hkid);
 
-    if (is_secure_ept_leaf_entry(&page_sept_entry_copy))
+    if (is_secure_ept_leaf_entry(&page_sept_entry_copy, false))
     {
         td_page_pamt_entry_ptr = pamt_implicit_get(td_page_pa, (page_size_t)page_level_entry);
     }
@@ -300,7 +310,7 @@ EXIT:
 
     if (sept_locked_flag)
     {
-        release_sharex_lock_ex(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_ex(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
         if (page_sept_entry_ptr != NULL)
         {
             free_la(page_sept_entry_ptr);

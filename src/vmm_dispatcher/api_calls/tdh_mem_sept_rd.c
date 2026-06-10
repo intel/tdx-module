@@ -123,7 +123,8 @@ api_error_type tdh_mem_sept_rd(page_info_api_input_t gpa_page_info, uint64_t tar
                                                       &sept_entry_ptr,
                                                       &sept_level_entry,
                                                       &sept_entry_copy,
-                                                      &sept_locked_flag);
+                                                      &sept_locked_flag,
+                                                      false);
 
     if (return_val != TDX_SUCCESS)
     {
@@ -193,7 +194,7 @@ EXIT:
 
     if (sept_locked_flag)
     {
-        release_sharex_lock_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
         if (sept_entry_ptr != NULL)
         {
             free_la(sept_entry_ptr);

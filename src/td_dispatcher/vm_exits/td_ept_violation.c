@@ -114,7 +114,7 @@ void td_ept_violation_exit(vmx_exit_qualification_t exit_qualification, vm_vmexi
         ia32e_sept_t  sept_entry;
         ia32e_sept_t* sept_entry_ptr = secure_ept_walk(tdcs_p->executions_ctl_fields.eptp, gpa,
                                                        tdr_p->key_management_fields.hkid,
-                                                       &level, &sept_entry, false);
+                                                       &level, &sept_entry, false, false, false);
 
         free_la(sept_entry_ptr);
 

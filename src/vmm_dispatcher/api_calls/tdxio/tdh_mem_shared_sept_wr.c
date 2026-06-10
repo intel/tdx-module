@@ -19,6 +19,7 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.
 //
 // SPDX-License-Identifier: MIT
+
 /**
  * @file tdh_mem_shared_sept_wr.c
  * @brief TDHMEMSHAREDSEPTWR API handler
@@ -182,7 +183,7 @@ EXIT:
 
     if (is_sept_locked)
     {
-        release_sharex_lock_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        release_sharex_lock_hp_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
     }
 
     if (tdcs_ptr != NULL)

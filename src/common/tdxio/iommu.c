@@ -209,20 +209,6 @@ api_error_type configure_iommu(
             KCB_WAC);
         is_kcbar_wac_set = true;
 
-        for (uint8_t rp_idx = 0; rp_idx < NUM_OF_RP; rp_idx++)
-        {
-            if ((hiop_info_ptr->hiop_rp_bit_vector & (uint16_t)BIT(rp_idx)) == 0)
-            {
-                const pmem_pcicmd_t pmem_pcicmd = {.raw = hiop_read_reg16(hiop_info_ptr, socket_io_info_ptr->pci_shadow[rp_idx].pcicmd_offst)};
-                if (pmem_pcicmd.bme == 1)
-                {
-                    TDX_ERROR("Invalid pmem_pcicmd BME or IOSE values - 0x%x\n", pmem_pcicmd.raw);
-                    return_val = api_error_with_operand_id(TDX_IOMMU_INVALID_STATE, OPERAND_ID_RCX);
-                    goto EXIT;
-                }
-            }
-        }
-
         if (!is_kcbar_disabled(kcbar_ptr))
         {
             return_val = api_error_with_operand_id(TDX_IOMMU_KCB_MUST_BE_DISABLED, OPERAND_ID_RCX);
@@ -578,7 +564,7 @@ api_error_type configure_rp(
     const uint64_t reg_value)
 {
     api_error_type return_val = UNINITIALIZE_ERROR;
-    rp_cfg_page_t *rp_cfg_ptr = NULL;
+    rp_cfg_page_t *rp_cfg_page_ptr = NULL;
     bool_t rp_seam_wac_set = false;
 
     // Verify no enhanced command is in progress
@@ -608,13 +594,6 @@ api_error_type configure_rp(
         goto EXIT;
     }
 
-    if (iommu_config_ptr->rp_reg_sts == 0) // First root port being configured
-    {
-        ecmd_reg_t ecmd_reg = {.raw = 0};
-        ecmd_reg.cmd = ECMD_CMD_RESET_PERFMON_COUNTER_CONFIGURATION;
-        vtbar_write_reg64(vtbar_ptr, VTBAR_ECMD_REG_OFFSET, ecmd_reg.raw);
-    }
-
     // Verify RP operand and extract its index in the IOMMU
     rp_bdf_reg_t rp_bdf_reg = {.raw = reg_value};
     uint8_t rp_idx = 0;
@@ -637,26 +616,25 @@ api_error_type configure_rp(
     }
 
     // Map RP_CFG_PAGE
-    rp_cfg_ptr = map_rp_mmcfg(
+    rp_cfg_page_ptr = map_rp_mmcfg(
         hiop_info_ptr,
         rp_bdf_reg.rp_bdf.dev_func);
 
     // Set SEAM only write access SAI policy for this RP IDE ECAP registers
     iommu_config_ptr->rp_wac_value[rp_idx] = set_seam_mode_wac(
         socket_io_info_ptr,
-        rp_cfg_ptr,
+        rp_cfg_page_ptr,
         RP_WAC);
 
     rp_seam_wac_set = true;
 
     if (!is_ide_disabled(
             socket_io_info_ptr,
-            rp_cfg_ptr))
+            rp_cfg_page_ptr))
     {
         return_val = api_error_with_operand_id(TDX_IOMMU_RP_IDE_MUST_BE_DISABLED, OPERAND_ID_R8);
         goto EXIT;
     }
-
 
     // Set RP status bit to mark it as configured
     iommu_config_ptr->rp_reg_sts |= (uint16_t)BIT(rp_idx);
@@ -668,14 +646,14 @@ EXIT:
     {
         remove_seam_mode_wac(
             socket_io_info_ptr,
-            rp_cfg_ptr,
+            rp_cfg_page_ptr,
             RP_WAC,
             iommu_config_ptr->rp_wac_value[rp_idx]);
     }
 
-    if (rp_cfg_ptr != NULL)
+    if (rp_cfg_page_ptr != NULL)
     {
-        free_la(rp_cfg_ptr);
+        free_la(rp_cfg_page_ptr);
     }
 
     return return_val;
@@ -688,7 +666,7 @@ api_error_type clear_rp(
     const uint64_t reg_value)
 {
     api_error_type return_val = UNINITIALIZE_ERROR;
-    rp_cfg_page_t *rp_cfg_ptr = NULL;
+    rp_cfg_page_t *rp_cfg_page_ptr = NULL;
 
     if (iommu_config_ptr->active_spdm_session_count != 0)
     {
@@ -720,14 +698,14 @@ api_error_type clear_rp(
     }
 
     // Map RP MMCFG page
-    rp_cfg_ptr = map_rp_mmcfg(
+    rp_cfg_page_ptr = map_rp_mmcfg(
         hiop_info_ptr,
         rp_bdf.rp_bdf.dev_func);
 
     // Clear SEAM only write access SAI policy from this RP IDE ECAP registers
     remove_seam_mode_wac(
         socket_io_info_ptr,
-        rp_cfg_ptr,
+        rp_cfg_page_ptr,
         RP_WAC,
         iommu_config_ptr->rp_wac_value[rp_idx]);
 
@@ -737,9 +715,9 @@ api_error_type clear_rp(
     return_val = TDX_SUCCESS;
 
 EXIT:
-    if (rp_cfg_ptr != NULL)
+    if (rp_cfg_page_ptr != NULL)
     {
-        free_la(rp_cfg_ptr);
+        free_la(rp_cfg_page_ptr);
     }
     return return_val;
 }

@@ -67,6 +67,13 @@
 #define IA32_FIXED_CTR0_MSR_ADDR                         0x309
 #define IA32_A_PMC0_MSR_ADDR                             0x4C1
 #define IA32_PERFEVTSEL0_MSR_ADDR                        0x186
+#define IA32_PERFEVTSEL1_MSR_ADDR                        0x187
+#define IA32_PERFEVTSEL2_MSR_ADDR                        0x188
+#define IA32_PERFEVTSEL3_MSR_ADDR                        0x189
+#define IA32_PERFEVTSEL4_MSR_ADDR                        0x18A
+#define IA32_PERFEVTSEL5_MSR_ADDR                        0x18B
+#define IA32_PERFEVTSEL6_MSR_ADDR                        0x18C
+#define IA32_PERFEVTSEL7_MSR_ADDR                        0x18D
 #define IA32_PERF_METRICS_MSR_ADDR                       0x329
 #define IA32_PEBS_ENABLE_MSR_ADDR                        0x3F1
 #define IA32_PEBS_DATA_CFG_MSR_ADDR                      0x3F2
@@ -89,6 +96,13 @@
 #define IA32_MISC_PACKAGE_CTLS_MSR_ADDR                  0xBC
 #define IA32_UARCH_MISC_CTL_MSR_ADDR                     0x1B01
 #define IA32_XAPIC_DISABLE_STATUS_MSR_ADDR               0xBD
+#define IA32_SMI_COUNT_MSR_ADDR                          0x34
+#define IA32_FEATURE_CONTROL_MSR_ADDR                    0x3A
+#define IA32_PPIN_CTL_MSR_ADDR                           0x4E
+#define IA32_BIOS_UPDT_TRIG_MSR_ADDR                     0x79
+#define IA32_BIOS_SIGN_ID_MSR_ADDR                       0x8B
+#define IA32_PLATFORM_INFO_MSR_ADDR                      0xCE
+#define IA32_FEATURE_ENABLES_MSR_ADDR                    0x140
 // Partial WBINVD related MSRs
 #define IA32_WBINVDP_MSR_ADDR                            0x98
 #define IA32_WBNOINVDP_MSR_ADDR                          0x99
@@ -469,7 +483,7 @@ typedef union ia32_misc_enable_u
         uint64_t bts_unavailable        : 1;  // 11
         uint64_t pebs_unavailable       : 1;  // 12
         uint64_t rsvd4                  : 3;  // 15:13
-        uint64_t enable_gv3             : 1;  // 16
+        uint64_t est                    : 1;  // 16
         uint64_t rsvd5                  : 1;  // 17
         uint64_t enable_monitor_fsm     : 1;  // 18
         uint64_t rsvd6                  : 3;  // 21:19
@@ -516,5 +530,35 @@ typedef union ia32_xapic_disable_status_u
     };
     uint64_t raw;
 } ia32_xapic_disable_status_t;
+
+typedef union ia32_perfevtsel_s
+{
+    struct
+    {
+        union
+        {
+            struct
+            {
+                uint8_t event_select;  // Bits 7:0
+                uint8_t umask;         // Bits 15:8
+            };
+            uint16_t event_id;         // Bits 15:0
+        };
+        uint8_t  usr        :  1;      // Bit 16
+        uint8_t  os         :  1;      // Bit 17
+        uint8_t  e          :  1;      // Bit 18
+        uint8_t  pc         :  1;      // Bit 19
+        uint8_t  interrupts :  1;      // Bit 20
+        uint8_t  any_thr    :  1;      // Bit 21
+        uint8_t  en         :  1;      // Bit 22
+        uint8_t  inv        :  1;      // Bit 23
+        uint8_t  cmask      :  8;      // Bits 31:24
+        uint32_t reserved_0 : 31;      // Bits 62:32
+        uint32_t forbidden  :  1;      // Bit 63:  This is a TDX definition, this bit is reserved for the real MSR
+    };
+
+    uint64_t raw;
+} ia32_perfevtsel_t;
+tdx_static_assert(sizeof(ia32_perfevtsel_t) == 8, ia32_perfevtsel_t);
 
 #endif /* SRC_COMMON_X86_DEFS_MSR_DEFS_H_ */

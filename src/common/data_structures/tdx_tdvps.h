@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -76,6 +76,14 @@ typedef enum
 
 #define MAX_VMS           4
 #define MAX_L2_VMS        (MAX_VMS - 1)
+typedef enum
+{
+    L1_TD = 0,
+    L2_VM_1 = 1,
+    L2_VM_2 = 2,
+    L2_VM_3 = 3,
+    L2_VM_MAX
+} l1_l2_vm_e;
 
 typedef union l2_vcpu_ctrl_u
 {
@@ -169,10 +177,9 @@ typedef struct tdvps_ve_info_s
     uint64_t  gla;
     uint64_t  gpa;
     uint16_t  eptp_index;
+    uint8_t reserved_0[2];
 
     // Non-Architectural Fields
-
-    uint8_t              reserved0[2];
     union
     {
         struct
@@ -182,7 +189,9 @@ typedef struct tdvps_ve_info_s
         };
         uint64_t inst_len_and_info;
     };
-    uint8_t              reserved1[84];
+
+    uint8_t ve_category;
+    uint8_t reserved_1[83];
 } tdvps_ve_info_t;
 tdx_static_assert(sizeof(tdvps_ve_info_t) == SIZE_OF_VE_INFO_STRUCT_IN_BYTES, tdvps_ve_info_t);
 
@@ -385,7 +394,7 @@ typedef struct tdvps_guest_state_s
 } tdvps_guest_state_t;
 tdx_static_assert(sizeof(tdvps_guest_state_t) == SIZE_OF_TDVPS_GUEST_STATE_IN_BYTES, tdvps_guest_state_t);
 
-#define SIZE_OF_TDVPS_GUEST_MSR_STATE_IN_BYTES   560
+#define SIZE_OF_TDVPS_GUEST_MSR_STATE_IN_BYTES   616
 #define OFFSET_OF_TDVPS_GUEST_MSR_STATE_IN_BYTES (OFFSET_OF_TDVPS_GUEST_STATE_IN_BYTES+SIZE_OF_TDVPS_GUEST_STATE_IN_BYTES)
 
 /**
@@ -424,6 +433,13 @@ typedef struct tdvps_guest_msr_state_s
     uint64_t ia32_fmask;
     uint64_t ia32_kernel_gs_base;
     uint64_t ia32_tsc_aux;
+    uint64_t ia32_fred_rsp0;
+    uint64_t ia32_pl0_ssp;
+    uint64_t ia32_user_msr_ctl;
+    uint64_t ia32_pebs_base;
+    uint64_t ia32_pebs_index;
+    uint64_t ia32_misc_enable;
+    uint64_t msr_smi_count;
 } tdvps_guest_msr_state_t;
 tdx_static_assert(sizeof(tdvps_guest_msr_state_t) == SIZE_OF_TDVPS_GUEST_MSR_STATE_IN_BYTES, tdvps_guest_msr_state_t);
 
@@ -518,7 +534,7 @@ typedef struct ALIGN(TDX_PAGE_SIZE_IN_BYTES) tdvps_s
     cpuid_control_t                cpuid_control[NUM_OF_CPUID_CTRL_ENTRIES];
     tdvps_guest_state_t            guest_state;
     tdvps_guest_msr_state_t        guest_msr_state;
-    uint8_t                        reserved_2[848]; /**< Reserved for aligning the next field */
+    uint8_t                        reserved_2[792]; /**< Reserved for aligning the next field */
 
     tdvps_td_vmcs_t                td_vmcs;
 

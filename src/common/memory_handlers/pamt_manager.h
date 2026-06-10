@@ -35,6 +35,9 @@
 
 #include "auto_gen/tdx_error_codes_defs.h"
 
+// With dynamic PAMT, the number of non-HKID bits in HPA must be at most 48
+#define MAX_DYNAMIC_PAMT_HKID_START_BIT         48
+
 /**
  * @brief Enum for page type in PAMT
  */
@@ -45,7 +48,6 @@ typedef enum {
     PT_TDR   = 4,
     PT_TDCX  = 5,
     PT_TDVPR = 6,
-    //reserved = 7,
     PT_EPT   = 8,
     // TDX-IO
     PT_DEVIFCS_R  = 9,
@@ -53,6 +55,7 @@ typedef enum {
     PT_IOMMU_MT   = 11,
     PT_MMIO_MT    = 12,
     PT_DEVIF_MT   = 13
+
 } page_type_t;
 
 /**
@@ -66,6 +69,9 @@ typedef enum {
 
 #define PAMT_ENTRY_SIZE_IN_BYTES        16
 
+#define PAMT_4K_ENTRIES_IN_2MB    (_2MB / _4KB)
+#define PAMT_4K_ENTRIES_IN_1GB    (_1GB / _4KB)
+#define PAMT_4K_ENTRIES_IN_CACHE  (MOVDIR64_CHUNK_SIZE / sizeof(pamt_entry_t))
 
 /**
  * @struct bepoch_t
@@ -108,6 +114,23 @@ typedef struct pamt_entry_s
 tdx_static_assert(sizeof(pamt_entry_t) == PAMT_ENTRY_SIZE_IN_BYTES, pamt_entry_t);
 tdx_static_assert((MOVDIR64_CHUNK_SIZE % sizeof(pamt_entry_t)) == 0, pamt_entry_t_2);
 
+/**
+ * @struct pamt_entry_t
+ *
+ * @brief PAMT entry structure
+ */
+typedef struct PACKED pamt_non_leaf_entry_s
+{
+    sharex_hp_lock_t entry_lock;     // bits  0 : 15
+    page_type_t      pt        :  5; // bits 16 : 20
+    uint64_t         reserved0 :  7; // bits 21 : 27
+    uint64_t         page_hpa0 : 36; // bits 28 : 63 (don't access this field directly, use accessors below)
+    uint64_t         reserved1 : 28; // bits 34 : 91
+    uint64_t         page_hpa1 : 36; // bits 92 :127 (don't access this field directly, use accessors below)
+} pamt_non_leaf_entry_t;
+tdx_static_assert(sizeof(pamt_non_leaf_entry_t) == PAMT_ENTRY_SIZE_IN_BYTES, pamt_non_leaf_entry_t);
+tdx_static_assert((MOVDIR64_CHUNK_SIZE % sizeof(pamt_non_leaf_entry_t)) == 0, pamt_non_leaf_entry_t_2);
+
 _STATIC_INLINE_ pa_t get_pamt_entry_owner(pamt_entry_t* pamt_entry)
 {
     pa_t owner_pa;
@@ -120,10 +143,26 @@ _STATIC_INLINE_ void set_pamt_entry_owner(pamt_entry_t* pamt_entry, pa_t owner)
     pamt_entry->owner = owner.page_4k_num;
 }
 
+_STATIC_INLINE_ pa_t get_pamt_node_page0(pamt_non_leaf_entry_t* pamt_entry)
+{
+    pa_t pa;
+    pa.raw = ((uint64_t)pamt_entry->page_hpa0) << 12;
+    return pa;
+}
+
+_STATIC_INLINE_ pa_t get_pamt_node_page1(pamt_non_leaf_entry_t* pamt_entry)
+{
+    pa_t pa;
+    pa.raw = ((uint64_t)pamt_entry->page_hpa1) << 12;
+    return pa;
+}
+
 #define PAMT_CHILD_ENTRIES              ( 512 )
 
 #define PAMT_2MB_ENTRIES_IN_1GB         ( PAMT_CHILD_ENTRIES )
 #define PAMT_4KB_ENTRIES_IN_1GB         ( PAMT_CHILD_ENTRIES * PAMT_2MB_ENTRIES_IN_1GB )
+
+#define DEFAULT_NUM_PAMT_PAGES          2
 
 /**
  * @struct pamt_block_t
@@ -134,10 +173,12 @@ _STATIC_INLINE_ void set_pamt_entry_owner(pamt_entry_t* pamt_entry, pa_t owner)
  */
 typedef struct pamt_block_s
 {
+    uint64_t      tdmr_base;
     pamt_entry_t* pamt_1gb_p;
     pamt_entry_t* pamt_2mb_p;
     pamt_entry_t* pamt_4kb_p;
 } pamt_block_t;
+
 
 /**
  * @brief This function gets a 4KB page aligned physical address and valid flag and returns a
@@ -210,38 +251,6 @@ api_error_code_e pamt_walk(pa_t pa, pamt_block_t pamt_block, lock_type_t leaf_lo
 void pamt_unwalk(pa_t pa, pamt_block_t pamt_block, pamt_entry_t* pamt_entry_p,
                  lock_type_t leaf_lock_type, page_size_t leaf_size);
 
-
-/**
- * @brief Given a page physical address, promote 512 leaf PAMT entries corresponding to
- *        the physical address by setting their parent PAMT entry LEAF bit and initializing
- *        the 512 leaf entries state to FREE.
- *
- * During the promotion this function acquires PAMT entry exclusive lock on new leaf entry
- * and shared locks on its parent PAMT entry when promoting to 2MB page.
- *
- * @param pa Physical address corresponding to the PAMT entry
- * @param new_leaf_size Size of the new promoted page
- *
- * @return Error code status
- */
-api_error_code_e pamt_promote(pa_t pa, page_size_t new_leaf_size);
-
-
-/**
- * @brief Given a page physical address [pa], locate its leaf PAMT entry and demote it to 512
- *        child leaf PAMT entries.
- *
- *  During the demotion, this function acquires PAMT entry exclusive lock on the demoted
- *  entry and shared locks on its parent PAMT entry when demoting a 2MB page.
- *
- * @param pa Physical address corresponding to the PAMT entry
- * @param leaf_size Size of the page to demote
- *
- * @return Error code status
- */
-api_error_code_e pamt_demote(pa_t pa, page_size_t leaf_size);
-
-
 /**
  * @brief Returns a linear address of pamt_entry describing the given pa. Does not acquires any locks.
  *        Function cannot fail, and failure will result in module halt.
@@ -289,5 +298,9 @@ void pamt_implicit_release_lock(pamt_entry_t* pamt_entry, lock_type_t leaf_lock_
  * @return if the 2MB range free or not
  */
 bool_t pamt_is_2mb_range_free(pa_t pa, pamt_block_t* pamt_block);
+
+api_error_code_e pamt_promote(pa_t pa, page_size_t new_leaf_size, uint64_t removed_child_pages[DEFAULT_NUM_PAMT_PAGES]);
+
+api_error_code_e pamt_demote(pa_t pa, page_size_t leaf_size, uint64_t pamt_hpa0, uint64_t pamt_hpa1);
 
 #endif /* SRC_COMMON_MEMORY_HANDLERS_PAMT_MANAGER_H_ */

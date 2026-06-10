@@ -198,7 +198,6 @@ api_error_code_e non_shared_hpa_metadata_check_and_lock(
         pamt_unwalk(hpa, *pamt_block, pamt_entry_lp, lock_type, *leaf_size);
         return TDX_PAGE_METADATA_INCORRECT;
     }
-
     *pamt_entry = pamt_entry_lp;
 
     return TDX_SUCCESS;
@@ -816,7 +815,27 @@ api_error_type lock_sept_check_and_walk_private_gpa(
     return lock_sept_check_and_walk_internal(tdcs_p, operand_id, gpa,
                                              lock_type, // Lock the SEPT tree
                                              true,      // Check private GPA validity
-                                             false,     // Walk to requested level
+                                             SEPT_WALK_TO_LEVEL,     // Walk to requested level
+                                             sept_entry_ptr, level, cached_sept_entry, is_sept_locked);
+}
+
+api_error_type lock_sept_check_and_walk_private_gpa_to_leaf(
+        tdcs_t* tdcs_p,
+        uint64_t operand_id,
+        pa_t gpa,
+        lock_type_t lock_type,
+        ia32e_sept_t** sept_entry_ptr,
+        ept_level_t* level,
+        ia32e_sept_t* cached_sept_entry,
+        bool_t* is_sept_locked
+        )
+{
+    tdx_debug_assert(lock_type != TDX_LOCK_NO_LOCK);
+
+    return lock_sept_check_and_walk_internal(tdcs_p, operand_id, gpa,
+                                             lock_type, // Lock the SEPT tree
+                                             true,      // Check private GPA validity
+                                             SEPT_WALK_TO_LEAF,
                                              sept_entry_ptr, level, cached_sept_entry, is_sept_locked);
 }
 
@@ -836,7 +855,7 @@ api_error_type lock_sept_and_walk_gpa(
     return lock_sept_check_and_walk_internal(tdcs_p, operand_id, gpa,
                                              lock_type, // Lock the SEPT tree
                                              false,     // Do not check private GPA validity
-                                             false,     // Walk to requested level
+                                             SEPT_WALK_TO_LEVEL,     // Walk to requested level
                                              sept_entry_ptr, level, cached_sept_entry, is_sept_locked);
 }
 
@@ -878,9 +897,9 @@ api_error_type walk_private_gpa(
                                              sept_entry_ptr, level, cached_sept_entry, &is_sept_locked);
 }
 
-static void inject_ve_and_return_to_td(tdvps_t* tdvps_p, pa_t gpa, vmx_exit_qualification_t exit_qual)
+static void inject_ve_and_return_to_td(tdvps_t* tdvps_p, pa_t gpa, vmx_exit_qualification_t exit_qual, ve_category_e category)
 {
-    tdx_inject_ve(VMEXIT_REASON_EPT_VIOLATION, exit_qual.raw, tdvps_p, gpa.raw, 0);
+    tdx_inject_ve(VMEXIT_REASON_EPT_VIOLATION, exit_qual.raw, category, tdvps_p, gpa.raw, 0);
     bus_lock_exit();
     check_pending_voe_on_debug_td_return();
     tdx_return_to_td(true, false, &tdvps_p->guest_state.gpr_state);
@@ -902,6 +921,74 @@ static void map_permissions(vmx_exit_qualification_t *exit_qual, access_rights_t
         exit_qual->ept_violation.data_write = 0;
     }
     exit_qual->ept_violation.insn_fetch = 0;
+}
+
+void walk_and_map_guest_side_gpa(
+        const tdcs_t *const tdcs_p,
+        const pa_t gpa,
+        const uint16_t hkid,
+        const mapping_type_t mapping_type,
+        void ** la
+        )
+{
+    ia32e_eptp_t eptp;
+    ia32e_ept_t ept_entry_copy = {.raw = 0};
+    ept_walk_result_t walk_result;
+    access_rights_t accumulated_rwx;
+
+    bool_t gpaw = tdcs_p->executions_ctl_fields.gpaw;
+    vmx_exit_qualification_t exit_qual;
+
+    pa_t page_hpa;
+
+    bool_t shared_bit = get_gpa_shared_bit(gpa.raw, gpaw);
+
+    access_rights_t access_rights = { .raw = 0 };
+
+    access_rights.r = 1;
+    access_rights.w = (mapping_type == TDX_RANGE_RW) ? 1 : 0;
+    access_rights.x = (uint8_t)0;
+
+    exit_qual.raw = (uint64_t)access_rights.raw;
+
+    if (shared_bit)
+    {
+        // read the shared EPT from the TD VMCS
+        ia32_vmread(VMX_GUEST_SHARED_EPT_POINTER_FULL_ENCODE, &eptp.raw);
+        eptp.fields.enable_ad_bits = tdcs_p->executions_ctl_fields.eptp.fields.enable_ad_bits;
+        eptp.fields.enable_sss_control = tdcs_p->executions_ctl_fields.eptp.fields.enable_sss_control;
+        eptp.fields.ept_ps_mt = tdcs_p->executions_ctl_fields.eptp.fields.ept_ps_mt;
+        eptp.fields.ept_pwl = tdcs_p->executions_ctl_fields.eptp.fields.ept_pwl;
+    }
+    else
+    {
+        eptp.raw = tdcs_p->executions_ctl_fields.eptp.raw;
+    }
+
+    walk_result = gpa_translate(eptp, gpa, !shared_bit, hkid, access_rights,
+                                &page_hpa, &ept_entry_copy, &accumulated_rwx);
+
+    if (walk_result != EPT_WALK_SUCCESS)
+    {
+        *la = NULL;
+        return;
+    }
+
+    if (shared_bit)
+    {
+        if (ept_entry_copy.fields_4k.mt != MT_WB)
+        {
+            *la = map_pa_non_wb(page_hpa.raw_void, mapping_type);
+        }
+        else
+        {
+            *la = map_pa(page_hpa.raw_void, mapping_type);
+        }
+    }
+    else
+    {
+        *la = map_pa_with_hkid(page_hpa.raw_void, hkid, mapping_type);
+    }
 }
 
 api_error_code_e check_walk_and_map_guest_side_gpa(
@@ -985,7 +1072,7 @@ api_error_code_e check_walk_and_map_guest_side_gpa(
             else
             {
                 // The TD is configured to throw a #VE on access to a PENDING page
-                inject_ve_and_return_to_td(tdvps_p, gpa, exit_qual);
+                inject_ve_and_return_to_td(tdvps_p, gpa, exit_qual, VE_INFO_PENDING);
             }
         }
         else
@@ -1005,7 +1092,7 @@ api_error_code_e check_walk_and_map_guest_side_gpa(
     }
     else IF_RARE (walk_result == EPT_WALK_CONVERTIBLE_VIOLATION)
     {
-        inject_ve_and_return_to_td(tdvps_p, gpa, exit_qual);
+        inject_ve_and_return_to_td(tdvps_p, gpa, exit_qual, VE_INFO_ARCH);
     }
 
     // Else - success
@@ -1126,6 +1213,24 @@ void associate_vcpu_initial(tdvps_t * tdvps_ptr,
     (void)_lock_xadd_32b(&(tdcs_ptr->management_fields.num_assoc_vcpus), 1);
 }
 
+// Initialize the guest IA32_MISC_ENABLE image in TDVPS, taking into account the TD's ATTRIBUTES and CPUID_FLAGS.
+static void init_guest_ia32_misc_enable(tdvps_t * tdvps_ptr, tdcs_t * tdcs_ptr)
+{
+    ia32_misc_enable_t misc_enable;
+
+    ia32_misc_enable_t pl_misc_enable = { .raw = get_global_data()->plt_common_config.ia32_misc_enable.raw };
+
+    misc_enable.raw = 0;
+    misc_enable.fast_strings = pl_misc_enable.fast_strings;
+    misc_enable.perfmon_available = tdcs_ptr->executions_ctl_fields.attributes.perfmon;
+    misc_enable.bts_unavailable = pl_misc_enable.bts_unavailable;
+    misc_enable.pebs_unavailable = pl_misc_enable.pebs_unavailable & ~tdcs_ptr->executions_ctl_fields.attributes.perfmon;
+    misc_enable.est = tdcs_ptr->executions_ctl_fields.cpuid_flags.est_supported;
+    misc_enable.enable_monitor_fsm = tdcs_ptr->executions_ctl_fields.cpuid_flags.monitor_mwait_supported;
+
+    tdvps_ptr->guest_msr_state.ia32_misc_enable = misc_enable.raw;
+}
+
 void init_tdvps_fields(tdcs_t * tdcs_ptr, tdvps_t * tdvps_ptr)
 {
     tdx_module_global_t* tdx_global_data_ptr = get_global_data();
@@ -1193,6 +1298,7 @@ void init_tdvps_fields(tdcs_t * tdcs_ptr, tdvps_t * tdvps_ptr)
     {
         // Initial value of IA32_SPEC_CTRL can be calculated by calculate_real_ia32_spec_ctrl(tdcs_p, 0)
         tdvps_ptr->guest_msr_state.ia32_spec_ctrl = calculate_real_ia32_spec_ctrl(tdcs_ptr, 0);
+        init_guest_ia32_misc_enable(tdvps_ptr, tdcs_ptr);
     }
 }
 
@@ -1329,7 +1435,7 @@ uint64_t calculate_virt_tsc(uint64_t native_tsc, uint64_t tsc_multiplier, uint64
     return (tmp_64b + tsc_offset);
 }
 
-cr_write_status_e write_guest_cr0(uint64_t value, bool_t allow_pe_disable)
+uint16_t write_guest_cr0(uint64_t value, bool_t allow_pe_disable)
 {
     ia32_cr0_t cr0;
     ia32_cr4_t cr4;
@@ -1375,7 +1481,7 @@ cr_write_status_e write_guest_cr0(uint64_t value, bool_t allow_pe_disable)
     if ((!cr0.pe && !allow_pe_disable) || !cr0.ne || cr0.nw || cr0.cd || cr0.reserved_3)
     {
         TDX_LOG("MOV to CR0 - illegal bits set - 0x%llx\n", cr0.raw);
-        return CR_ACCESS_NON_ARCH;
+        return construct_msr_status_with_ve_category(CR_ACCESS_NON_ARCH, VE_INFO_UNSUPPORTED_FEATURE);
     }
 
     // Update the value of guest CR0.
@@ -1424,8 +1530,7 @@ bool_t is_guest_cr4_allowed_by_td_config(ia32_cr4_t cr4, tdcs_t* tdcs_p, ia32_xc
     return true;
 }
 
-cr_write_status_e write_guest_cr4(uint64_t value, tdcs_t* tdcs_p
-                                  )
+cr_write_status_e write_guest_cr4(uint64_t value, tdcs_t* tdcs_p)
 {
     ia32_cr0_t cr0;
     ia32_cr4_t cr4;
@@ -1462,11 +1567,43 @@ cr_write_status_e write_guest_cr4(uint64_t value, tdcs_t* tdcs_p
         return CR_ACCESS_GP;
     }
 
+    if (tdcs_p->executions_ctl_fields.td_ctls.reduce_ve)
+    {
+        ia32_cr4_t cr4_read_shadow;
+        ia32_vmread(VMX_CR4_READ_SHADOW_ENCODE, &cr4_read_shadow.raw);
+
+        if (tdcs_p->executions_ctl_fields.cpuid_flags.mce_not_supported)
+        {
+            // MCE is virtualized as not supported.
+            // Do not allow the guest to modify virtual CR4.MCE from 0 to 1.
+            // Note that if CR4.MCE (in the CR4 read shadow) is already 1, it's OK (for backward compatibility)
+            if (!cr4_read_shadow.mce && cr4.mce)
+            {
+                return CR_ACCESS_GP;
+            }
+        }
+
+        // The guest is allowed to update virtual CR4.MCE.
+        // Update CR4 read shadow to reflect this.
+        // Note that the real CR4 is not updated.
+        cr4_read_shadow.mce = cr4.mce;
+        ia32_vmwrite(VMX_CR4_READ_SHADOW_ENCODE, cr4_read_shadow.raw);
+
+        return CR_ACCESS_SUCCESS;
+    }
+    else
+    {
+        if (!cr4.mce)
+        {
+            return construct_msr_status_with_ve_category(CR_ACCESS_NON_ARCH, VE_INFO_CONFIG_PARAVIRT);
+        }
+    }
+
     // In all other cases, there was no architectural error but there was
     // a VM exit due to bit values that are not compatible with TDX.
     // In these cases throw a #VE.
     TDX_LOG("MOV to CR4 - other case (0x%lx) - #VE", value);
-    return CR_ACCESS_NON_ARCH;
+    return construct_msr_status_with_ve_category(CR_ACCESS_NON_ARCH, VE_INFO_UNSUPPORTED_FEATURE);
 }
 
 bool_t verify_td_attributes(td_param_attributes_t attributes, bool_t is_import)
@@ -1841,7 +1978,8 @@ bool_t is_msr_dynamic_bit_cleared(tdcs_t* tdcs_ptr, uint32_t msr_addr, msr_bitma
     {
         // No other MSR's are currently expected for rare case
         tdx_debug_assert((msr_addr == IA32_PERF_CAPABILITIES_MSR_ADDR) ||
-                         (msr_addr == IA32_PERF_METRICS_MSR_ADDR));
+                         (msr_addr == IA32_PERF_METRICS_MSR_ADDR) ||
+                         ((msr_addr >= IA32_PERFEVTSEL0_MSR_ADDR) && (msr_addr <= IA32_PERFEVTSEL7_MSR_ADDR)));
 
         if ((msr_addr == IA32_PERF_CAPABILITIES_MSR_ADDR) &&
             (is_perfmon_supported_in_tdcs(tdcs_ptr) && is_pt_supported_in_tdcs(tdcs_ptr)))
@@ -1852,6 +1990,12 @@ bool_t is_msr_dynamic_bit_cleared(tdcs_t* tdcs_ptr, uint32_t msr_addr, msr_bitma
         if ((msr_addr == IA32_PERF_METRICS_MSR_ADDR) &&
             (is_perfmon_supported_in_tdcs(tdcs_ptr) &&
              get_global_data()->plt_common_config.ia32_perf_capabilities.perf_metrics_available))
+        {
+            return true;
+        }
+
+        if ((msr_addr >= IA32_PERFEVTSEL0_MSR_ADDR) && (msr_addr <= IA32_PERFEVTSEL7_MSR_ADDR) &&
+            is_perfmon_supported_in_tdcs(tdcs_ptr) && (tdcs_ptr->executions_ctl2_fields.event_filters_num == 0))
         {
             return true;
         }
@@ -1927,8 +2071,10 @@ void set_xbuff_offsets_and_size(tdcs_t* tdcs_ptr, uint64_t xfam)
 
 void init_imported_td_state_mutable (tdcs_t* tdcs_ptr)
 {
-    UNUSED(tdcs_ptr);
-    // Do nothing
+    // Immutable CPUID flags were upated before, during immutable state import. Now update the mutable CPUID flags.
+    update_mutable_cpuid_flags(tdcs_ptr);
+
+    /* OTHER DETAILS ARE NOT PROVIDED, REFER TO THE TDR/TDCS SPREADSHEET */
 }
 
 bool_t td_immutable_state_cross_check(tdcs_t* tdcs_ptr)
@@ -1956,7 +2102,7 @@ api_error_type check_and_init_imported_td_state_immutable (tdcs_t* tdcs_ptr)
     // num_vcpus sanity check (at this point num_vcpus and max_vcpus already set)
     if (tdcs_ptr->management_fields.num_vcpus > tdcs_ptr->executions_ctl_fields.max_vcpus)
     {
-        return api_error_with_operand_id_fatal(TDX_OPERAND_INVALID, OPERAND_ID_MAX_VCPUS);
+        return api_error_with_operand_id_fatal(TDX_OPERAND_INVALID, OPERAND_ID_NUM_VCPUS);
     }
 
     /**
@@ -1983,12 +2129,28 @@ api_error_type check_and_init_imported_td_state_immutable (tdcs_t* tdcs_ptr)
      */
     tdcs_ptr->executions_ctl_fields.td_ctls.pending_ve_disable = tdcs_ptr->executions_ctl_fields.attributes.sept_ve_disable;
 
+    if (!check_imported_cpuid_fixed0_bitmap(tdcs_ptr))
+    {
+        return api_error_with_operand_id_fatal(TDX_OPERAND_INVALID, OPERAND_ID_CPUID_FIXED0_BITMAP);
+    }
+
     // Check the imported CPUID(0x1F) values and set CPUID(0xB) values
 
     api_error_type return_val = check_cpuid_1f_and_compute_cpuid_0b(tdcs_ptr, false);
     if (return_val != TDX_SUCCESS)
     {
         return return_val;
+    }
+
+    // Check that all CPUID4_NATIVE_VALID are set.
+    // If not (e.g., importing from an older TDX module), clear TDCS.VE_REDUCTION_VALID;
+    // import will fail later if TDH.IMPORT.STATE.TD tries to set TD_CTLS.REDUCE_VE.
+    for (uint32_t i = 0; i < NUM_CPUID4_NATIVE; i++)
+    {
+        if (!tdcs_ptr->executions_ctl2_fields.cpuid4_native_valid[i])
+        {
+            tdcs_ptr->executions_ctl_fields.ve_reduction_valid = false;
+        }
     }
 
     calculate_servtd_hash(tdcs_ptr, true);
@@ -2293,7 +2455,6 @@ uint32_t prepare_handoff_data(uint16_t hv, uint32_t size, uint8_t* data)
     // Copy global DEVIFMT_ROOT_NODE
     copy_global_field_to_handoff(&g_d->devifmt_root_node, sizeof(g_d->devifmt_root_node),
                                  &data, &size, &written_size);
-
     return written_size;
 }
 
@@ -2802,6 +2963,121 @@ void calculate_servtd_hash(tdcs_t* tdcs_ptr, bool_t handle_avx_state)
             FATAL_ERROR();
         }
     }
+}
+
+void update_mutable_cpuid_flags(tdcs_t* tdcs_p)
+{
+    bool_t reduce_ve = tdcs_p->executions_ctl_fields.td_ctls.reduce_ve;
+    feature_paravirt_ctls_t pv_ctls = tdcs_p->executions_ctl2_fields.feature_paravirt_ctls;
+
+    // Update mutable CPUID flags based on CPUID(1)
+    uint32_t cpuid_i = get_cpuid_lookup_entry(1, CPUID_LOOKUP_IDX_NA);
+    tdx_sanity_check(cpuid_i != CPUID_LOOKUP_IDX_NA, SCEC_HELPERS_SOURCE, cpuid_i);
+
+    cpuid_config_return_values_t cpuid_values = tdcs_p->cpuid_config_vals[cpuid_i];
+
+    cpuid_01_ecx_t cpuid_01_ecx = { .raw = cpuid_values.ecx };
+    tdcs_p->executions_ctl_fields.cpuid_flags.dca_supported = cpuid_01_ecx.dca && (!reduce_ve || pv_ctls.dca);
+    tdcs_p->executions_ctl_fields.cpuid_flags.tsc_deadline_supported = cpuid_01_ecx.tsc_deadline && (!reduce_ve || pv_ctls.tsc_deadline);
+    tdcs_p->executions_ctl_fields.cpuid_flags.est_supported = cpuid_01_ecx.est && (!reduce_ve || pv_ctls.est);
+    tdcs_p->executions_ctl_fields.cpuid_flags.tm2_supported = cpuid_01_ecx.tm2 && (!reduce_ve || pv_ctls.tm2);
+
+    cpuid_01_edx_t cpuid_01_edx = { .raw = cpuid_values.edx };
+
+    // CPUID_FLAGS with Negative Polarity:
+    tdcs_p->executions_ctl_fields.cpuid_flags.mce_not_supported = reduce_ve && !(pv_ctls.mca && cpuid_01_edx.mce);
+    tdcs_p->executions_ctl_fields.cpuid_flags.mca_not_supported = reduce_ve && !(pv_ctls.mca && cpuid_01_edx.mca);
+    tdcs_p->executions_ctl_fields.cpuid_flags.mtrr_not_supported = reduce_ve && !(pv_ctls.mtrr && cpuid_01_edx.mtrr);
+
+    tdcs_p->executions_ctl_fields.cpuid_flags.acpi_supported = cpuid_01_edx.acpi && (!reduce_ve || pv_ctls.acpi);
+
+    // Update mutable CPUID flags based on CPUID(7, 0)
+    cpuid_i = get_cpuid_lookup_entry(7, 0);
+    tdx_sanity_check(cpuid_i != CPUID_LOOKUP_IDX_NA, SCEC_HELPERS_SOURCE, cpuid_i);
+
+    cpuid_values = tdcs_p->cpuid_config_vals[cpuid_i];
+
+    cpuid_07_00_ebx_t cpuid_07_00_ebx = { .raw = cpuid_values.ebx };
+
+    tdcs_p->executions_ctl_fields.cpuid_flags.rdt_a_supported = cpuid_07_00_ebx.rdt_a && (!reduce_ve || pv_ctls.rdt_a);
+    tdcs_p->executions_ctl_fields.cpuid_flags.rdt_m_supported = cpuid_07_00_ebx.rdt_m && (!reduce_ve || pv_ctls.rdt_m);
+
+    cpuid_07_00_ecx_t cpuid_07_00_ecx = { .raw = cpuid_values.ecx };
+
+    tdcs_p->executions_ctl_fields.cpuid_flags.tme_supported = cpuid_07_00_ecx.tme && (!reduce_ve || pv_ctls.tme);
+
+    cpuid_07_00_edx_t cpuid_07_00_edx = { .raw = cpuid_values.edx };
+
+    tdcs_p->executions_ctl_fields.cpuid_flags.pconfig_supported = cpuid_07_00_edx.pconfig_mktme && (!reduce_ve || pv_ctls.pconfig);
+
+    // CPUID_FLAGS with Negative Polarity:
+    tdcs_p->executions_ctl_fields.cpuid_flags.core_capabilities_not_supported = reduce_ve && !(pv_ctls.core_capabilities && cpuid_07_00_edx.ia32_core_capabilities_present);
+}
+
+// Check the imported CPUID_FIXED0_BITMAP.  Each bit that is set to 1 must pass one of the two conditions:
+// The same bit in FIXED0_BITMAP of the local lookup table is 0, or
+// The applicable leaf is in the local lookup table, and all its sub-leaves virtual values in TDCS are 0.
+bool_t check_imported_cpuid_fixed0_bitmap(tdcs_t* tdcs_p)
+{
+    // Get bits that are 1 in the imported CPUID_FIXED0_BITMAP, but 0 in the FIXED0_BITMAP of the local lookup table.
+    cpuid_fixed0_bitmap_t bitmap = { .raw = tdcs_p->executions_ctl2_fields.cpuid_fixed0_bitmap & ~(uint64_t)CPUID_FIXED0_BITMAP };
+    uint32_t leaf = 0;
+
+    // all reserved bits in the bitmap must be 0
+    if (bitmap.raw & BITS(CPUID_FIXED0_BITMAP_BASE_RANGE - 1, CPUID_LAST_BASE_LEAF + 1))
+    {
+        return false;
+    }
+
+    uint64_t leaf_mask = BIT(0);
+    for (uint32_t i = 0; i <= CPUID_LAST_EXTENDED_LEAF; i++, leaf++, leaf_mask <<= 1)
+    {
+        if (i == CPUID_LAST_BASE_LEAF + 1)
+        {
+            // reserved bits handling is covered above, when reaching reserved range jump straight to the extended range
+            i = CPUID_FIRST_EXTENDED_LEAF;
+            leaf_mask = BIT(CPUID_FIXED0_BITMAP_BASE_RANGE);
+        }
+
+        if (bitmap.raw & leaf_mask)
+        {
+            // This leaf is marked fixed-0 in the imported CPUID_FIXED0_BITMAP, but not in the
+            // FIXED0_BITMAP of the local lookup table.  This can still be OK.
+            // Check that it appears in the local lookup table and that its virtual value in TDCS
+            // for all sub-leaves is 0.
+
+            uint32_t sub_leaf = 0;
+            uint32_t cpuid_index = get_cpuid_lookup_entry(leaf, sub_leaf);
+
+            // A value of -1 indicates that this CPUID leaf with sub-leaf 0 is not supported
+            if (cpuid_index == CPUID_LOOKUP_IDX_NA)
+            {
+                return false;
+            }
+
+            // Loop on all supported sub-leaves
+            do
+            {
+                // All values must be 0
+                if (!tdx_memcmp_to_zero(tdcs_p->cpuid_config_vals[cpuid_index].values, sizeof(cpuid_config_return_values_t)))
+                {
+                    return false;
+                }
+
+                if (cpuid_lookup[cpuid_index].leaf_subleaf.subleaf == CPUID_SUBLEAF_NA)
+                {
+                    // all subleaves were processed, move to the next leaf (assuming there is no leaf with both specific subleaf value and CPUID_SUBLEAF_NA)
+                    break;
+                }
+
+                // Get the next sub-leaf
+                sub_leaf++;
+                cpuid_index = get_cpuid_lookup_entry(leaf, sub_leaf);
+            } while (cpuid_index != CPUID_LOOKUP_IDX_NA);
+        }
+    } // for (uint32_t i = 0; i <= CPUID_LAST_EXTENDED_LEAF; i++, leaf++, leaf_mask <<= 1)
+
+    return true;
 }
 
 api_error_type check_cpuid_1f_and_compute_cpuid_0b(tdcs_t* tdcs_p, bool_t allow_null)

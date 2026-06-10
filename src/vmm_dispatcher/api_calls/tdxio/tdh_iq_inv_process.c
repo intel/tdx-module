@@ -28,6 +28,62 @@
 #include "tdxio/inv_queue.h"
 #include "tdxio/vtbar.h"
 #include "tdxio/dmar.h"
+#include "common/memory_handlers/sept_manager.h"
+
+_STATIC_INLINE_ void emulate_wait_complete(
+    tdcs_t *const tdcs_ptr,
+    tdcs_tdxio_fields_t *const tdcs_tdxio_fields_ptr)
+{
+    if (!tdcs_tdxio_fields_ptr->status_complete_write)
+    {
+        return;
+    }
+
+    uint32_t *wait_status_ptr = NULL;
+    api_error_type return_val = UNINITIALIZE_ERROR;
+    ia32e_sept_t *sept_entry;
+    ia32e_sept_t sept_entry_copy;
+    ept_level_t ept_level = LVL_PT;
+    bool_t sept_locked_flag = false;
+
+    // Do not call again
+    tdcs_tdxio_fields_ptr->status_complete_write = false;
+
+    /**
+     * @brief Get the HPA for the Status Complete GPA. The page must be guest accessible (Mapped) otherwise
+     * TDX Module does not write the status and doesn't call EPT violation.
+     * VMM can block the page but it can simply not commit the TD invalidations. With the implementation
+     * of "pinned" pages, the VMM will not be able to block the private page.
+     */
+    return_val = lock_sept_check_and_walk_private_gpa_to_leaf(tdcs_ptr,
+                                                                OPERAND_ID_RCX,
+                                                                tdcs_tdxio_fields_ptr->status_complete_gpa,
+                                                                TDX_LOCK_SHARED,
+                                                                &sept_entry,
+                                                                &ept_level,
+                                                                &sept_entry_copy,
+                                                                &sept_locked_flag);
+
+    if (return_val != TDX_SUCCESS)
+    {
+        return; // No error, just a silent Status Write drop
+    }
+
+    // Now we can map and write status
+    pa_t wait_status_gpa_with_hkid = {.raw = leaf_ept_entry_to_hpa(*sept_entry, tdcs_tdxio_fields_ptr->status_complete_gpa.raw, ept_level)};
+    wait_status_ptr = (uint32_t *)map_pa(wait_status_gpa_with_hkid.raw_void, TDX_RANGE_RW);
+
+    *wait_status_ptr = tdcs_tdxio_fields_ptr->status_complete_data;
+    free_la(wait_status_ptr);
+
+    tdcs_tdxio_fields_ptr->status_complete_write = false;
+
+    if (sept_locked_flag)
+    {
+        release_sharex_lock_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
+        free_la(sept_entry);
+    }
+}
 
 api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
 {
@@ -47,6 +103,7 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
     pamt_entry_t *tdr_pamt_entry_ptr = NULL; // Pointer to the TDR PAMT entry
     bool_t is_tdr_locked = false;            // Indicate TDR is locked
     tdcs_t *tdcs_ptr = NULL;                 // Pointer to the TDCS structure (Multi-page)
+    bool_t op_state_locked_flag = false;
 
     return_val = tdh_check_and_lock_iommu_config(
         iommu_id_reg.raw,
@@ -77,9 +134,14 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
         {
             pa_t object_pa = iq_ctx_ptr->inv_target_pa;
 
-            mapping_type_t mapping_type = iq_ctx_ptr->inv_req_type == INV_REQ_IOTLB ? TDX_RANGE_RO : TDX_RANGE_RW;
+            mapping_type_t mapping_type =
+                (iq_ctx_ptr->inv_req_type == INV_REQ_IOTLB ||
+                 iq_ctx_ptr->inv_req_type == INV_REQ_TD)
+                    ? TDX_RANGE_RO
+                    : TDX_RANGE_RW;
             // The TDR get's mapped differently in the relevant switch case
-            if (iq_ctx_ptr->inv_req_type != INV_REQ_IOTLB)
+            if (iq_ctx_ptr->inv_req_type != INV_REQ_IOTLB &&
+                iq_ctx_ptr->inv_req_type != INV_REQ_TD)
             {
                 object_ptr = map_pa(object_pa.raw_void, mapping_type);
             }
@@ -103,6 +165,8 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
                 dmar_walk_res.pasidte_ptr = object_ptr;
                 break;
             case INV_REQ_IOTLB:
+            // No break
+            case INV_REQ_TD:
                 // TDR and TDCS must be valid and mapped implicitly because TDCS cannot
                 // be reclaimed untill all related IOTLB in progress invalidations are done
                 // Check, lock and map the owner TDR page (Shared lock!)
@@ -122,30 +186,116 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
                     goto EXIT;
                 }
 
-                // Implicitly map tdcs
-                tdcs_ptr = map_implicit_tdcs(tdr_ptr, TDX_RANGE_RW, false);
+                tdcs_tdxio_fields_t *tdcs_tdxio_fields_ptr = NULL;
 
-                // Acquire TDCS epoch lock or fail with TDX_OPERAND_BUSY
-                if (acquire_sharex_lock_sh(&tdcs_ptr->epoch_tracking.epoch_lock) != LOCK_RET_SUCCESS)
+                if (iq_ctx_ptr->inv_req_type == INV_REQ_IOTLB)
                 {
-                    return_val = api_error_with_operand_id(TDX_OPERAND_BUSY, OPERAND_ID_TD_EPOCH);
-                    TDX_ERROR("Failed to acquire TDCS epoch lock\n");
-                    free_la(tdcs_ptr);
+                    // Implicitly map tdcs
+                    tdcs_ptr = map_implicit_tdcs(tdr_ptr, TDX_RANGE_RW, false);
+                    tdcs_tdxio_fields_ptr = &tdcs_ptr->tdxio_fields;
 
-                    free_la(tdr_ptr);
-                    pamt_unwalk(object_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+                    return_val = acquire_sharex_lock_hp_ex(&tdcs_tdxio_fields_ptr->tdinv_lock, false);
+                    if (return_val != TDX_SUCCESS)
+                    {
+                        TDX_ERROR("Failed to acquire lock on tdinv_lock\n")
+                        return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
+                        free_la(tdcs_ptr);
 
-                    goto EXIT;
+                        free_la(tdr_ptr);
+                        pamt_unwalk(object_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+                        goto EXIT;
+                    }
+
+                    // Acquire TDCS epoch lock or fail with TDX_OPERAND_BUSY
+                    if (acquire_sharex_lock_sh(&tdcs_ptr->epoch_tracking.epoch_lock) != LOCK_RET_SUCCESS)
+                    {
+                        TDX_ERROR("Failed to acquire TDCS epoch lock\n");
+                        return_val = api_error_with_operand_id(TDX_OPERAND_BUSY, OPERAND_ID_TD_EPOCH);
+
+                        release_sharex_lock_hp_ex(&tdcs_tdxio_fields_ptr->tdinv_lock);
+
+                        free_la(tdcs_ptr);
+                        free_la(tdr_ptr);
+                        pamt_unwalk(object_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+
+                        goto EXIT;
+                    }
+
+                    iotlb_inv_tracker_t *iotlb_inv_tracker = &tdcs_ptr->tdxio_fields.iotlb_track_array[iommu_id_reg.iommu_id.raw];
+                    iotlb_inv_tracker->inv_epoch = (tdcs_ptr->epoch_tracking.epoch_and_refcount.td_epoch & BIT(0));
+                    _lock_xadd_64b(&tdcs_ptr->tdxio_fields.prev_iotlb_cnt, (uint64_t)-1);
+                    iotlb_inv_tracker->inv_req = 0;
+
+                    if (tdcs_tdxio_fields_ptr->is_req_active &&
+                        get_qword_bm(tdcs_tdxio_fields_ptr->req_iommu_bm.qwords, iommu_id_reg.raw))
+                    {
+                        set_qword_bm(tdcs_tdxio_fields_ptr->req_iommu_bm.qwords, iommu_id_reg.raw, false);
+                        if (tdx_memcmp_to_zero(&tdcs_tdxio_fields_ptr->req_iommu_bm, sizeof(tdcs_tdxio_fields_ptr->req_iommu_bm)) &&
+                            !tdr_ptr->management_fields.fatal)
+                        {
+                            emulate_wait_complete(tdcs_ptr, tdcs_tdxio_fields_ptr);
+                            tdcs_tdxio_fields_ptr->is_req_active = false;
+                        }
+                    }
+
+                    // End of critical section, release the lock
+                    release_sharex_lock_sh(&tdcs_ptr->epoch_tracking.epoch_lock);
+                }
+                else // INV_REQ_TD
+                {
+                    // Map the TDCS structure and check the state
+                    return_val = check_state_map_tdcs_and_lock(tdr_ptr, TDX_RANGE_RW, TDX_LOCK_SHARED,
+                                               false, TDH_IQ_INV_PROCESS_LEAF, &tdcs_ptr);
+
+
+                    if (return_val != TDX_SUCCESS)
+                    {
+                        TDX_ERROR("State check or TDCS lock failure - error = %llx\n", return_val);
+                        free_la(tdr_ptr);
+                        pamt_unwalk(object_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+                        goto EXIT;
+                    }
+                    op_state_locked_flag = true;
+
+                    tdcs_tdxio_fields_ptr = &tdcs_ptr->tdxio_fields;
+
+                    return_val = acquire_sharex_lock_hp_ex(&tdcs_tdxio_fields_ptr->tdinv_lock, false);
+                    if (return_val != TDX_SUCCESS)
+                    {
+                        TDX_ERROR("Failed to acquire lock on tdinv_lock\n")
+                        return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
+
+                        release_sharex_lock_hp_sh(&(tdcs_ptr->management_fields.op_state_lock));
+                        free_la(tdcs_ptr);
+
+                        free_la(tdr_ptr);
+                        pamt_unwalk(object_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
+                        goto EXIT;
+                    }
+
+                    if (tdcs_tdxio_fields_ptr->is_req_active)
+                    {
+                        tdcs_tdxio_fields_ptr->iotlb_complete[iommu_id_reg.raw]++;
+                        if (tdcs_tdxio_fields_ptr->iotlb_complete[iommu_id_reg.raw] == tdcs_tdxio_fields_ptr->req_num)
+                        {
+                            set_qword_bm(tdcs_tdxio_fields_ptr->req_iommu_bm.qwords, iommu_id_reg.raw, false);
+                            if (tdx_memcmp_to_zero(&tdcs_tdxio_fields_ptr->req_iommu_bm, sizeof(tdcs_tdxio_fields_ptr->req_iommu_bm)) &&
+                                !tdr_ptr->management_fields.fatal)
+                            {
+                                emulate_wait_complete(tdcs_ptr, tdcs_tdxio_fields_ptr);
+                                tdcs_tdxio_fields_ptr->is_req_active = false;
+                            }
+                        }
+                    }
                 }
 
-                iotlb_inv_tracker_t *iotlb_inv_tracker = &tdcs_ptr->tdxio_fields.iotlb_track_array[iommu_id_reg.iommu_id.raw];
-                iotlb_inv_tracker->inv_epoch = (tdcs_ptr->epoch_tracking.epoch_and_refcount.td_epoch & BIT(0));
-                _lock_xadd_64b(&tdcs_ptr->tdxio_fields.prev_iotlb_cnt, (uint64_t)-1);
-                iotlb_inv_tracker->inv_req = 0;
-
                 // End of critical section, release the lock
-                release_sharex_lock_sh(&tdcs_ptr->epoch_tracking.epoch_lock);
-
+                release_sharex_lock_hp_ex(&tdcs_tdxio_fields_ptr->tdinv_lock);
+                if (op_state_locked_flag)
+                {
+                    release_sharex_lock_hp_sh(&(tdcs_ptr->management_fields.op_state_lock));
+                    op_state_locked_flag = false;
+                }
                 free_la(tdcs_ptr);
                 pamt_unwalk(object_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
 
@@ -158,7 +308,8 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
                 FATAL_ERROR();
             }
 
-            if (iq_ctx_ptr->inv_req_type != INV_REQ_IOTLB)
+            if (iq_ctx_ptr->inv_req_type != INV_REQ_IOTLB &&
+                iq_ctx_ptr->inv_req_type != INV_REQ_TD)
             {
                 dmar_state_info = dmar_get_state_info(&dmar_walk_res);
                 dmar_state_info.inv_sts = DMAR_INV_DONE;
@@ -203,7 +354,6 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg)
     return_val = TDX_SUCCESS;
 
 EXIT:
-
     if (iq_ctx_ptr != NULL)
     {
         free_la(iq_ctx_ptr);

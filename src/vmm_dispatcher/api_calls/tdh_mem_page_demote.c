@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -35,6 +35,7 @@
 #include "helpers/helpers.h"
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
+
 
 static void sept_split_entry(tdr_t* tdr_ptr, pa_t sept_page_pa, pa_t split_page_pa,
                              ept_level_t split_page_level_entry, ia32e_sept_t split_page_sept_entry_copy)
@@ -65,7 +66,8 @@ static void sept_split_entry(tdr_t* tdr_ptr, pa_t sept_page_pa, pa_t split_page_
     free_la(sept_page_ptr);
 }
 
-api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handle_and_flags_t target_tdr_and_flags)
+api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handle_and_flags_t target_tdr_and_flags,
+                                   uint64_t pamt_hpa0, uint64_t pamt_hpa1)
 {
     // Local data for return values
     tdx_module_local_t  * local_data_ptr = get_local_data();
@@ -385,10 +387,10 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
     }
 
     // Split PAMT of the demoted page
-    if ((return_val = pamt_demote(split_page_pa, (page_size_t)split_page_level_entry)) != TDX_SUCCESS)
+    if ((return_val = pamt_demote(split_page_pa, (page_size_t)split_page_level_entry,
+                                  pamt_hpa0, pamt_hpa1)) != TDX_SUCCESS)
     {
         TDX_ERROR("Couldn't not split the destined page in PAMT\n");
-        return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
         goto EXIT;
     }
 

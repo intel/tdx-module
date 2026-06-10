@@ -254,7 +254,7 @@ api_error_type tdh_mem_page_relocate(uint64_t source_page_pa,
         }
 
         ia32e_sept_t l2_epte_val = {.raw = l2_sept_entry_ptr->raw};
-        l2_epte_val.base = target_pa.full_pa >> 12;
+        l2_epte_val.base = set_hkid_to_pa(target_pa, tdr_ptr->key_management_fields.hkid).page_4k_num;
 
         if (!sept_state_is_any_pending(mapped_page_sept_entry_copy))
         {

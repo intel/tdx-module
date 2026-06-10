@@ -278,7 +278,14 @@ static void save_guest_td_state_before_td_exit(tdcs_t* tdcs_ptr, tdx_module_loca
         for (uint32_t i = 0; i < NUM_PMC; i++)
         {
             tdvps_ptr->guest_msr_state.ia32_a_pmc[i] = ia32_rdmsr(IA32_A_PMC0_MSR_ADDR + i);
-            tdvps_ptr->guest_msr_state.ia32_perfevtsel[i] = ia32_rdmsr(IA32_PERFEVTSEL0_MSR_ADDR + i);
+
+            if (!tdcs_ptr->executions_ctl2_fields.event_filters_num)
+            {
+                /* IA32_PERFEVTSEL[i] values are only saved if event filtering is not enabled.
+                   If event filtering is enabled, TDVPS always holds the up-to-date value of
+                   each IA32_PERFEVTSEL[i]. */
+                tdvps_ptr->guest_msr_state.ia32_perfevtsel[i] = ia32_rdmsr(IA32_PERFEVTSEL0_MSR_ADDR + i);
+            }
         }
 
         for (uint32_t i = 0; i < 2; i++)
@@ -354,46 +361,33 @@ static void async_tdexit_internal(api_error_code_e tdexit_case,
 
     tdx_local_data_ptr->vp_ctx.bus_lock_preempted = false;
 
-    switch (tdexit_case)
+    if (error_code.fatal)
     {
-    case TDX_SUCCESS:
-    case TDX_CROSS_TD_FAULT:
-    case TDX_TD_EXIT_BEFORE_L2_ENTRY:
-    case TDX_TD_EXIT_ON_L2_TO_L1:
-    case TDX_TD_EXIT_ON_L2_VM_EXIT:
-        // Update the VCPU state for the next TDHVPENTER
-        vcpu_state = VCPU_READY;
-        last_td_exit = LAST_EXIT_ASYNC_FAULT;
-        break;
-
-    case TDX_CROSS_TD_TRAP:
-    case TDX_HOST_PRIORITY_BUSY_TIMEOUT:
-        // Update the VCPU state for the next TDH_VP_ENTER
-        vcpu_state = VCPU_READY;
-        last_td_exit = LAST_EXIT_ASYNC_TRAP;
-        break;
-
-    case TDX_NON_RECOVERABLE_VCPU:
-        // Mark the VCPU so it can't be re-entered
-        vcpu_state = VCPU_DISABLED;
-        break;
-
-        // Fatal cases
-    case TDX_NON_RECOVERABLE_TD:
-    case TDX_NON_RECOVERABLE_TD_WRONG_APIC_MODE:
-    case TDX_NON_RECOVERABLE_TD_NON_ACCESSIBLE:
-    case TDX_NON_RECOVERABLE_TD_CORRUPTED_MD:
         // VCPU state and last TD-exit doesn't change - we will pass to td_vmexit_to_vmm
         // the current value written in the TDVPS
         tdr_ptr->management_fields.fatal = true;
-        error_code.fatal = 1;
-        break;
-   case TDX_DEVIF_HANDLE_ERROR:
-       vcpu_state = VCPU_READY;
-       tdx_local_data_ptr->vmm_regs.rax = TDX_DEVIF_HANDLE_ERROR;
-       break;
-    default:
-        FATAL_ERROR();
+    }
+    else
+    {
+        if (error_code.non_recoverable)
+        {
+            // Mark the VCPU so it can't be re-entered
+            vcpu_state = VCPU_DISABLED;
+        }
+        else
+        {
+            // Update the VCPU state for the next TDH_VP_ENTER
+            if (error_code.host_recoverability_hint)
+            {
+                last_td_exit = LAST_EXIT_ASYNC_TRAP;
+            }
+            else
+            {
+                last_td_exit = LAST_EXIT_ASYNC_FAULT;
+            }
+
+            vcpu_state = VCPU_READY;
+        }
     }
 
     // Set TD exit information
@@ -433,7 +427,7 @@ static void async_tdexit_internal(api_error_code_e tdexit_case,
 
     td_vmexit_to_vmm(vcpu_state, last_td_exit, scrub_mask,
                      0, (tdexit_case == TDX_NON_RECOVERABLE_TD_NON_ACCESSIBLE),
-                     error_code.host_recoverability_hint);
+                     ((error_code.host_recoverability_hint == 1) || (tdexit_case == TDX_IOTLB_INV_REQUEST)));
 }
 
 void write_l2_enter_outputs(tdvps_t* tdvps_ptr, uint16_t vm_id)
@@ -623,6 +617,9 @@ static void td_l2_to_l1_exit_internal(api_error_code_e tdexit_case, vm_vmexit_ex
     // Make L1 the current VM
     tdvps_ptr->management.curr_vm = 0;
     set_vm_vmcs_as_active(tdvps_ptr, tdvps_ptr->management.curr_vm);
+
+    // Before VM entry, update the current VM's VMCS' Guest IA32_PERF_GLOBAL_CTRL
+    conditionally_write_vmcs_ia32_perf_global_ctrl_msr(ld_p->vp_ctx.tdcs);
 
     if (is_not_gnr_a0_stepping())
     {

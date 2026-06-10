@@ -264,8 +264,8 @@ void tdx_td_l2_dispatcher(void)
 
         case VMEXIT_REASON_CR_ACCESS:
         {
-            cr_write_status_e status = td_l2_cr_access_exit(vm_exit_qualification, vm_id);
-
+            uint16_t status = td_l2_cr_access_exit(vm_exit_qualification, vm_id);
+            status &= 0xFF;
             if (status != CR_ACCESS_SUCCESS)
             {
                 if (status == CR_ACCESS_GP)
@@ -285,7 +285,7 @@ void tdx_td_l2_dispatcher(void)
         {
             td_msr_access_status_t status = (vm_exit_reason.basic_reason == VMEXIT_REASON_MSR_READ) ?
                                             td_rdmsr_exit() : td_wrmsr_exit();
-
+            status &= 0xFF;
             if (status != TD_MSR_ACCESS_SUCCESS)
             {
                 if (status == TD_MSR_ACCESS_GP)

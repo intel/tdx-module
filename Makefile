@@ -73,14 +73,12 @@ $(TARGET): $(CRYPTO_OBJECTS) $(OBJECTS)
 	cp $(TARGET) $(ORIG_TARGET)
 
 postBuildScripts: $(TARGET)
-	strip -s $(RELEASE_DIR)/libtdx.so
+	strip -s $(TARGET_DIR)/libtdx.so
 
 	#The padding operation must be the last change made to the binary
 	$(MSG) "Padding Binary to page size granularity"
 	python3 $(PAD_BINARY_PY) $<
-	
-	rm -f $(ORIG_TARGET)
-	
+
 clean:
 	rm -rf $(DEBUG_DIR)/$(OBJ_DIR_NAME)
 	rm -rf $(RELEASE_DIR)/$(OBJ_DIR_NAME)

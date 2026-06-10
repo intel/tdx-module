@@ -43,8 +43,6 @@ api_error_type tdh_devif_response(
     devif_rsp_out_t devif_rsp_out = {0};
 
     // TDISP related variables
-    iommu_config_t *iommu_config_ptr = NULL;
-    bool_t is_iommu_locked = false;
     spdmdir_entry_t *spdmdir_entry_ptr = NULL;
     spdm_info_t *spdm_info_ptr = NULL;
 
@@ -127,17 +125,8 @@ api_error_type tdh_devif_response(
         dest_response_pa = devif_verify_param.devifcs_ptr->vmm_tdisp_msg_buff_pa;
     }
 
-    // Lock IOMMU entry and verify it is configured
-    return_val = tdh_check_and_lock_iommu_config(
-        devif_verify_param.devifcs_ptr->devif_id.iommu_id.raw,
-        OPERAND_ID_RCX,
-        &is_iommu_locked,
-        &iommu_config_ptr);
-    if (return_val != TDX_SUCCESS)
-    {
-        goto EXIT;
-    }
-
+    // implicitly get the IOMMU config
+    iommu_config_t *iommu_config_ptr = &get_global_data()->iommu_configs[devif_verify_param.devifcs_ptr->devif_id.iommu_id.raw];
     return_val = lock_check_and_map_spdm_metadata(
         devif_verify_param.devifcs_ptr->spdm_id,
         OPERAND_ID_RCX,
@@ -296,8 +285,6 @@ EXIT:
         unlock_spdmdir_entry(spdmdir_entry_ptr, devif_verify_param.devifcs_ptr->spdm_id);
         free_la(spdmdir_entry_ptr);
     }
-
-    release_iommu_lock(is_iommu_locked, iommu_config_ptr);
 
     devif_unmap_devifcs(&devif_verify_param);
 

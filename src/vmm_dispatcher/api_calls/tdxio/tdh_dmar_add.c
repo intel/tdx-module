@@ -56,8 +56,9 @@ static api_error_type is_valid_dmar_add_entry(
     {
         if (dmar_entry_ptr->raw.qwords[curr_q] != 0)
         {
+            uint16_t operand_id = curr_q == 0? OPERAND_ID_RDX: curr_q + OPERAND_ID_R8 - 1;
             TDX_ERROR("dmar_val_%u  != 0\n", curr_q);
-            return api_error_with_operand_id(TDX_OPERAND_INVALID, curr_q + OPERAND_ID_R8);
+            return api_error_with_operand_id(TDX_OPERAND_INVALID, operand_id);
         }
     }
 
@@ -66,7 +67,6 @@ static api_error_type is_valid_dmar_add_entry(
 
 api_error_type tdh_dmar_add(
     dmar_idx_t dmar_idx,
-    pa_t tdr_pa,
     uint64_t dmar_val_1,
     uint64_t dmar_val_2,
     uint64_t dmar_val_3,
@@ -81,14 +81,6 @@ api_error_type tdh_dmar_add(
 
     dmar_walk_res_t dmar_walk_res = {0};
     bool_t is_dmar_walked = false;
-
-    // TDR related variables
-    tdr_t *tdr_ptr = NULL;                   // Pointer to the TDR page (linear address)
-    pamt_block_t tdr_pamt_block;             // TDR PAMT block
-    pamt_entry_t *tdr_pamt_entry_ptr = NULL; // Pointer to the TDR PAMT entry
-    bool_t is_tdr_locked = false;            // Indicate TDR is locked
-    tdcs_t *tdcs_ptr = NULL;                 // Pointer to the TDCS structure (Multi-page)
-    bool_t op_state_locked_flag = false;     // Indicate OP is locked
 
     api_error_type return_val = UNINITIALIZE_ERROR;
 
@@ -109,51 +101,6 @@ api_error_type tdh_dmar_add(
     if (return_val != TDX_SUCCESS)
     {
         goto EXIT;
-    }
-
-    if (dmar_idx.level == DMAR_PASIDTE_LVL)
-    {
-        // Lock TDR page
-        return_val = check_lock_and_map_explicit_tdr(
-            tdr_pa,
-            OPERAND_ID_RDX,
-            TDX_RANGE_RO,
-            TDX_LOCK_SHARED,
-            PT_TDR,
-            &tdr_pamt_block,
-            &tdr_pamt_entry_ptr,
-            &is_tdr_locked,
-            &tdr_ptr);
-        if (return_val != TDX_SUCCESS)
-        {
-            TDX_ERROR("Failed to check/lock/map a TDR - error = %llx\n", return_val);
-            goto EXIT;
-        }
-
-        // Map TDCS structure and check its state.
-        return_val = check_state_map_tdcs_and_lock(
-            tdr_ptr,
-            TDX_RANGE_RW,
-            TDX_LOCK_SHARED,
-            false,
-            TDH_DMAR_ADD_LEAF,
-            &tdcs_ptr);
-        if (return_val != TDX_SUCCESS)
-        {
-            TDX_ERROR("State check or TDCS lock failure - error = %llx\n", return_val);
-            goto EXIT;
-        }
-        op_state_locked_flag = true;
-    }
-    else
-    {
-        // TDR must equal zero
-        if (tdr_pa.raw)
-        {
-            TDX_ERROR("For dmar level which is not pasidte level, tdr_pa(0x%llx) (operand id=RDX) should be zero\n", tdr_pa.raw);
-            return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
-            goto EXIT;
-        }
     }
 
     dmar_entry_t dmar_entry = {
@@ -229,10 +176,7 @@ api_error_type tdh_dmar_add(
             &dmar_walk_res,
             dmar_state_info,
             &dmar_entry,
-            dmar_idx,
-            tdr_pa,
-            tdr_ptr,
-            tdcs_ptr);
+            dmar_idx.iommu_id);
         break;
     default:
         TDX_ERROR("Invalid dmar level %u\n", dmar_state_info.level);
@@ -243,25 +187,6 @@ EXIT:
     if (is_dmar_walked)
     {
         dmar_unwalk(&dmar_walk_res);
-    }
-
-    if (op_state_locked_flag)
-    {
-        release_sharex_lock_hp_sh(&(tdcs_ptr->management_fields.op_state_lock));
-    }
-
-    if (tdcs_ptr != NULL)
-    {
-        free_la(tdcs_ptr);
-    }
-
-    if (is_tdr_locked)
-    {
-        if (tdr_ptr != NULL)
-        {
-            free_la(tdr_ptr);
-        }
-        pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_SHARED, PT_4KB);
     }
 
     release_iommu_lock(is_iommu_locked, iommu_config_ptr);

@@ -212,8 +212,7 @@ api_error_type tdh_mmio_unmap(
     }
 
     /**
-     * Set the SEPT entry local copy to FREE & unlocked, and atomically write
-     *  to memory as a single 64b write.
+     *  Set the SEPT entry local copy to FREE & unlocked.
      *  TLB tracking checked that the guest can't change this SEPT so concurrency
      *  is guaranteed by the host-side lock.
      *  Page removal is allowed during the out-of-order import phase.  However,
@@ -222,6 +221,7 @@ api_error_type tdh_mmio_unmap(
      */
     septe_set_free_or_removed_and_release_locks(&page_sept_entry_copy, tdcs_ptr);
     atomic_mem_write_64b(&page_sept_entry_ptr->raw, page_sept_entry_copy.raw);
+
     is_host_side_locked = false;
 
     // Update DEVIF and MMIOMT state variables(atomic)

@@ -32,6 +32,7 @@
 
 #include "data_structures/tdxio/devif_defs.h"
 #include "data_structures/tdxio/tdisp_defs.h"
+#include "data_structures/tdxio/dmar_defs.h"
 
 /**
  * @brief Read register from a device interface.
@@ -111,7 +112,7 @@ api_error_type tdg_devif_validate(
  * @note
  *
  * @param function_id_reg
- * @param guest_pasid
+ * @param dmar_target
  * @param param1
  * @param param2
  * @param param3
@@ -125,7 +126,7 @@ api_error_type tdg_devif_validate(
  */
 api_error_type tdg_dmar_accept(
     function_id_reg_t function_id_reg,
-    uint64_t guest_pasid,
+    dmar_target_t dmar_target,
     uint64_t param1,
     uint64_t param2,
     uint64_t param3,
@@ -176,5 +177,18 @@ api_error_type tdg_spdm_tpa_get(
 api_error_type tdg_mmio_accept(
     page_info_api_input_t gpa_mapping,
     uint64_t mmio_pa_offset);
+
+/**
+ * @brief
+ *
+ * @param num_inv_descs
+ * @param req_pa
+ *
+ * @return Success or Error type
+ */
+api_error_type tdg_iq_inv_request(
+    uint64_t num_inv_descs,
+    pa_t req_pa);
+
 
 #endif /* INCLUDE_TDXIO_TD_API_HANDLERS_H_ */

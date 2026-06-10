@@ -35,6 +35,7 @@
 #include "data_structures/tdx_tdvps.h"
 #include "td_transitions/td_exit_stepping.h"
 #include "data_structures/tdx_local_data.h"
+#include "helpers/helpers.h"
 
 
 /**
@@ -113,8 +114,9 @@ void check_pending_voe_on_debug_td_return(void);
  *
  * @param vm_exit_reason
  * @param exit_qualification
+ * @param category
  */
-void td_generic_ve_exit(vm_vmexit_exit_reason_t vm_exit_reason, uint64_t exit_qualification);
+void td_generic_ve_exit(vm_vmexit_exit_reason_t vm_exit_reason, uint64_t exit_qualification, ve_category_e category);
 
 /**
  * @brief Handler for all TDCALLs

@@ -76,11 +76,12 @@ api_error_type tdh_iommu_setreg(
 
     iommu_config_t *iommu_config_ptr = &tdx_global_data_ptr->iommu_configs[iommu_id_reg.iommu_id.raw];
 
+    return_val = acquire_sharex_lock_hp_ex(&iommu_config_ptr->lock, false);
     // Acquire IOMMU config entry lock
-    if (acquire_sharex_lock_hp_ex(&iommu_config_ptr->lock, false) != TDX_SUCCESS)
+    if (return_val != TDX_SUCCESS)
     {
         TDX_ERROR("Failed to acquire IOMMU config entry lock\n");
-        return_val = api_error_with_operand_id(TDX_OPERAND_BUSY, OPERAND_ID_RCX);
+        return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
         goto EXIT;
     }
     iommu_config_lock_taken = true;

@@ -611,8 +611,8 @@ void md_get_rd_wr_mask(const md_lookup_t* entry, md_access_t access_type, md_acc
             *out_wr_mask = (entry->mig_import == MIG_ME   || entry->mig_import == MIG_CE ||
                             entry->mig_import == MIG_MEO  || entry->mig_import == MIG_CEO ||
                             entry->mig_import == MIG_IE   || entry->mig_import == MIG_IES ||
-                            entry->mig_import == MIG_IEME || entry->mig_import == MIG_IESME)
-                                    ? entry->import_mask : 0;
+                            entry->mig_import == MIG_IEME || entry->mig_import == MIG_IESME ||
+                            entry->mig_import == MIG_IESMEO) ? entry->import_mask : 0;
             *out_rd_mask = ~(0ULL);
             break;
         default:
@@ -1056,7 +1056,7 @@ _STATIC_INLINE_ bool_t is_required_or_optional_entry(const md_lookup_t* entry, m
     if (access_type == MD_IMPORT_MUTABLE)
     {
         if (entry->mig_import == MIG_ME || entry->mig_import == MIG_CE || entry->mig_import == MIG_IESME ||
-            entry->mig_import == MIG_MEO || entry->mig_import == MIG_CEO)
+            entry->mig_import == MIG_IESMEO || entry->mig_import == MIG_MEO || entry->mig_import == MIG_CEO)
         {
             return true;
         }

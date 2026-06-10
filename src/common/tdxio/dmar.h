@@ -261,22 +261,22 @@ _STATIC_INLINE_ api_error_type is_valid_dmar_cte(const dmar_cte_t *const cte)
         (get_hkid_from_pa(pdp_pa) != 0) ||
         (get_hkid_from_pa(max_pdp_pa) != 0))
     {
-        res = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
+        res = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
     }
     else if ((cte->pd_idx >= (BIT(cte->pdts + PDTS_IDX_CONST))) || // RID_PASID does not overflow the PDTS
              cte->rid_pasid ||
              cte->rid_priv ||
              cte->rsvd2)
     {
-        res = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R9);
+        res = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
     }
     else if (cte->rsvd3)
     {
-        res = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R10);
+        res = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R9);
     }
     else if (cte->rsvd4)
     {
-        res = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R11);
+        res = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R10);
     }
     else
     {
@@ -327,21 +327,17 @@ _STATIC_INLINE_ bool_t is_valid_dmar_pde(const dmar_pde_t *const pde)
  * @return  Success or Error type
  */
 _STATIC_INLINE_ api_error_type is_valid_dmar_pasidte(
-    const dmar_pasidte_t *const pasidte,
-    const tdcs_t *const tdcs_ptr)
+    const dmar_pasidte_t *const pasidte)
 {
     // Check Qword[0]
     if (pasidte->p ||
-        (!((pasidte->aw == AW_48_BIT && tdcs_ptr->executions_ctl_fields.eptp.fields.ept_pwl == LVL_PML4) ||
-           (pasidte->aw == AW_57_BIT && tdcs_ptr->executions_ctl_fields.eptp.fields.ept_pwl == LVL_PML5))) ||
         (!pasidte->slee) ||
-        pasidte->pgtt != AW_48_BIT ||
-        (pasidte->slade != tdcs_ptr->executions_ctl_fields.eptp.fields.enable_ad_bits) ||
-        pasidte->rsvd1 ||
-        pasidte->slptptr)
+        (pasidte->pgtt != AW_48_BIT) ||
+        (pasidte->rsvd1) ||
+        (pasidte->slptptr))
     {
         TDX_ERROR("Invalid pasidte entry qword[0] = 0x%llx\n", pasidte->raw.qwords[0]);
-        return api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
+        return api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
     }
     // Check Qword[1]
     else if (pasidte->did ||
@@ -356,15 +352,16 @@ _STATIC_INLINE_ api_error_type is_valid_dmar_pasidte(
              pasidte->pat)
     {
         TDX_ERROR("Invalid pasidte entry qword[1] = 0x%llx\n", pasidte->raw.qwords[1]);
-        return api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R9);
+        return api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
     }
 
     for (uint8_t curr_q = 2; curr_q < sizeof(dmar_entry_t) / sizeof(uint64_t); curr_q++)
     {
         if (pasidte->raw.qwords[curr_q] != 0)
         {
+            uint16_t operand_id = curr_q == 0? OPERAND_ID_RDX: curr_q + OPERAND_ID_R8 - 1;
             TDX_ERROR("dmar_val_%u  != 0\n", curr_q);
-            return api_error_with_operand_id(TDX_OPERAND_INVALID, curr_q + OPERAND_ID_R8);
+            return api_error_with_operand_id(TDX_OPERAND_INVALID, operand_id);
         }
     }
 
@@ -741,10 +738,7 @@ api_error_type dmar_pde_add(
  * @param dmar_walk_res
  * @param dmar_state_info
  * @param dmar_entry_ptr
- * @param dmar_idx
- * @param tdr_pa
- * @param tdr_ptr
- * @param tdcs_ptr
+ * @param iommu_id
  *
  * @return Success or Error type
  */
@@ -752,10 +746,7 @@ api_error_type dmar_pasidte_add(
     dmar_walk_res_t *const dmar_walk_res,
     dmar_state_info_t dmar_state_info,
     dmar_entry_t *const dmar_entry_ptr,
-    const dmar_idx_t dmar_idx,
-    const pa_t tdr_pa,
-    const tdr_t *const tdr_ptr,
-    tdcs_t *const tdcs_ptr);
+    const iommu_id_t iommu_id);
 
 /**
  * @brief Infer current DMAR entry using the level and set R8-R15 with the DMAR entry value with TDX

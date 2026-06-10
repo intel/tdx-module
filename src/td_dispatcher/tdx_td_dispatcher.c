@@ -217,12 +217,12 @@ static void save_guest_td_gpr_state_on_td_vmexit(void)
 }
 
 
-void td_generic_ve_exit(vm_vmexit_exit_reason_t vm_exit_reason, uint64_t exit_qualification)
+void td_generic_ve_exit(vm_vmexit_exit_reason_t vm_exit_reason, uint64_t exit_qualification, ve_category_e category)
 {
     tdx_module_local_t* tdx_local_data_ptr = get_local_data();
     tdvps_t* tdvps_p = tdx_local_data_ptr->vp_ctx.tdvps;
 
-    tdx_inject_ve((uint32_t)vm_exit_reason.raw, exit_qualification, tdvps_p, 0, 0);
+    tdx_inject_ve((uint32_t)vm_exit_reason.raw, exit_qualification, category, tdvps_p, 0, 0);
 }
 
 
@@ -245,7 +245,7 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
     tdx_leaf_and_version_t leaf_opcode;
     leaf_opcode.raw = tdx_local_data_ptr->td_regs.rax;
 
-    if (!is_valid_tdx_io_guest_call(leaf_opcode.raw))
+    if (!is_valid_tdx_io_guest_call(leaf_opcode))
     {
         TDX_ERROR("tdx_td_dispatcher - TDX-IO not supported, invalid leaf = %d\n", leaf_opcode);
         tdx_local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state.rax = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
@@ -261,8 +261,7 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
     }
 
     // Only a few functions have multiple versions
-    if ((leaf_opcode.version > 0) &&
-        (leaf_opcode.leaf != TDG_VM_RD_LEAF))
+    if ((leaf_opcode.version > 0) && !((leaf_opcode.leaf == TDG_VM_RD_LEAF) || (leaf_opcode.leaf == TDG_VP_VEINFO_GET_LEAF)))
     {
         TDX_ERROR("Invalid version %d for leaf %d\n", leaf_opcode.version, leaf_opcode.leaf);
         retval = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
@@ -285,7 +284,7 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
         }
         case TDG_VP_VEINFO_GET_LEAF:
         {
-            retval = tdg_vp_veinfo_get();
+            retval = tdg_vp_veinfo_get((uint8_t)leaf_opcode.version);
             break;
         }
         case TDG_VP_INFO_LEAF:
@@ -361,7 +360,7 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
         case TDG_DMAR_ACCEPT_LEAF:
         {
             retval = tdg_dmar_accept((function_id_reg_t)tdx_local_data_ptr->td_regs.rcx,
-                    tdx_local_data_ptr->td_regs.rdx,
+                    (dmar_target_t)tdx_local_data_ptr->td_regs.rdx,
                     tdx_local_data_ptr->td_regs.r8,
                     tdx_local_data_ptr->td_regs.r9,
                     tdx_local_data_ptr->td_regs.r10,
@@ -370,6 +369,12 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
                     tdx_local_data_ptr->td_regs.r13,
                     tdx_local_data_ptr->td_regs.r14,
                     tdx_local_data_ptr->td_regs.r15);
+            break;
+        }
+        case TDG_IQ_INV_REQUEST_LEAF:
+        {
+            retval = tdg_iq_inv_request(tdx_local_data_ptr->td_regs.rcx,
+                    (pa_t)tdx_local_data_ptr->td_regs.rdx);
             break;
         }
         case TDG_VM_RD_LEAF:
@@ -829,9 +834,13 @@ void tdx_td_dispatcher(void)
         case VMEXIT_REASON_INVD_INSTRUCTION:
         case VMEXIT_REASON_VMCALL_INSTRUCTION:
         case VMEXIT_REASON_WBINVD_INSTRUCTION:
-        case VMEXIT_REASON_PCONFIG:
         case VMEXIT_REASON_APIC_WRITE:
-            td_generic_ve_exit(vm_exit_reason, vm_exit_qualification.raw);
+            td_generic_ve_exit(vm_exit_reason, vm_exit_qualification.raw, VE_INFO_NON_CONFIG_PARAVIRT);
+            break;
+
+        // Unconditional #VE injection, but VM exit itself is conditioned on some configuration
+        case VMEXIT_REASON_PCONFIG: // If CPUID(0x7,0x0).EDX[18] is virtualized as 0, PCONFIG is disabled and there's no VM exit
+            td_generic_ve_exit(vm_exit_reason, vm_exit_qualification.raw, VE_INFO_CONFIG_PARAVIRT);
             break;
 
         case VMEXIT_REASON_GETSEC_INSTRUCTION:
@@ -930,9 +939,10 @@ void tdx_td_dispatcher(void)
         case VMEXIT_REASON_MSR_READ:
         case VMEXIT_REASON_MSR_WRITE:
         {
-            td_msr_access_status_t status = (vm_exit_reason.basic_reason == VMEXIT_REASON_MSR_READ) ?
+            uint16_t status = (vm_exit_reason.basic_reason == VMEXIT_REASON_MSR_READ) ?
                                             td_rdmsr_exit() : td_wrmsr_exit();
-
+            uint16_t status_category = (status >> 8) & 0xFF;
+            status &= 0xFF;
             if (status != TD_MSR_ACCESS_SUCCESS)
             {
                 if (status == TD_MSR_ACCESS_GP)
@@ -942,7 +952,7 @@ void tdx_td_dispatcher(void)
                 else
                 {
                     tdx_sanity_check((status == TD_MSR_ACCESS_MSR_NON_ARCH_EXCEPTION), SCEC_TD_DISPATCHER_SOURCE, 3);
-                    td_generic_ve_exit(vm_exit_reason, 0);
+                    td_generic_ve_exit(vm_exit_reason, 0, status_category);
                 }
             }
             break;

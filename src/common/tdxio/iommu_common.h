@@ -124,11 +124,12 @@ _STATIC_INLINE_ api_error_type general_check_and_lock_iommu_config(
     iommu_id_reg.raw = iommu_id_val;
 
     *iommu_config_ptr = &tdx_global_data_ptr->iommu_configs[iommu_id_reg.iommu_id.raw];
+    ret_val = acquire_sharex_lock_hp_ex(&(*iommu_config_ptr)->lock, is_guest);
 
-    if (acquire_sharex_lock_hp_ex(&(*iommu_config_ptr)->lock, is_guest) != TDX_SUCCESS)
+    if (ret_val != TDX_SUCCESS)
     {
         TDX_ERROR("Failed to acquire lock on IOMMU %llu\n", iommu_id_val);
-        ret_val = api_error_with_operand_id(TDX_OPERAND_BUSY, operand_id);
+        ret_val = api_error_with_operand_id(ret_val, operand_id);
         goto EXIT;
     }
     *is_iommu_locked_ptr = true;

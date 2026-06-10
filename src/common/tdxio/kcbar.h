@@ -30,6 +30,7 @@
 #include "tdx_basic_types.h"
 #include "tdx_api_defs.h"
 #include "helpers/helpers.h"
+#include "tdxio/io_accessors.h"
 
 #include "data_structures/tdxio/kcbar_defs.h"
 #include "data_structures/tdxio/iommu_defs.h"

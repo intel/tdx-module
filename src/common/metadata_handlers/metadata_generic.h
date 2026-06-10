@@ -64,6 +64,7 @@ typedef enum mig_type_e
     MIG_IES,
     MIG_IEME,
     MIG_IESME,
+    MIG_IESMEO,
     MIG_IB,
     MIG_IBS,
     MIG_CB,

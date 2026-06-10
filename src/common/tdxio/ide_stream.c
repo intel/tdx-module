@@ -265,7 +265,9 @@ api_error_type verify_rid_assoc_regs(
             .base = rid_assoc_2_reg.rid_assoc_2.rid_base,
             .limit = rid_assoc_1_reg.rid_assoc_1.rid_limit};
 
-    // Verify RID range is a valid RID range within the IOMMU configured range
+    // Verify the RID base and RID limit are within the range of bus numbers decoded by this HIOP
+    // Verify that the RID limit is below RID base
+    // Note, there are 256 device functions on each bus
     uint64_t iommu_base = (uint64_t)(hiop_info_ptr->hiop_bus_base * NUM_DF_PER_BUS);
     uint64_t iommu_limit = (uint64_t)((hiop_info_ptr->hiop_bus_limit + 1) * NUM_DF_PER_BUS);
     if (rid_range.base < iommu_base ||
@@ -618,29 +620,33 @@ void prime_rc_ide_keys(
     vol_write_reg32(ctrl_reg_ptr, stream_txrx_control.raw);
 }
 
-bool_t is_ide_key_ready(
+bool_t is_ide_ks_ready(
     kcbar_t *const kcbar_ptr,
     const uint8_t key_id,
-    const ide_stream_direction_t direction,
     const ide_stream_key_set_sel_t key_set_select)
 {
     stream_config_reg_block_t *stream_cfg_reg_block = get_stream_cfg_reg_block(kcbar_ptr, key_id);
-    stream_txrx_status_t *ctrl_reg_ptr = (direction == DEV_RX) ? &stream_cfg_reg_block->tx_status : &stream_cfg_reg_block->rx_status;
-    uint8_t key_set_val = 0;
+    stream_txrx_status_t *rx_ctrl_reg_ptr = &stream_cfg_reg_block->tx_status;
+    stream_txrx_status_t *tx_ctrl_reg_ptr = &stream_cfg_reg_block->rx_status;
+    uint8_t rx_ks_status = 0;
+    uint8_t tx_ks_status = 0;
 
     if (key_set_select == KS0)
     {
-        key_set_val = ctrl_reg_ptr->ready_key_set_0;
+        rx_ks_status = rx_ctrl_reg_ptr->ready_key_set_0;
+        tx_ks_status = tx_ctrl_reg_ptr->ready_key_set_0;
     }
     else if (key_set_select == KS1)
     {
-        key_set_val = ctrl_reg_ptr->ready_key_set_1;
+        rx_ks_status = rx_ctrl_reg_ptr->ready_key_set_1;
+        tx_ks_status = tx_ctrl_reg_ptr->ready_key_set_1;
     }
     else
     {
         FATAL_ERROR();
     }
-    return key_set_val > 0;
+
+    return (rx_ks_status > 0) && (tx_ks_status > 0);
 }
 
 void set_rc_tx_ide_key_set(

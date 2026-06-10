@@ -53,11 +53,11 @@ _STATIC_INLINE_ bool_t is_any_host_owned_bit_modified(uint64_t cr, uint64_t gues
 // For L2, only PE, MP, EM and TD bits can be modified
 #define CR0_L2_LMSW_MASK 0xFULL
 
-cr_write_status_e td_l2_cr_access_exit(vmx_exit_qualification_t vm_exit_qualification, uint16_t vm_id)
+uint16_t td_l2_cr_access_exit(vmx_exit_qualification_t vm_exit_qualification, uint16_t vm_id)
 {
     uint64_t   value;
     ia32_cr0_t cr0;
-    cr_write_status_e status = CR_ACCESS_SUCCESS;
+    uint16_t status = CR_ACCESS_SUCCESS;
 
     tdx_module_local_t* tdx_local_data_ptr = get_local_data();
 
@@ -106,12 +106,12 @@ cr_write_status_e td_l2_cr_access_exit(vmx_exit_qualification_t vm_exit_qualific
                         return CR_L2_TO_L1_EXIT; // L2->L1 exit
                     }
 
-                    status = write_guest_cr4(value, tdcs_p);
+                    status = (uint16_t)write_guest_cr4(value, tdcs_p);
                     break;
 
                 default:
                     // VM exits due to other CR accesses cause L2->L1 exit or #VE
-                    return CR_ACCESS_NON_ARCH;
+                    return construct_msr_status_with_ve_category(CR_ACCESS_NON_ARCH, VE_INFO_UNSUPPORTED_FEATURE);
             } // switch (vm_exit_qualification.cr_access.cr_num)
 
             break;
@@ -159,7 +159,7 @@ cr_write_status_e td_l2_cr_access_exit(vmx_exit_qualification_t vm_exit_qualific
 
         default:
             // VM exits due to other access types cause L2->L1 exit or #VE
-            return CR_ACCESS_NON_ARCH;
+            return construct_msr_status_with_ve_category(CR_ACCESS_NON_ARCH, VE_INFO_UNSUPPORTED_FEATURE);
     }
 
     return status;

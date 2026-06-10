@@ -52,6 +52,12 @@
                                                         movq $vec, %rdi;    /* 7 bytes */ \
                                                         jmp func;           /* 5 bytes */
 
+#define EXCEPTION_HANDLER_NO_VEC(func)                  endbr64;            /* 4 bytes */ \
+                                                        jmp func;           /* 5 bytes */\
+                                                        /* 7 nops to fill 7 bytes to complete 16 bytes */\
+                                                        nop; nop; nop; nop; \
+                                                        nop; nop; nop; \
+
 
 .globl tdx_fault_wrapper
 .type  tdx_fault_wrapper,@function
@@ -70,7 +76,7 @@ tdx_fault_wrapper:
     EXCEPTION_HANDLER(tdx_debug_handler_with_errc, 10)        // Vector 10
     EXCEPTION_HANDLER(tdx_debug_handler_with_errc, 11)        // Vector 11
     EXCEPTION_HANDLER(tdx_debug_handler_with_errc, 12)        // Vector 12
-    EXCEPTION_HANDLER(tdx_gp_handler, 13)                     // Vector 13 - #GP
+    EXCEPTION_HANDLER_NO_VEC(tdx_gp_handler)                  // Vector 13 - #GP
     EXCEPTION_HANDLER(tdx_debug_handler_with_errc, 14)        // Vector 14
     EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 15)          // Vector 15
     EXCEPTION_HANDLER(tdx_debug_handler_no_errc, 16)          // Vector 16
@@ -203,7 +209,7 @@ indicator_valid:
     // If the old stack wasn't aligned on 16-bytes, "Spare 64" will be inserted to align it
 
     btq  $3, 24(%rsp)                      // Check if old stack was aligned on 8 or 16 bytes
-    jc aligned_stack_ret
+    jnc aligned_stack_ret
 
     lretq $32
 

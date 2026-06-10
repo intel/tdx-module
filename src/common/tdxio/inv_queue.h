@@ -80,6 +80,14 @@ _STATIC_INLINE_ void iq_enqueue(
         *t_iq_ptr = (inv_desc_t *)map_iq_entry(iommu_config_ptr->t_iqaddr, *t_iqt_idx);
         *iq_ctx_ptr = (iq_ctx_entry_t *)map_iq_entry(iommu_config_ptr->iqctxaddr, *t_iqt_idx);
     }
+    else if ((iommu_config_ptr->t_iqaddr.size == 1) &&
+             (*t_iqt_idx == 0))
+    {
+        // edge case where the IQ size is 1 and the last index is already occupied
+        // The new index should start at zero without mapping a new page
+        *t_iq_ptr -= prev_t_iqt_index;
+        *iq_ctx_ptr -= prev_t_iqt_index;
+    }
     else
     {
         (*t_iq_ptr)++;

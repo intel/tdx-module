@@ -74,7 +74,7 @@ api_error_type tdh_iommu_getreg(
         if (hiop_info_ptr->hiop_rp_bit_vector == 0)
         {
             TDX_ERROR("HIOP RP bitmap is zero\n");
-            return_val = TDX_IOMMU_INVALID_STATE;
+            return_val = api_error_with_operand_id(TDX_IOMMU_INVALID_STATE, OPERAND_ID_RCX);
             goto EXIT;
         }
 

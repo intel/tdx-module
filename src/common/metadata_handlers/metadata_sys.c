@@ -139,12 +139,16 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
                 tdx_features_0.l2_tlb_invd_opt = 1;
                 tdx_features_0.fms_config = 1;
                 tdx_features_0.topology_enum = 1;
+                tdx_features_0.ve_reduction = 1;
+                tdx_features_0.event_filtering = 1;
                 tdx_features_0.icssd = 1;
                 tdx_features_0.fixed_ctr12_prof = 1;
                 tdx_features_0.maxpa_virt = 1;
                 tdx_features_0.maxgpa_virt = 1;
                 tdx_features_0.cpuid2_virt = 1;
+                tdx_features_0.enhanced_event_filtering = 0;
                 tdx_features_0.tdx_io = get_sysinfo_table()->mcheck_fields.io_sys_info_table_version > 0? 1: 0;
+                tdx_features_0.tdx_connect_partitioning = tdx_features_0.tdx_io;
 
                 *element_array = tdx_features_0.raw;
             }
@@ -347,6 +351,10 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
             else if (entry->field_id.field_code == MD_SYS_MIN_VIRT_MAXPA_FIELD_CODE)
             {
                 *element_array = MIN_VIRT_MAXPA;
+            }
+            else if (entry->field_id.field_code == MD_SYS_MAX_EVENT_FILTERS_FIELD_CODE)
+            {
+                *element_array = MAX_EVENT_FILTERS;
             }
             else
             {

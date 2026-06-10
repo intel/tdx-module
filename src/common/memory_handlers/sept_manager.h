@@ -130,6 +130,9 @@
                                           BIT(SEPT_ENTRY_PS_BIT_POSITION)   | \
                                           BIT(SEPT_ENTRY_TDB_BIT_POSITION))
 
+#define L2_SEPT_MMIO_STATE_ENCODING_MASK (BIT(SEPT_ENTRY_PS_BIT_POSITION) | \
+                                          BIT(SEPT_ENTRY_TDB_BIT_POSITION))
+
 #define L2_SEPT_STATE_ENCODING_WO_R_MASK  (L2_SEPT_STATE_ENCODING_MASK & ~(BIT(SEPT_ENTRY_R_BIT_POSITION)))
 
 #define SEPT_CONVERT_TO_ENCODING(ept_entry)  ( ((uint64_t)(ept_entry).state_encoding.state_encoding_0) |   \
@@ -173,7 +176,9 @@ typedef enum sept_state_mask_e
     SEPT_STATE_L2_NL_MAPPED_MASK               = L2_SEPT_STATE_ENC_TO_MASK(SEPT_STATE_L2_NL_MAPPED_ENCODING),
     SEPT_STATE_L2_NL_BLOCKED_MASK              = L2_SEPT_STATE_ENC_TO_MASK(SEPT_STATE_L2_NL_BLOCKED_ENCODING),
     SEPT_STATE_L2_MAPPED_MASK                  = L2_SEPT_STATE_ENC_TO_MASK(SEPT_STATE_L2_MAPPED_ENCODING),
-    SEPT_STATE_L2_BLOCKED_MASK                 = L2_SEPT_STATE_ENC_TO_MASK(SEPT_STATE_L2_BLOCKED_ENCODING)
+    SEPT_STATE_L2_BLOCKED_MASK                 = L2_SEPT_STATE_ENC_TO_MASK(SEPT_STATE_L2_BLOCKED_ENCODING),
+    SEPT_STATE_L2_MMIO_MAPPED_MASK             = L2_SEPT_STATE_ENC_TO_MASK(SEPT_STATE_L2_MMIO_MAPPED_ENCODING),
+    SEPT_STATE_L2_MMIO_BLOCKED_MASK            = L2_SEPT_STATE_ENC_TO_MASK(SEPT_STATE_L2_MMIO_BLOCKED_ENCODING)
 } sept_state_mask_t;
 
 // Clearing the TDP bit relies of specific encoding of the SEPT entry state.
@@ -256,7 +261,8 @@ _STATIC_INLINE_ bool_t is_l2_sept_nl_blocked(const ia32e_sept_t* ept_entry)
 
 _STATIC_INLINE_ bool_t is_l2_sept_blocked(const ia32e_sept_t* ept_entry)
 {
-    return ((ept_entry->raw & L2_SEPT_STATE_ENCODING_WO_R_MASK) == SEPT_STATE_L2_BLOCKED_MASK);
+    return ((ept_entry->raw & L2_SEPT_STATE_ENCODING_WO_R_MASK) == SEPT_STATE_L2_BLOCKED_MASK) ||
+           ((ept_entry->raw & L2_SEPT_MMIO_STATE_ENCODING_MASK) == SEPT_STATE_L2_MMIO_BLOCKED_MASK);
 }
 
 _STATIC_INLINE_ bool_t is_l2_sept_mapped(const ia32e_sept_t* ept_entry)
@@ -373,6 +379,13 @@ _STATIC_INLINE_ bool_t sept_state_is_any_pending(ia32e_sept_t ept_entry)
     return sept_special_flags_lookup[idx].any_pending;
 }
 
+_STATIC_INLINE_ bool_t sept_state_is_any_pending_inc_mmiol(ia32e_sept_t ept_entry)
+{
+    uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC);
+    return sept_special_flags_lookup[idx].any_pending_incl_mmio;
+}
+
 _STATIC_INLINE_ bool_t sept_state_is_any_pending_and_guest_acceptable(const ia32e_sept_t ept_entry)
 {
     uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
@@ -461,6 +474,17 @@ _STATIC_INLINE_ void sept_set_mt_from_ipat_tdmem(ia32e_sept_t *const ept_entry_p
     ept_entry_ptr->mt2 = ept_entry_ptr->ipat_tdmem;
 }
 
+/**
+ * @brief Return true if the page is MMIO (IPAT_TDMEM (bit 6) is 0)
+ *
+ * @param ept_entry_ptr
+ * @return bool_t
+ */
+_STATIC_INLINE_ bool_t is_ept_pt_mmio(ia32e_sept_t *const ept_entry_ptr)
+{
+    return ept_entry_ptr->ipat_tdmem == 0;
+}
+
 _STATIC_INLINE_ void sept_update_state(ia32e_sept_t* ept_entry, sept_state_mask_t state)
 {
     ia32e_sept_t new_septe;
@@ -479,7 +503,10 @@ _STATIC_INLINE_ void sept_l2_update_state(ia32e_sept_t* ept_entry, sept_state_ma
 
     uint64_t final_mask = L2_SEPT_STATE_ENCODING_MASK;
 
-    if ((state == SEPT_STATE_L2_MAPPED_MASK) || (state == SEPT_STATE_L2_BLOCKED_MASK))
+    if ((state == SEPT_STATE_L2_MAPPED_MASK) ||
+        (state == SEPT_STATE_L2_BLOCKED_MASK) ||
+        (state == SEPT_STATE_L2_MMIO_MAPPED_MASK) ||
+        (state == SEPT_STATE_L2_MMIO_BLOCKED_MASK))
     {
         final_mask = L2_SEPT_STATE_ENCODING_WO_R_MASK;
     }
@@ -498,6 +525,23 @@ _STATIC_INLINE_ gpa_attr_single_vm_t sept_get_gpa_attr(const ia32e_sept_t ept_en
     return gpa_attr_single_vm;
 }
 
+/**
+ * @brief - Update the architectural GPA attributes, Memory Type and IPTA of the leaf L2 SEPT entry.
+ *          The page is assumed to be not blocked and not blocked for writing, but may be pending.
+ *              - Ignore gpa_attr.VALID; this bit is assumed to be checked by the caller.
+ *              - If the entry is a blocked leaf (L2_BLOCKED):
+ *              - Set R, W, Xs, Xu and PWA bits to 0 and save the requested values in TDRD, TDWR, TDXS, TDXU and TDPWA
+ *          Update the IPAT_TDMEM and MT - see the SEPT spreadsheet
+ *              - MT0        (bit 3) = 0
+ *              - MT1        (bit 4) = !is_mmio
+ *              - MT2        (bit 5) = !is_mmio
+ *              - IPAT_TDMEM (bit 6) = !is_mmio
+ *
+ * @param l2_sept_entry_ptr
+ * @param gpa_attr_single_vm
+ * @param is_mmio
+ * @return void
+ */
 _STATIC_INLINE_ void l2_sept_update_gpa_attr(
     ia32e_sept_t *const l2_sept_entry_ptr,
     const gpa_attr_single_vm_t gpa_attr_single_vm)
@@ -510,6 +554,7 @@ _STATIC_INLINE_ void l2_sept_update_gpa_attr(
     l2_sept_entry_ptr->l2_encoding.pwa = gpa_attr_single_vm.pwa;
     l2_sept_entry_ptr->l2_encoding.sss = gpa_attr_single_vm.sss;
     l2_sept_entry_ptr->l2_encoding.sve = gpa_attr_single_vm.sve;
+    l2_sept_entry_ptr->l2_encoding.mt0_tdrd = 0;
 
     if (is_l2_sept_blocked(l2_sept_entry_ptr))
     {
@@ -521,6 +566,8 @@ _STATIC_INLINE_ void l2_sept_update_gpa_attr(
         l2_sept_entry_ptr->l2_encoding.x = 0;
         l2_sept_entry_ptr->l2_encoding.mt2_tdxu = l2_sept_entry_ptr->l2_encoding.xu;
         l2_sept_entry_ptr->l2_encoding.xu = 0;
+        l2_sept_entry_ptr->l2_encoding.tdpwa = l2_sept_entry_ptr->l2_encoding.pwa;
+        l2_sept_entry_ptr->l2_encoding.pwa = 0;
     }
 }
 
@@ -530,7 +577,7 @@ _STATIC_INLINE_ void l2_sept_update_gpa_attr(
  *  - If the entry is free, return only SVE.  Return VALID as 0.
  *  - Else if the entry is a leaf, return all attributes.  Return VALID as 1.
  *    - If the entry is a blocked leaf, return saved W bit (if is_blockedw) or saved RWXsXu bits (if !is_blockedw)
- *  - Else (non-leaf), return RWXsXu as all-1 (even if they are 0 since the entry is blocked).  Return VALID as 1.
+ *  - Else (non-leaf), return R, W, Xs, Xuand pwa as all-1 (even if they are 0 since the entry is blocked).  Return VALID as 1.
  *
  *  @param l2_sept_entry_ptr - pointer to the L2 sept entry
  *  @param is_blockedw - BLOCKEDW state of the parent L1 entry
@@ -569,6 +616,7 @@ _STATIC_INLINE_ gpa_attr_single_vm_t l2_sept_get_gpa_attr(
                     gpa_attr_single_vm.r = l2_sept_entry_ptr->l2_encoding.mt0_tdrd;
                     gpa_attr_single_vm.xs = l2_sept_entry_ptr->l2_encoding.mt1_tdxs;
                     gpa_attr_single_vm.xu = l2_sept_entry_ptr->l2_encoding.mt2_tdxu;
+                    gpa_attr_single_vm.pwa = l2_sept_entry_ptr->l2_encoding.tdpwa;
                 }
             }
         }
@@ -801,7 +849,7 @@ void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t
  * @param is_l2_blocked
  */
 void sept_l2_set_leaf_given_hpa_with_hkid(ia32e_sept_t* l2_sept_entry_ptr, gpa_attr_single_vm_t gpa_attr_single_vm,
-                                            pa_t pa, bool_t is_l2_blocked);
+                                            pa_t pa, bool_t is_l2_blocked, bool_t is_mmio);
 
 /**
  * @brief Map a L2 SEPT non-leaf entry - releases all lock on current entry

@@ -30,817 +30,2659 @@
 const msr_lookup_t msr_lookup[MAX_NUM_MSR_LOOKUP] = {
 
  {
-  // 0 - IA32_TIME_STAMP_COUNTER 
+  // 0 - IA32_P5_MC_ADDR 
+  .start_address  = 0x0, .end_address = 0x0,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 1 - IA32_P5_MC_TYPE 
+  .start_address  = 0x1, .end_address = 0x1,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 2 - IA32_MONITOR_FILTER_SIZE 
+  .start_address  = 0x6, .end_address = 0x6,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 3 - IA32_TIME_STAMP_COUNTER 
   .start_address  = 0x10, .end_address = 0x10,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
  },
  {
-  // 1 - IA32_SPEC_CTRL 
+  // 4 - IA32_PLATFORM_ID 
+  .start_address  = 0x17, .end_address = 0x17,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 5 - IA32_APIC_BASE 
+  .start_address  = 0x1b, .end_address = 0x1b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 6 - MSR_MEMORY_CTRL 
+  .start_address  = 0x33, .end_address = 0x33,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES 
+ },
+ {
+  // 7 - MSR_SMI_COUNT 
+  .start_address  = 0x34, .end_address = 0x34,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_OTHER 
+ },
+ {
+  // 8 - IA32_FEATURE_CONTROL 
+  .start_address  = 0x3a, .end_address = 0x3a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 9 - IA32_TSC_ADJUST 
+  .start_address  = 0x3b, .end_address = 0x3b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 10 - IA32_SPEC_CTRL 
   .start_address  = 0x48, .end_address = 0x48,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 2 - IA32_PRED_CMD 
+  // 11 - IA32_PRED_CMD 
   .start_address  = 0x49, .end_address = 0x49,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 3 - IA32_MKTME_PARTITIONING 
-  .start_address  = 0x87, .end_address = 0x87,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE,
-  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE 
+  // 12 - IA32_PPIN_CTL 
+  .start_address  = 0x4e, .end_address = 0x4e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
  },
  {
-  // 4 - IA32_SGXLEPUBKEYHASHx 
+  // 13 - IA32_PPIN 
+  .start_address  = 0x4f, .end_address = 0x4f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 14 - IA32_BIOS_UPDT_TRIG 
+  .start_address  = 0x79, .end_address = 0x79,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_OTHER 
+ },
+ {
+  // 15 - IA32_FEATURE_ACTIVATION 
+  .start_address  = 0x7a, .end_address = 0x7a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 16 - IA32_FZM_RANGE_INDEX 
+  .start_address  = 0x82, .end_address = 0x82,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 17 - IA32_FZM_DOMAIN_CONFIG 
+  .start_address  = 0x83, .end_address = 0x83,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 18 - IA32_FZM_RANGE_STARTADDR 
+  .start_address  = 0x84, .end_address = 0x84,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 19 - IA32_FZM_RANGE_ENDADDR 
+  .start_address  = 0x85, .end_address = 0x85,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 20 - IA32_FZM_RANGE_WRITESTATUS 
+  .start_address  = 0x86, .end_address = 0x86,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 21 - IA32_MKTME_PARTITIONING 
+  .start_address  = 0x87, .end_address = 0x87,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_PCONFIG,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_PCONFIG 
+ },
+ {
+  // 22 - IA32_BIOS_SIGN_ID 
+  .start_address  = 0x8b, .end_address = 0x8b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_OTHER 
+ },
+ {
+  // 23 - IA32_SGXLEPUBKEYHASHx 
   .start_address  = 0x8c, .end_address = 0x8f,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 5 - MSR_WBINVDP 
+  // 24 - MSR_WBINVDP 
   .start_address  = 0x98, .end_address = 0x98,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 6 - MSR_WBNOINVDP 
+  // 25 - MSR_WBNOINVDP 
   .start_address  = 0x99, .end_address = 0x99,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 7 - MSR_INTR_PENDING 
+  // 26 - MSR_INTR_PENDING 
   .start_address  = 0x9a, .end_address = 0x9a,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 8 - IA32_SMM_MONITOR_CTL 
+  // 27 - IA32_SMM_MONITOR_CTL 
   .start_address  = 0x9b, .end_address = 0x9b,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 9 - IA32_SMBASE 
+  // 28 - IA32_SMBASE 
   .start_address  = 0x9e, .end_address = 0x9e,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 10 - IA32_MISC_PACKAGE_CTLS 
+  // 29 - IA32_MISC_PACKAGE_CTLS 
   .start_address  = 0xbc, .end_address = 0xbc,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
  },
  {
-  // 11 - IA32_XAPIC_DISABLE_STATUS 
+  // 30 - IA32_XAPIC_DISABLE_STATUS 
   .start_address  = 0xbd, .end_address = 0xbd,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 12 - IA32_PMCx 
+  // 31 - IA32_PMCx 
   .start_address  = 0xc1, .end_address = 0xc8,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 13 - IA32_UMWAIT_CONTROL 
+  // 32 - MSR_PLATFORM_INFO 
+  .start_address  = 0xce, .end_address = 0xce,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 33 - IA32_CORE_CAPABILITIES 
+  .start_address  = 0xcf, .end_address = 0xcf,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
+ },
+ {
+  // 34 - IA32_UMWAIT_CONTROL 
   .start_address  = 0xe1, .end_address = 0xe1,
   .rd_bit_meaning = MSR_BITMAP_DYN_UMWAIT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_UMWAIT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 14 - IA32_ARCH_CAPABILITIES 
+  // 35 - IA32_MPERF 
+  .start_address  = 0xe7, .end_address = 0xe7,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 36 - IA32_APERF 
+  .start_address  = 0xe8, .end_address = 0xe8,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 37 - MSR_RAR_CONTROL 
+  .start_address  = 0xed, .end_address = 0xed,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES 
+ },
+ {
+  // 38 - MSR_RAR_ACTION_VECTOR 
+  .start_address  = 0xee, .end_address = 0xee,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES 
+ },
+ {
+  // 39 - MSR_RAR_PAYLOAD_TABLE_BASE  
+  .start_address  = 0xef, .end_address = 0xef,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES 
+ },
+ {
+  // 40 - MSR_RAR_INFO 
+  .start_address  = 0xf0, .end_address = 0xf0,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES 
+ },
+ {
+  // 41 - IA32_MTRRCAP 
+  .start_address  = 0xfe, .end_address = 0xfe,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
+ },
+ {
+  // 42 - IA32_ARCH_CAPABILITIES 
   .start_address  = 0x10a, .end_address = 0x10a,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 15 - IA32_FLUSH_CMD 
+  // 43 - IA32_FLUSH_CMD 
   .start_address  = 0x10b, .end_address = 0x10b,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 16 - IA32_TSX_CTRL 
+  // 44 - IA32_TSX_FORCE_ABORT 
+  .start_address  = 0x10f, .end_address = 0x10f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 45 - IA32_TSX_CTRL 
   .start_address  = 0x122, .end_address = 0x122,
   .rd_bit_meaning = MSR_BITMAP_DYN_TSX, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_TSX, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 17 - IA32_SYSENTER_CS 
+  // 46 - IA32_MCU_OPT_CTRL 
+  .start_address  = 0x123, .end_address = 0x123,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 47 - MSR_FEATURE_ENABLES 
+  .start_address  = 0x140, .end_address = 0x140,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_OTHER 
+ },
+ {
+  // 48 - IA32_SYSENTER_CS 
   .start_address  = 0x174, .end_address = 0x174,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 18 - IA32_SYSENTER_ESP 
+  // 49 - IA32_SYSENTER_ESP 
   .start_address  = 0x175, .end_address = 0x175,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 19 - IA32_SYSENTER_EIP 
+  // 50 - IA32_SYSENTER_EIP 
   .start_address  = 0x176, .end_address = 0x176,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 20 - IA32_PERFEVTSELx 
-  .start_address  = 0x186, .end_address = 0x18d,
-  .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
-  .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
+  // 51 - IA32_MCG_CAP 
+  .start_address  = 0x179, .end_address = 0x179,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 21 - IA32_OVERCLOCKING_STATUS 
+  // 52 - IA32_MCG_STATUS 
+  .start_address  = 0x17a, .end_address = 0x17a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 53 - IA32_MCG_CTL 
+  .start_address  = 0x17b, .end_address = 0x17b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 54 - IA32_PERFEVTSELx 
+  .start_address  = 0x186, .end_address = 0x18d,
+  .rd_bit_meaning = MSR_BITMAP_DYN_OTHER, .rd_action = MSR_ACTION_OTHER,
+  .wr_bit_meaning = MSR_BITMAP_DYN_OTHER, .wr_action = MSR_ACTION_OTHER 
+ },
+ {
+  // 55 - IA32_OVERCLOCKING_STATUS 
   .start_address  = 0x195, .end_address = 0x195,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 22 - IA32_MISC_ENABLE 
-  .start_address  = 0x1a0, .end_address = 0x1a0,
-  .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_OTHER,
-  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+  // 56 - IA32_PERF_STATUS 
+  .start_address  = 0x198, .end_address = 0x198,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_EST,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_EST 
  },
  {
-  // 23 - MSR_OFFCORE_RSPx 
+  // 57 - IA32_PERF_CTL 
+  .start_address  = 0x199, .end_address = 0x199,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_EST,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_EST 
+ },
+ {
+  // 58 - IA32_CLOCK_MODULATION 
+  .start_address  = 0x19a, .end_address = 0x19a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_ACPI,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_ACPI 
+ },
+ {
+  // 59 - IA32_THERM_INTERRUPT 
+  .start_address  = 0x19b, .end_address = 0x19b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_ACPI,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_ACPI 
+ },
+ {
+  // 60 - IA32_THERM_STATUS 
+  .start_address  = 0x19c, .end_address = 0x19c,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_ACPI,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_ACPI 
+ },
+ {
+  // 61 - MSR_THERM2_CTL 
+  .start_address  = 0x19d, .end_address = 0x19d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_TM2,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_TM2 
+ },
+ {
+  // 62 - IA32_MISC_ENABLE 
+  .start_address  = 0x1a0, .end_address = 0x1a0,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_OTHER 
+ },
+ {
+  // 63 - MSR_OFFCORE_RSPx 
   .start_address  = 0x1a6, .end_address = 0x1a7,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 24 - IA32_XFD 
+  // 64 - IA32_ENERGY_PERF_BIAS 
+  .start_address  = 0x1b0, .end_address = 0x1b0,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 65 - IA32_PACKAGE_THERM_STATUS 
+  .start_address  = 0x1b1, .end_address = 0x1b1,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 66 - IA32_PACKAGE_THERM_INTERRUPT 
+  .start_address  = 0x1b2, .end_address = 0x1b2,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 67 - IA32_HW_GET_LP_PM_META_DATA 
+  .start_address  = 0x1c2, .end_address = 0x1c2,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 68 - IA32_HW_SET_LP_PM_META_DATA 
+  .start_address  = 0x1c3, .end_address = 0x1c3,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 69 - IA32_XFD 
   .start_address  = 0x1c4, .end_address = 0x1c4,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFD, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFD, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 25 - IA32_XFD_ERR 
+  // 70 - IA32_XFD_ERR 
   .start_address  = 0x1c5, .end_address = 0x1c5,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFD, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFD, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 26 - IA32_DEBUGCTL 
+  // 71 - IA32_DD_TRHTTLE_DEACTIVATE_MSR  
+  .start_address  = 0x1c7, .end_address = 0x1c7,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 72 - IA32_DD_DI_CAPABILITY_MSR  
+  .start_address  = 0x1ca, .end_address = 0x1ca,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 73 - IA32_DD_DI_ACTIVATE_MSR  
+  .start_address  = 0x1cb, .end_address = 0x1cb,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 74 - IA32_DEBUGCTL 
   .start_address  = 0x1d9, .end_address = 0x1d9,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_OTHER 
  },
  {
-  // 27 - IA32_PLATFORM_DCA_CAP 
+  // 75 - IA32_SMRR_PHYSBASE 
+  .start_address  = 0x1f2, .end_address = 0x1f2,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 76 - IA32_SMRR_PHYSMASK 
+  .start_address  = 0x1f3, .end_address = 0x1f3,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 77 - IA32_SMRR2_PHYSBASE 
+  .start_address  = 0x1f6, .end_address = 0x1f6,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 78 - IA32_SMRR2_PHYSMASK 
+  .start_address  = 0x1f7, .end_address = 0x1f7,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 79 - IA32_PLATFORM_DCA_CAP 
   .start_address  = 0x1f8, .end_address = 0x1f8,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE,
-  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE 
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_DCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_DCA 
  },
  {
-  // 28 - IA32_CPU_DCA_CAP 
+  // 80 - IA32_CPU_DCA_CAP 
   .start_address  = 0x1f9, .end_address = 0x1f9,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE,
-  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE 
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_DCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_DCA 
  },
  {
-  // 29 - IA32_DCA_0_CAP 
+  // 81 - IA32_DCA_0_CAP 
   .start_address  = 0x1fa, .end_address = 0x1fa,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE,
-  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE 
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_DCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_DCA 
  },
  {
-  // 30 - MSR_SLAM_ENABLE 
+  // 82 - IA32_MTRR_PHYSBASE0 
+  .start_address  = 0x200, .end_address = 0x200,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 83 - IA32_MTRR_PHYSMASK0 
+  .start_address  = 0x201, .end_address = 0x201,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 84 - IA32_MTRR_PHYSBASE1 
+  .start_address  = 0x202, .end_address = 0x202,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 85 - IA32_MTRR_PHYSMASK1 
+  .start_address  = 0x203, .end_address = 0x203,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 86 - IA32_MTRR_PHYSBASE2 
+  .start_address  = 0x204, .end_address = 0x204,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 87 - IA32_MTRR_PHYSMASK2 
+  .start_address  = 0x205, .end_address = 0x205,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 88 - IA32_MTRR_PHYSBASE3 
+  .start_address  = 0x206, .end_address = 0x206,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 89 - IA32_MTRR_PHYSMASK3 
+  .start_address  = 0x207, .end_address = 0x207,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 90 - IA32_MTRR_PHYSBASE4 
+  .start_address  = 0x208, .end_address = 0x208,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 91 - IA32_MTRR_PHYSMASK4 
+  .start_address  = 0x209, .end_address = 0x209,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 92 - IA32_MTRR_PHYSBASE5 
+  .start_address  = 0x20a, .end_address = 0x20a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 93 - IA32_MTRR_PHYSMASK5 
+  .start_address  = 0x20b, .end_address = 0x20b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 94 - IA32_MTRR_PHYSBASE6 
+  .start_address  = 0x20c, .end_address = 0x20c,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 95 - IA32_MTRR_PHYSMASK6 
+  .start_address  = 0x20d, .end_address = 0x20d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 96 - IA32_MTRR_PHYSBASE7 
+  .start_address  = 0x20e, .end_address = 0x20e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 97 - IA32_MTRR_PHYSMASK7 
+  .start_address  = 0x20f, .end_address = 0x20f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 98 - IA32_MTRR_PHYSBASE8 
+  .start_address  = 0x210, .end_address = 0x210,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 99 - IA32_MTRR_PHYSMASK8 
+  .start_address  = 0x211, .end_address = 0x211,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 100 - IA32_MTRR_PHYSBASE9 
+  .start_address  = 0x212, .end_address = 0x212,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 101 - IA32_MTRR_PHYSMASK9 
+  .start_address  = 0x213, .end_address = 0x213,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 102 - IA32_MTRR_FIX64K_00000 
+  .start_address  = 0x250, .end_address = 0x250,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 103 - IA32_MTRR_FIX16K_80000 
+  .start_address  = 0x258, .end_address = 0x258,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 104 - IA32_MTRR_FIX16K_A0000 
+  .start_address  = 0x259, .end_address = 0x259,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 105 - IA32_MTRR_FIX4K_C0000 
+  .start_address  = 0x268, .end_address = 0x268,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 106 - IA32_MTRR_FIX4K_C8000 
+  .start_address  = 0x269, .end_address = 0x269,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 107 - IA32_MTRR_FIX4K_D0000 
+  .start_address  = 0x26a, .end_address = 0x26a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 108 - IA32_MTRR_FIX4K_D8000 
+  .start_address  = 0x26b, .end_address = 0x26b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 109 - IA32_MTRR_FIX4K_E0000 
+  .start_address  = 0x26c, .end_address = 0x26c,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 110 - IA32_MTRR_FIX4K_E8000 
+  .start_address  = 0x26d, .end_address = 0x26d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 111 - IA32_MTRR_FIX4K_F0000 
+  .start_address  = 0x26e, .end_address = 0x26e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 112 - IA32_MTRR_FIX4K_F8000 
+  .start_address  = 0x26f, .end_address = 0x26f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 113 - MSR_SLAM_ENABLE 
   .start_address  = 0x276, .end_address = 0x276,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 31 - IA32_PAT 
+  // 114 - IA32_PAT 
   .start_address  = 0x277, .end_address = 0x277,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 32 - IA32_FIXED_CTRx 
+  // 115 - IA32_MCx_CTL2 
+  .start_address  = 0x280, .end_address = 0x29f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 116 - IA32_PRMRR_BASEx 
+  .start_address  = 0x2a0, .end_address = 0x2a7,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 117 - IA32_FUSARR_BASE 
+  .start_address  = 0x2c0, .end_address = 0x2c0,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 118 - IA32_FUSARR_MASK 
+  .start_address  = 0x2c1, .end_address = 0x2c1,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 119 - IA32_MTRR_DEF_TYPE 
+  .start_address  = 0x2ff, .end_address = 0x2ff,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MTRR,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MTRR 
+ },
+ {
+  // 120 - BIOS_SE_SVN 
+  .start_address  = 0x302, .end_address = 0x302,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 121 - Future BIOS_SE_SVN Expansion 
+  .start_address  = 0x303, .end_address = 0x303,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 122 - IA32_FIXED_CTRx 
   .start_address  = 0x309, .end_address = 0x310,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 33 - IA32_PERF_METRICS 
+  // 123 - IA32_PERF_METRICS 
   .start_address  = 0x329, .end_address = 0x329,
   .rd_bit_meaning = MSR_BITMAP_DYN_OTHER, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_OTHER, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 34 - IA32_PERF_CAPABILITIES 
+  // 124 - IA32_PERF_CAPABILITIES 
   .start_address  = 0x345, .end_address = 0x345,
   .rd_bit_meaning = MSR_BITMAP_DYN_OTHER, .rd_action = MSR_ACTION_OTHER,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 35 - IA32_FIXED_CTR_CTRL 
+  // 125 - IA32_FIXED_CTR_CTRL 
   .start_address  = 0x38d, .end_address = 0x38d,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 36 - IA32_PERF_GLOBAL_STATUS 
+  // 126 - IA32_PERF_GLOBAL_STATUS 
   .start_address  = 0x38e, .end_address = 0x38e,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 37 - IA32_PERF_GLOBAL_CTRL 
+  // 127 - IA32_PERF_GLOBAL_CTRL 
   .start_address  = 0x38f, .end_address = 0x38f,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 38 - IA32_PERF_GLOBAL_STATUS_RESET 
+  // 128 - IA32_PERF_GLOBAL_STATUS_RESET 
   .start_address  = 0x390, .end_address = 0x390,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 39 - IA32_PERF_GLOBAL_STATUS_SET 
+  // 129 - IA32_PERF_GLOBAL_STATUS_SET 
   .start_address  = 0x391, .end_address = 0x391,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 40 - IA32_PERF_GLOBAL_INUSE 
+  // 130 - IA32_PERF_GLOBAL_INUSE 
   .start_address  = 0x392, .end_address = 0x392,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 41 - IA32_PEBS_ENABLE 
+  // 131 - IA32_PEBS_ENABLE 
   .start_address  = 0x3f1, .end_address = 0x3f1,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 42 - MSR_PEBS_MATRIX_VECT 
+  // 132 - MSR_PEBS_MATRIX_VECT 
   .start_address  = 0x3f2, .end_address = 0x3f2,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 43 - MSR_PEBS_LD_LATENCY 
+  // 133 - MSR_PEBS_LD_LATENCY 
   .start_address  = 0x3f6, .end_address = 0x3f6,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 44 - MSR_PEBS_FRONTEND 
+  // 134 - MSR_PEBS_FRONTEND 
   .start_address  = 0x3f7, .end_address = 0x3f7,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 45 - IA32_VMX_BASIC 
+  // 135 - IA32_MC0_CTL 
+  .start_address  = 0x400, .end_address = 0x400,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 136 - IA32_MC0_STATUS 
+  .start_address  = 0x401, .end_address = 0x401,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 137 - IA32_MC0_ADDR 
+  .start_address  = 0x402, .end_address = 0x402,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 138 - IA32_MC0_MISC 
+  .start_address  = 0x403, .end_address = 0x403,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 139 - IA32_MC1_CTL 
+  .start_address  = 0x404, .end_address = 0x404,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 140 - IA32_MC1_STATUS 
+  .start_address  = 0x405, .end_address = 0x405,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 141 - IA32_MC1_ADDR 
+  .start_address  = 0x406, .end_address = 0x406,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 142 - IA32_MC1_MISC 
+  .start_address  = 0x407, .end_address = 0x407,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 143 - IA32_MC2_CTL 
+  .start_address  = 0x408, .end_address = 0x408,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 144 - IA32_MC2_STATUS 
+  .start_address  = 0x409, .end_address = 0x409,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 145 - IA32_MC2_ADDR 
+  .start_address  = 0x40a, .end_address = 0x40a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 146 - IA32_MC2_MISC 
+  .start_address  = 0x40b, .end_address = 0x40b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 147 - IA32_MC3_CTL 
+  .start_address  = 0x40c, .end_address = 0x40c,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 148 - IA32_MC3_STATUS 
+  .start_address  = 0x40d, .end_address = 0x40d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 149 - IA32_MC3_ADDR 
+  .start_address  = 0x40e, .end_address = 0x40e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 150 - IA32_MC3_MISC 
+  .start_address  = 0x40f, .end_address = 0x40f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 151 - IA32_MC4_CTL 
+  .start_address  = 0x410, .end_address = 0x410,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 152 - IA32_MC4_STATUS 
+  .start_address  = 0x411, .end_address = 0x411,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 153 - IA32_MC4_ADDR 
+  .start_address  = 0x412, .end_address = 0x412,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 154 - IA32_MC4_MISC 
+  .start_address  = 0x413, .end_address = 0x413,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 155 - IA32_MC5_CTL 
+  .start_address  = 0x414, .end_address = 0x414,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 156 - IA32_MC5_STATUS 
+  .start_address  = 0x415, .end_address = 0x415,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 157 - IA32_MC5_ADDR 
+  .start_address  = 0x416, .end_address = 0x416,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 158 - IA32_MC5_MISC 
+  .start_address  = 0x417, .end_address = 0x417,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 159 - IA32_MC6_CTL 
+  .start_address  = 0x418, .end_address = 0x418,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 160 - IA32_MC6_STATUS 
+  .start_address  = 0x419, .end_address = 0x419,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 161 - IA32_MC6_ADDR 
+  .start_address  = 0x41a, .end_address = 0x41a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 162 - IA32_MC6_MISC 
+  .start_address  = 0x41b, .end_address = 0x41b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 163 - IA32_MC7_CTL 
+  .start_address  = 0x41c, .end_address = 0x41c,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 164 - IA32_MC7_STATUS 
+  .start_address  = 0x41d, .end_address = 0x41d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 165 - IA32_MC7_ADDR 
+  .start_address  = 0x41e, .end_address = 0x41e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 166 - IA32_MC7_MISC 
+  .start_address  = 0x41f, .end_address = 0x41f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 167 - IA32_MC8_CTL 
+  .start_address  = 0x420, .end_address = 0x420,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 168 - IA32_MC8_STATUS 
+  .start_address  = 0x421, .end_address = 0x421,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 169 - IA32_MC8_ADDR 
+  .start_address  = 0x422, .end_address = 0x422,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 170 - IA32_MC8_MISC 
+  .start_address  = 0x423, .end_address = 0x423,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 171 - IA32_MC9_CTL 
+  .start_address  = 0x424, .end_address = 0x424,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 172 - IA32_MC9_STATUS 
+  .start_address  = 0x425, .end_address = 0x425,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 173 - IA32_MC9_ADDR 
+  .start_address  = 0x426, .end_address = 0x426,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 174 - IA32_MC9_MISC 
+  .start_address  = 0x427, .end_address = 0x427,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 175 - IA32_MC10_CTL 
+  .start_address  = 0x428, .end_address = 0x428,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 176 - IA32_MC10_STATUS 
+  .start_address  = 0x429, .end_address = 0x429,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 177 - IA32_MC10_ADDR 
+  .start_address  = 0x42a, .end_address = 0x42a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 178 - IA32_MC10_MISC 
+  .start_address  = 0x42b, .end_address = 0x42b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 179 - IA32_MC11_CTL 
+  .start_address  = 0x42c, .end_address = 0x42c,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 180 - IA32_MC11_STATUS 
+  .start_address  = 0x42d, .end_address = 0x42d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 181 - IA32_MC11_ADDR 
+  .start_address  = 0x42e, .end_address = 0x42e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 182 - IA32_MC11_MISC 
+  .start_address  = 0x42f, .end_address = 0x42f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 183 - IA32_MC12_CTL 
+  .start_address  = 0x430, .end_address = 0x430,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 184 - IA32_MC12_STATUS 
+  .start_address  = 0x431, .end_address = 0x431,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 185 - IA32_MC12_ADDR 
+  .start_address  = 0x432, .end_address = 0x432,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 186 - IA32_MC12_MISC 
+  .start_address  = 0x433, .end_address = 0x433,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 187 - IA32_MC13_CTL 
+  .start_address  = 0x434, .end_address = 0x434,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 188 - IA32_MC13_STATUS 
+  .start_address  = 0x435, .end_address = 0x435,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 189 - IA32_MC13_ADDR 
+  .start_address  = 0x436, .end_address = 0x436,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 190 - IA32_MC13_MISC 
+  .start_address  = 0x437, .end_address = 0x437,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 191 - IA32_MC14_CTL 
+  .start_address  = 0x438, .end_address = 0x438,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 192 - IA32_MC14_STATUS 
+  .start_address  = 0x439, .end_address = 0x439,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 193 - IA32_MC14_ADDR 
+  .start_address  = 0x43a, .end_address = 0x43a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 194 - IA32_MC14_MISC 
+  .start_address  = 0x43b, .end_address = 0x43b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 195 - IA32_MC15_CTL 
+  .start_address  = 0x43c, .end_address = 0x43c,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 196 - IA32_MC15_STATUS 
+  .start_address  = 0x43d, .end_address = 0x43d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 197 - IA32_MC15_ADDR 
+  .start_address  = 0x43e, .end_address = 0x43e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 198 - IA32_MC15_MISC 
+  .start_address  = 0x43f, .end_address = 0x43f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 199 - IA32_MC16_CTL 
+  .start_address  = 0x440, .end_address = 0x440,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 200 - IA32_MC16_STATUS 
+  .start_address  = 0x441, .end_address = 0x441,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 201 - IA32_MC16_ADDR 
+  .start_address  = 0x442, .end_address = 0x442,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 202 - IA32_MC16_MISC 
+  .start_address  = 0x443, .end_address = 0x443,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 203 - IA32_MC17_CTL 
+  .start_address  = 0x444, .end_address = 0x444,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 204 - IA32_MC17_STATUS 
+  .start_address  = 0x445, .end_address = 0x445,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 205 - IA32_MC17_ADDR 
+  .start_address  = 0x446, .end_address = 0x446,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 206 - IA32_MC17_MISC 
+  .start_address  = 0x447, .end_address = 0x447,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 207 - IA32_MC18_CTL 
+  .start_address  = 0x448, .end_address = 0x448,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 208 - IA32_MC18_STATUS 
+  .start_address  = 0x449, .end_address = 0x449,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 209 - IA32_MC18_ADDR 
+  .start_address  = 0x44a, .end_address = 0x44a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 210 - IA32_MC18_MISC 
+  .start_address  = 0x44b, .end_address = 0x44b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 211 - IA32_MC19_CTL 
+  .start_address  = 0x44c, .end_address = 0x44c,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 212 - IA32_MC19_STATUS 
+  .start_address  = 0x44d, .end_address = 0x44d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 213 - IA32_MC19_ADDR 
+  .start_address  = 0x44e, .end_address = 0x44e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 214 - IA32_MC19_MISC 
+  .start_address  = 0x44f, .end_address = 0x44f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 215 - IA32_MC20_CTL 
+  .start_address  = 0x450, .end_address = 0x450,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 216 - IA32_MC20_STATUS 
+  .start_address  = 0x451, .end_address = 0x451,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 217 - IA32_MC20_ADDR 
+  .start_address  = 0x452, .end_address = 0x452,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 218 - IA32_MC20_MISC 
+  .start_address  = 0x453, .end_address = 0x453,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 219 - IA32_MC21_CTL 
+  .start_address  = 0x454, .end_address = 0x454,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 220 - IA32_MC21_STATUS 
+  .start_address  = 0x455, .end_address = 0x455,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 221 - IA32_MC21_ADDR 
+  .start_address  = 0x456, .end_address = 0x456,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 222 - IA32_MC21_MISC 
+  .start_address  = 0x457, .end_address = 0x457,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 223 - IA32_MC22_CTL 
+  .start_address  = 0x458, .end_address = 0x458,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 224 - IA32_MC22_STATUS 
+  .start_address  = 0x459, .end_address = 0x459,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 225 - IA32_MC22_ADDR 
+  .start_address  = 0x45a, .end_address = 0x45a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 226 - IA32_MC22_MISC 
+  .start_address  = 0x45b, .end_address = 0x45b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 227 - IA32_MC23_CTL 
+  .start_address  = 0x45c, .end_address = 0x45c,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 228 - IA32_MC23_STATUS 
+  .start_address  = 0x45d, .end_address = 0x45d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 229 - IA32_MC23_ADDR 
+  .start_address  = 0x45e, .end_address = 0x45e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 230 - IA32_MC23_MISC 
+  .start_address  = 0x45f, .end_address = 0x45f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 231 - IA32_MC24_CTL 
+  .start_address  = 0x460, .end_address = 0x460,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 232 - IA32_MC24_STATUS 
+  .start_address  = 0x461, .end_address = 0x461,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 233 - IA32_MC24_ADDR 
+  .start_address  = 0x462, .end_address = 0x462,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 234 - IA32_MC24_MISC 
+  .start_address  = 0x463, .end_address = 0x463,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 235 - IA32_MC25_CTL 
+  .start_address  = 0x464, .end_address = 0x464,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 236 - IA32_MC25_STATUS 
+  .start_address  = 0x465, .end_address = 0x465,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 237 - IA32_MC25_ADDR 
+  .start_address  = 0x466, .end_address = 0x466,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 238 - IA32_MC25_MISC 
+  .start_address  = 0x467, .end_address = 0x467,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 239 - IA32_MC26_CTL 
+  .start_address  = 0x468, .end_address = 0x468,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 240 - IA32_MC26_STATUS 
+  .start_address  = 0x469, .end_address = 0x469,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 241 - IA32_MC26_ADDR 
+  .start_address  = 0x46a, .end_address = 0x46a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 242 - IA32_MC26_MISC 
+  .start_address  = 0x46b, .end_address = 0x46b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 243 - IA32_MC27_CTL 
+  .start_address  = 0x46c, .end_address = 0x46c,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 244 - IA32_MC27_STATUS 
+  .start_address  = 0x46d, .end_address = 0x46d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 245 - IA32_MC27_ADDR 
+  .start_address  = 0x46e, .end_address = 0x46e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 246 - IA32_MC27_MISC 
+  .start_address  = 0x46f, .end_address = 0x46f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 247 - IA32_MC28_CTL 
+  .start_address  = 0x470, .end_address = 0x470,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 248 - IA32_MC28_STATUS 
+  .start_address  = 0x471, .end_address = 0x471,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 249 - IA32_MC28_ADDR 
+  .start_address  = 0x472, .end_address = 0x472,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 250 - IA32_MC28_MISC 
+  .start_address  = 0x473, .end_address = 0x473,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 251 - IA32_VMX_BASIC 
   .start_address  = 0x480, .end_address = 0x480,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 46 - IA32_VMX_PINBASED_CTLS 
+  // 252 - IA32_VMX_PINBASED_CTLS 
   .start_address  = 0x481, .end_address = 0x481,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 47 - IA32_VMX_PROCBASED_CTLS 
+  // 253 - IA32_VMX_PROCBASED_CTLS 
   .start_address  = 0x482, .end_address = 0x482,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 48 - IA32_VMX_EXIT_CTLS 
+  // 254 - IA32_VMX_EXIT_CTLS 
   .start_address  = 0x483, .end_address = 0x483,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 49 - IA32_VMX_ENTRY_CTLS 
+  // 255 - IA32_VMX_ENTRY_CTLS 
   .start_address  = 0x484, .end_address = 0x484,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 50 - IA32_VMX_MISC 
+  // 256 - IA32_VMX_MISC 
   .start_address  = 0x485, .end_address = 0x485,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 51 - IA32_VMX_CR0_FIXED0 
+  // 257 - IA32_VMX_CR0_FIXED0 
   .start_address  = 0x486, .end_address = 0x486,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 52 - IA32_VMX_CR0_FIXED1 
+  // 258 - IA32_VMX_CR0_FIXED1 
   .start_address  = 0x487, .end_address = 0x487,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 53 - IA32_VMX_CR4_FIXED0 
+  // 259 - IA32_VMX_CR4_FIXED0 
   .start_address  = 0x488, .end_address = 0x488,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 54 - IA32_VMX_CR4_FIXED1 
+  // 260 - IA32_VMX_CR4_FIXED1 
   .start_address  = 0x489, .end_address = 0x489,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 55 - IA32_VMX_VMCS_ENUM 
+  // 261 - IA32_VMX_VMCS_ENUM 
   .start_address  = 0x48a, .end_address = 0x48a,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 56 - IA32_VMX_PROCBASED_CTLS2 
+  // 262 - IA32_VMX_PROCBASED_CTLS2 
   .start_address  = 0x48b, .end_address = 0x48b,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 57 - IA32_VMX_EPT_VPID_CAP 
+  // 263 - IA32_VMX_EPT_VPID_CAP 
   .start_address  = 0x48c, .end_address = 0x48c,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 58 - IA32_VMX_TRUE_PINBASED_CTLS 
+  // 264 - IA32_VMX_TRUE_PINBASED_CTLS 
   .start_address  = 0x48d, .end_address = 0x48d,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 59 - IA32_VMX_TRUE_PROCBASED_CTLS 
+  // 265 - IA32_VMX_TRUE_PROCBASED_CTLS 
   .start_address  = 0x48e, .end_address = 0x48e,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 60 - IA32_VMX_TRUE_EXIT_CTLS 
+  // 266 - IA32_VMX_TRUE_EXIT_CTLS 
   .start_address  = 0x48f, .end_address = 0x48f,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 61 - IA32_VMX_TRUE_ENTRY_CTLS 
+  // 267 - IA32_VMX_TRUE_ENTRY_CTLS 
   .start_address  = 0x490, .end_address = 0x490,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 62 - IA32_VMX_VMFUNC 
+  // 268 - IA32_VMX_VMFUNC 
   .start_address  = 0x491, .end_address = 0x491,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 63 - IA32_VMX_PROCBASED_CTLS3 
+  // 269 - IA32_VMX_PROCBASED_CTLS3 
   .start_address  = 0x492, .end_address = 0x492,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 64 - IA32_A_PMCx 
+  // 270 - IA32_A_PMCx 
   .start_address  = 0x4c1, .end_address = 0x4c8,
   .rd_bit_meaning = MSR_BITMAP_DYN_PERFMON, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PERFMON, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 65 - IA32_SGX_SVN_STATUS 
+  // 271 - IA32_MCG_EXT_CTL 
+  .start_address  = 0x4d0, .end_address = 0x4d0,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_MCA,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_MCA 
+ },
+ {
+  // 272 - IA32_SGX_SVN_STATUS 
   .start_address  = 0x500, .end_address = 0x500,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 66 - MSR_SEAM_SAI_MODE 
+  // 273 - Future IA32_SE_SVN Expansion 
+  .start_address  = 0x501, .end_address = 0x501,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 274 - MSR_SEAM_SAI_MODE 
   .start_address  = 0x550, .end_address = 0x550,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 67 - IA32_RTIT_OUTPUT_BASE 
+  // 275 - IA32_RTIT_OUTPUT_BASE 
   .start_address  = 0x560, .end_address = 0x560,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 68 - IA32_RTIT_OUTPUT_MASK_PTRS 
+  // 276 - IA32_RTIT_OUTPUT_MASK_PTRS 
   .start_address  = 0x561, .end_address = 0x561,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 69 - IA32_RTIT_CTL 
+  // 277 - IA32_RTIT_CTL 
   .start_address  = 0x570, .end_address = 0x570,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 70 - IA32_RTIT_STATUS 
+  // 278 - IA32_RTIT_STATUS 
   .start_address  = 0x571, .end_address = 0x571,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 71 - IA32_RTIT_CR3_MATCH 
+  // 279 - IA32_RTIT_CR3_MATCH 
   .start_address  = 0x572, .end_address = 0x572,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 72 - IA32_RTIT_ADDR0_A 
+  // 280 - IA32_RTIT_ADDR0_A 
   .start_address  = 0x580, .end_address = 0x580,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 73 - IA32_RTIT_ADDR0_B 
+  // 281 - IA32_RTIT_ADDR0_B 
   .start_address  = 0x581, .end_address = 0x581,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 74 - IA32_RTIT_ADDR1_A 
+  // 282 - IA32_RTIT_ADDR1_A 
   .start_address  = 0x582, .end_address = 0x582,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 75 - IA32_RTIT_ADDR1_B 
+  // 283 - IA32_RTIT_ADDR1_B 
   .start_address  = 0x583, .end_address = 0x583,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 76 - IA32_RTIT_ADDR2_A 
+  // 284 - IA32_RTIT_ADDR2_A 
   .start_address  = 0x584, .end_address = 0x584,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 77 - IA32_RTIT_ADDR2_B 
+  // 285 - IA32_RTIT_ADDR2_B 
   .start_address  = 0x585, .end_address = 0x585,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 78 - IA32_RTIT_ADDR3_A 
+  // 286 - IA32_RTIT_ADDR3_A 
   .start_address  = 0x586, .end_address = 0x586,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 79 - IA32_RTIT_ADDR3_B 
+  // 287 - IA32_RTIT_ADDR3_B 
   .start_address  = 0x587, .end_address = 0x587,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_PT, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 80 - IA32_DS_AREA 
+  // 288 - IA32_MPRR_CAP 
+  .start_address  = 0x5d0, .end_address = 0x5d0,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 289 - IA32_MPRR_EN_ATTR_DEFAULT 
+  .start_address  = 0x5d1, .end_address = 0x5d1,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 290 - IA32_MPRR_LOW_ADDR1 
+  .start_address  = 0x5d2, .end_address = 0x5d2,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 291 - IA32_MPRR_HIGH_ADDR1 
+  .start_address  = 0x5d3, .end_address = 0x5d3,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 292 - IA32_MPRR_EN_ATTR_ATTR1 
+  .start_address  = 0x5d4, .end_address = 0x5d4,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 293 - IA32_MPRR_LOW_ADDR2 
+  .start_address  = 0x5d5, .end_address = 0x5d5,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 294 - IA32_MPRR_HIGH_ADDR2 
+  .start_address  = 0x5d6, .end_address = 0x5d6,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 295 - IA32_MPRR_EN_ATTR_ATTR2 
+  .start_address  = 0x5d7, .end_address = 0x5d7,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 296 - IA32_MPRR_LOW_ADDR3 
+  .start_address  = 0x5d8, .end_address = 0x5d8,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 297 - IA32_MPRR_HIGH_ADDR3 
+  .start_address  = 0x5d9, .end_address = 0x5d9,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 298 - IA32_MPRR_EN_ATTR_ATTR3 
+  .start_address  = 0x5da, .end_address = 0x5da,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 299 - IA32_MPRR_LOW_ADDR4 
+  .start_address  = 0x5db, .end_address = 0x5db,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 300 - IA32_MPRR_HIGH_ADDR4 
+  .start_address  = 0x5dc, .end_address = 0x5dc,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 301 - IA32_MPRR_EN_ATTR_ATTR4 
+  .start_address  = 0x5dd, .end_address = 0x5dd,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 302 - IA32_MPRR_LOW_ADDR5 
+  .start_address  = 0x5de, .end_address = 0x5de,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 303 - IA32_MPRR_HIGH_ADDR5 
+  .start_address  = 0x5df, .end_address = 0x5df,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 304 - IA32_MPRR_EN_ATTR_ATTR5 
+  .start_address  = 0x5e0, .end_address = 0x5e0,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 305 - IA32_MPRR_LOW_ADDR6 
+  .start_address  = 0x5e1, .end_address = 0x5e1,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 306 - IA32_MPRR_HIGH_ADDR6 
+  .start_address  = 0x5e2, .end_address = 0x5e2,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 307 - IA32_MPRR_EN_ATTR_ATTR6 
+  .start_address  = 0x5e3, .end_address = 0x5e3,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 308 - IA32_MPRR_LOW_ADDR7 
+  .start_address  = 0x5e4, .end_address = 0x5e4,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 309 - IA32_MPRR_HIGH_ADDR7 
+  .start_address  = 0x5e5, .end_address = 0x5e5,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 310 - IA32_MPRR_EN_ATTR_ATTR7 
+  .start_address  = 0x5e6, .end_address = 0x5e6,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 311 - IA32_MPRR_LOW_ADDR8 
+  .start_address  = 0x5e7, .end_address = 0x5e7,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 312 - IA32_MPRR_HIGH_ADDR8 
+  .start_address  = 0x5e8, .end_address = 0x5e8,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 313 - IA32_MPRR_EN_ATTR_ATTR8 
+  .start_address  = 0x5e9, .end_address = 0x5e9,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 314 - IA32_MPRR_LOW_ADDR9 
+  .start_address  = 0x5ea, .end_address = 0x5ea,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 315 - IA32_MPRR_HIGH_ADDR9 
+  .start_address  = 0x5eb, .end_address = 0x5eb,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 316 - IA32_MPRR_EN_ATTR_ATTR9 
+  .start_address  = 0x5ec, .end_address = 0x5ec,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 317 - IA32_MPRR_LOW_ADDR10 
+  .start_address  = 0x5ed, .end_address = 0x5ed,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 318 - IA32_MPRR_HIGH_ADDR10 
+  .start_address  = 0x5ee, .end_address = 0x5ee,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 319 - IA32_MPRR_EN_ATTR_ATTR10 
+  .start_address  = 0x5ef, .end_address = 0x5ef,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 320 - IA32_MPRR_LOW_ADDR11 
+  .start_address  = 0x5f0, .end_address = 0x5f0,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 321 - IA32_MPRR_HIGH_ADDR11 
+  .start_address  = 0x5f1, .end_address = 0x5f1,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 322 - IA32_MPRR_EN_ATTR_ATTR11 
+  .start_address  = 0x5f2, .end_address = 0x5f2,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 323 - IA32_MPRR_LOW_ADDR12 
+  .start_address  = 0x5f3, .end_address = 0x5f3,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 324 - IA32_MPRR_HIGH_ADDR12 
+  .start_address  = 0x5f4, .end_address = 0x5f4,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 325 - IA32_MPRR_EN_ATTR_ATTR12 
+  .start_address  = 0x5f5, .end_address = 0x5f5,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 326 - IA32_MPRR_LOW_ADDR13 
+  .start_address  = 0x5f6, .end_address = 0x5f6,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 327 - IA32_MPRR_HIGH_ADDR13 
+  .start_address  = 0x5f7, .end_address = 0x5f7,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 328 - IA32_MPRR_EN_ATTR_ATTR13 
+  .start_address  = 0x5f8, .end_address = 0x5f8,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 329 - IA32_MPRR_LOW_ADDR14 
+  .start_address  = 0x5f9, .end_address = 0x5f9,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 330 - IA32_MPRR_HIGH_ADDR14 
+  .start_address  = 0x5fa, .end_address = 0x5fa,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 331 - IA32_MPRR_EN_ATTR_ATTR14 
+  .start_address  = 0x5fb, .end_address = 0x5fb,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 332 - IA32_MPRR_LOW_ADDR15 
+  .start_address  = 0x5fc, .end_address = 0x5fc,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 333 - IA32_MPRR_HIGH_ADDR15 
+  .start_address  = 0x5fd, .end_address = 0x5fd,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 334 - IA32_DS_AREA 
   .start_address  = 0x600, .end_address = 0x600,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 81 - IA32_U_CET 
+  // 335 - IA32_U_CET 
   .start_address  = 0x6a0, .end_address = 0x6a0,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 82 - IA32_S_CET 
+  // 336 - IA32_S_CET 
   .start_address  = 0x6a2, .end_address = 0x6a2,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 83 - IA32_PL0_SSP 
+  // 337 - IA32_PL0_SSP 
   .start_address  = 0x6a4, .end_address = 0x6a4,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 84 - IA32_PL1_SSP 
+  // 338 - IA32_PL1_SSP 
   .start_address  = 0x6a5, .end_address = 0x6a5,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 85 - IA32_PL2_SSP 
+  // 339 - IA32_PL2_SSP 
   .start_address  = 0x6a6, .end_address = 0x6a6,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 86 - IA32_PL3_SSP 
+  // 340 - IA32_PL3_SSP 
   .start_address  = 0x6a7, .end_address = 0x6a7,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 87 - IA32_INTERRUPT_SSP_TABLE_ADDR 
+  // 341 - IA32_INTERRUPT_SSP_TABLE_ADDR 
   .start_address  = 0x6a8, .end_address = 0x6a8,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_CET, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 88 - IA32_TSC_DEADLINE 
+  // 342 - IA32_TSC_DEADLINE 
   .start_address  = 0x6e0, .end_address = 0x6e0,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE,
-  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE 
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_TSC_DEADLINE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_TSC_DEADLINE 
  },
  {
-  // 89 - IA32_PKRS 
+  // 343 - IA32_PKRS 
   .start_address  = 0x6e1, .end_address = 0x6e1,
   .rd_bit_meaning = MSR_BITMAP_DYN_PKS, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_PKS, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 90 - Reserved for xAPIC MSRs 
+  // 344 - IA32_PM_ENABLE 
+  .start_address  = 0x770, .end_address = 0x770,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 345 - IA32_HWP_CAPABILITIES 
+  .start_address  = 0x771, .end_address = 0x771,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 346 - IA32_HWP_REQUEST_PKG 
+  .start_address  = 0x772, .end_address = 0x772,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 347 - IA32_HWP_INTERRUPT 
+  .start_address  = 0x773, .end_address = 0x773,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 348 - IA32_HWP_REQUEST 
+  .start_address  = 0x774, .end_address = 0x774,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 349 - IA32_HWP_PECI_REQUEST_INFO 
+  .start_address  = 0x775, .end_address = 0x775,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 350 - IA32_HWP_CTL 
+  .start_address  = 0x776, .end_address = 0x776,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 351 - IA32_HWP_STATUS 
+  .start_address  = 0x777, .end_address = 0x777,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 352 - EXTENDED_MCG_PTR 
+  .start_address  = 0x793, .end_address = 0x793,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 353 - Reserved for xAPIC MSRs 
   .start_address  = 0x800, .end_address = 0x801,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 91 - IA32_X2APIC_APICID 
+  // 354 - IA32_X2APIC_APICID 
   .start_address  = 0x802, .end_address = 0x802,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_OTHER,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 92 - Reserved for xAPIC MSRs 
+  // 355 - IA32_X2APIC_VERSION 
+  .start_address  = 0x803, .end_address = 0x803,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
+ },
+ {
+  // 356 - Reserved for xAPIC MSRs 
   .start_address  = 0x804, .end_address = 0x807,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 93 - IA32_X2APIC_TPR 
+  // 357 - IA32_X2APIC_TPR 
   .start_address  = 0x808, .end_address = 0x808,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 94 - Reserved for xAPIC MSRs 
+  // 358 - Reserved for xAPIC MSRs 
   .start_address  = 0x809, .end_address = 0x809,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 95 - IA32_X2APIC_PPR 
+  // 359 - IA32_X2APIC_PPR 
   .start_address  = 0x80a, .end_address = 0x80a,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 96 - IA32_X2APIC_EOI 
+  // 360 - IA32_X2APIC_EOI 
   .start_address  = 0x80b, .end_address = 0x80b,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 97 - Reserved for xAPIC MSRs 
+  // 361 - Reserved for xAPIC MSRs 
   .start_address  = 0x80c, .end_address = 0x80c,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 98 - Reserved for xAPIC MSRs 
+  // 362 - IA32_X2APIC_LDR 
+  .start_address  = 0x80d, .end_address = 0x80d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
+ },
+ {
+  // 363 - Reserved for xAPIC MSRs 
   .start_address  = 0x80e, .end_address = 0x80e,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 99 - IA32_X2APIC_ISRx 
+  // 364 - IA32_X2APIC_SIVR 
+  .start_address  = 0x80f, .end_address = 0x80f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 365 - IA32_X2APIC_ISRx 
   .start_address  = 0x810, .end_address = 0x817,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 100 - IA32_X2APIC_TMRx 
+  // 366 - IA32_X2APIC_TMRx 
   .start_address  = 0x818, .end_address = 0x81f,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 101 - IA32_X2APIC_IRRx 
+  // 367 - IA32_X2APIC_IRRx 
   .start_address  = 0x820, .end_address = 0x827,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 102 - Reserved for xAPIC MSRs 
+  // 368 - IA32_X2APIC_ESR 
+  .start_address  = 0x828, .end_address = 0x828,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 369 - Reserved for xAPIC MSRs 
   .start_address  = 0x829, .end_address = 0x82e,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 103 - Reserved for xAPIC MSRs 
+  // 370 - IA32_X2APIC_LVT_CMCI 
+  .start_address  = 0x82f, .end_address = 0x82f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 371 - IA32_X2APIC_ICR 
+  .start_address  = 0x830, .end_address = 0x830,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 372 - Reserved for xAPIC MSRs 
   .start_address  = 0x831, .end_address = 0x831,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 104 - IA32_X2APIC_SELF_IPI 
+  // 373 - IA32_X2APIC_LVT_TIMER 
+  .start_address  = 0x832, .end_address = 0x832,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 374 - IA32_X2APIC_LVT_THERMAL 
+  .start_address  = 0x833, .end_address = 0x833,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 375 - IA32_X2APIC_LVT_PMI 
+  .start_address  = 0x834, .end_address = 0x834,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 376 - IA32_X2APIC_LVT_LINT0 
+  .start_address  = 0x835, .end_address = 0x835,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 377 - IA32_X2APIC_LVT_LINT1 
+  .start_address  = 0x836, .end_address = 0x836,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 378 - IA32_X2APIC_LVT_ERROR 
+  .start_address  = 0x837, .end_address = 0x837,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 379 - IA32_X2APIC_INIT_COUNT 
+  .start_address  = 0x838, .end_address = 0x838,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 380 - IA32_X2APIC_CUR_COUNT 
+  .start_address  = 0x839, .end_address = 0x839,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
+ },
+ {
+  // 381 - IA32_X2APIC_LVT_HWP 
+  .start_address  = 0x83a, .end_address = 0x83a,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 382 - Reserved for xAPIC MSRs 
+  .start_address  = 0x83b, .end_address = 0x83d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
+ },
+ {
+  // 383 - IA32_X2APIC_DIV_CONF 
+  .start_address  = 0x83e, .end_address = 0x83e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 384 - IA32_X2APIC_SELF_IPI 
   .start_address  = 0x83f, .end_address = 0x83f,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 105 - Reserved for xAPIC MSRs 
+  // 385 - Reserved for xAPIC MSRs 
   .start_address  = 0x840, .end_address = 0x87f,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 106 - Reserved for xAPIC MSRs 
+  // 386 - Reserved for xAPIC MSRs 
   .start_address  = 0x880, .end_address = 0x8bf,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 107 - Reserved for xAPIC MSRs 
+  // 387 - Reserved for xAPIC MSRs 
   .start_address  = 0x8c0, .end_address = 0x8ff,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 108 - IA32_TME_CAPABILITY 
+  // 388 - IA32_TME_CAPABILITY 
   .start_address  = 0x981, .end_address = 0x981,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE,
-  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE 
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_TME,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_TME 
  },
  {
-  // 109 - IA32_TME_ACTIVATE 
+  // 389 - IA32_TME_ACTIVATE 
   .start_address  = 0x982, .end_address = 0x982,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE,
-  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE 
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_TME,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_TME 
  },
  {
-  // 110 - IA32_TME_EXCLUDE_MASK 
+  // 390 - IA32_TME_EXCLUDE_MASK 
   .start_address  = 0x983, .end_address = 0x983,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE,
-  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE 
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_TME,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_TME 
  },
  {
-  // 111 - IA32_TME_EXCLUDE_BASE 
+  // 391 - IA32_TME_EXCLUDE_BASE 
   .start_address  = 0x984, .end_address = 0x984,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE,
-  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE 
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_TME,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_TME 
  },
  {
-  // 112 - IA32_UINTR_RR 
+  // 392 - IA32_UINTR_RR 
   .start_address  = 0x985, .end_address = 0x985,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 113 - IA32_UINTR_HANDLER 
+  // 393 - IA32_UINTR_HANDLER 
   .start_address  = 0x986, .end_address = 0x986,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 114 - IA32_UINTR_STACKADJUST 
+  // 394 - IA32_UINTR_STACKADJUST 
   .start_address  = 0x987, .end_address = 0x987,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 115 - IA32_UINTR_MISC 
+  // 395 - IA32_UINTR_MISC 
   .start_address  = 0x988, .end_address = 0x988,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 116 - IA32_UINTR_PD 
+  // 396 - IA32_UINTR_PD 
   .start_address  = 0x989, .end_address = 0x989,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 117 - IA32_UINTR_TT 
+  // 397 - IA32_UINTR_TT 
   .start_address  = 0x98a, .end_address = 0x98a,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_ULI, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 118 - IA32_DEBUG_INTERFACE 
-  .start_address  = 0xc80, .end_address = 0xc80,
-  .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
-  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+  // 398 - IA32_MPRR-High-ADDR15 
+  .start_address  = 0x98b, .end_address = 0x98b,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
  },
  {
-  // 119 - IA32_BNDCFGS 
+  // 399 - IA32_MPRR_EN_ATTR15 
+  .start_address  = 0x98c, .end_address = 0x98c,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 400 - IA32_MPRR-Low-ADDR16 
+  .start_address  = 0x98d, .end_address = 0x98d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 401 - IA32_MPRR-High-ADDR16 
+  .start_address  = 0x98e, .end_address = 0x98e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 402 - IA32_MPRR_EN_ATTR16 
+  .start_address  = 0x98f, .end_address = 0x98f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 403 - IA32_DEBUG_INTERFACE 
+  .start_address  = 0xc80, .end_address = 0xc80,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 404 - IA32_L3_QOS_CFG 
+  .start_address  = 0xc81, .end_address = 0xc81,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_RDT_A,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_RDT_A 
+ },
+ {
+  // 405 - IA32_L2_QOS_CFG 
+  .start_address  = 0xc82, .end_address = 0xc82,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_RDT_A,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_RDT_A 
+ },
+ {
+  // 406 - IA32_QM_EVTSEL 
+  .start_address  = 0xc8d, .end_address = 0xc8d,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_RDT_M,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_RDT_M 
+ },
+ {
+  // 407 - IA32_QM_CTR 
+  .start_address  = 0xc8e, .end_address = 0xc8e,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_RDT_M,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_RDT_M 
+ },
+ {
+  // 408 - IA32_PQR_ASSOC 
+  .start_address  = 0xc8f, .end_address = 0xc8f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_RDT_M,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_RDT_M 
+ },
+ {
+  // 409 - IA32_L3_QOS_MASK_x 
+  .start_address  = 0xc90, .end_address = 0xd0f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_RDT_A,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_RDT_A 
+ },
+ {
+  // 410 - IA32_L2_QOS_MASK_x 
+  .start_address  = 0xd10, .end_address = 0xd4f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_RDT_A,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_RDT_A 
+ },
+ {
+  // 411 - IA32_L2_QOS_Ext_BW_Thrtl_x 
+  .start_address  = 0xd50, .end_address = 0xd8f,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_RDT_A,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_RDT_A 
+ },
+ {
+  // 412 - IA32_BNDCFGS 
   .start_address  = 0xd90, .end_address = 0xd90,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 120 - IA32_PASID 
+  // 413 - IA32_PASID 
   .start_address  = 0xd93, .end_address = 0xd93,
   .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 121 - IA32_XSS 
+  // 414 - IA32_XSS 
   .start_address  = 0xda0, .end_address = 0xda0,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_OTHER 
  },
  {
-  // 122 - IA32_LBR_INFO 
+  // 415 - IA32_PKG_HDC_CTL 
+  .start_address  = 0xdb0, .end_address = 0xdb0,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 416 - IA32_PM_CTL1 
+  .start_address  = 0xdb1, .end_address = 0xdb1,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 417 - IA32_THREAD_STALL 
+  .start_address  = 0xdb2, .end_address = 0xdb2,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 418 - IA32_MPX_LAX 
+  .start_address  = 0x1000, .end_address = 0x1000,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 419 - IA32_LBR_INFO 
   .start_address  = 0x1200, .end_address = 0x12ff,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_LBR, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_LBR, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 123 - IA32_LBR_CTL 
+  // 420 - IA32_SEAMRR_BASE 
+  .start_address  = 0x1400, .end_address = 0x1400,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 421 - IA32_SEAMRR_MASK 
+  .start_address  = 0x1401, .end_address = 0x1401,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 422 - IA32_SEAM_EXTEND 
+  .start_address  = 0x1402, .end_address = 0x1402,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 423 - IA32_RELOAD_PMCx 
+  .start_address  = 0x14c1, .end_address = 0x14c8,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 424 - IA32_LBR_CTL 
   .start_address  = 0x14ce, .end_address = 0x14ce,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_LBR, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_LBR, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 124 - IA32_LBR_DEPTH 
+  // 425 - IA32_LBR_DEPTH 
   .start_address  = 0x14cf, .end_address = 0x14cf,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_LBR, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_LBR, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 125 - IA32_LBR_x_FROM_IP 
+  // 426 - IA32_LBR_x_FROM_IP 
   .start_address  = 0x1500, .end_address = 0x15ff,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_LBR, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_LBR, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 126 - IA32_LBR_x_TO_IP 
+  // 427 - IA32_LBR_x_TO_IP 
   .start_address  = 0x1600, .end_address = 0x16ff,
   .rd_bit_meaning = MSR_BITMAP_DYN_XFAM_LBR, .rd_action = MSR_ACTION_GP,
   .wr_bit_meaning = MSR_BITMAP_DYN_XFAM_LBR, .wr_action = MSR_ACTION_GP 
  },
  {
-  // 127 - IA32_UARCH_MISC_CTL 
+  // 428 - IA32_HW_FEEDBACK_PTR 
+  .start_address  = 0x17d0, .end_address = 0x17d0,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 429 - IA32_HW_FEEDBACK_CONFIG 
+  .start_address  = 0x17d1, .end_address = 0x17d1,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 430 - IA32_THREAD_FEEDBACK_CHAR 
+  .start_address  = 0x17d2, .end_address = 0x17d2,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 431 - IA32_HW_FEEDBACK_THREAD_CONFIG 
+  .start_address  = 0x17d4, .end_address = 0x17d4,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 432 - IA32_HRESET_ENABLE 
+  .start_address  = 0x17da, .end_address = 0x17da,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_GP_OR_VE_BY_REDUCED_VE 
+ },
+ {
+  // 433 - IA32_UARCH_MISC_CTL 
   .start_address  = 0x1b01, .end_address = 0x1b01,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 128 - IA32_EFER 
+  // 434 - IA32_EFER 
   .start_address  = 0xc0000080, .end_address = 0xc0000080,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_OTHER 
  },
  {
-  // 129 - IA32_STAR 
+  // 435 - IA32_STAR 
   .start_address  = 0xc0000081, .end_address = 0xc0000081,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 130 - IA32_LSTAR 
+  // 436 - IA32_LSTAR 
   .start_address  = 0xc0000082, .end_address = 0xc0000082,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 131 - IA32_FMASK 
+  // 437 - IA32_CSTAR 
+  .start_address  = 0xc0000083, .end_address = 0xc0000083,
+  .rd_bit_meaning = MSR_BITMAP_FIXED_1, .rd_action = MSR_ACTION_VE,
+  .wr_bit_meaning = MSR_BITMAP_FIXED_1, .wr_action = MSR_ACTION_VE 
+ },
+ {
+  // 438 - IA32_FMASK 
   .start_address  = 0xc0000084, .end_address = 0xc0000084,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 132 - IA32_FSBASE 
+  // 439 - IA32_FSBASE 
   .start_address  = 0xc0000100, .end_address = 0xc0000100,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 133 - IA32_GSBASE 
+  // 440 - IA32_GSBASE 
   .start_address  = 0xc0000101, .end_address = 0xc0000101,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 134 - IA32_KERNEL_GS_BASE 
+  // 441 - IA32_KERNEL_GS_BASE 
   .start_address  = 0xc0000102, .end_address = 0xc0000102,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 
  },
  {
-  // 135 - IA32_TSC_AUX 
+  // 442 - IA32_TSC_AUX 
   .start_address  = 0xc0000103, .end_address = 0xc0000103,
   .rd_bit_meaning = MSR_BITMAP_FIXED_0, .rd_action = MSR_ACTION_FATAL_ERROR,
   .wr_bit_meaning = MSR_BITMAP_FIXED_0, .wr_action = MSR_ACTION_FATAL_ERROR 

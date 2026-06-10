@@ -46,6 +46,7 @@
 // Used by PDE
 #define NUM_PASIDT_PAGES_TO_MAP (0X1U)
 #define MAX_PASIDT_ENTRIES_PER_PAGE (TDX_PAGE_SIZE_IN_BYTES / sizeof(dmar_pasidte_t))
+#define GET_PD_NUM_OF_ENTRIES(cte_ptr) BIT(PDTS_IDX_CONST + cte_ptr->pdts)
 
 // Used by PASIDTE
 #define AW_48_BIT (0b10)
@@ -403,5 +404,18 @@ typedef struct
     pamt_entry_t *pasidt_pamt_ptr;
     pa_t pasidte_pa;
 } dmar_walk_res_t;
+
+typedef union
+{
+    struct
+    {
+        uint64_t vm_idx : 8; // Bits [7:0]: VM_IDX, 0:L1 SEPT, 1-3:L2 VM 1-3 SEPT
+        uint64_t pasid : 20; // Bits [27:8]: Reserved for Gen2. Must be 0.
+        uint64_t rsrvd : 36; // Bits [28:63]: Reserved for Gen2. Must be 0
+    };
+    uint64_t raw;
+} dmar_target_t;
+tdx_static_assert(sizeof(dmar_target_t) == 8, dmar_target_t);
+
 
 #endif /* SRC_COMMON_DATA_STRUCTURES_TDXIO_DMAR_DEFS_H_ */

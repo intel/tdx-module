@@ -34,6 +34,7 @@
 #include "data_structures/tdx_tdvps.h"
 #include "helpers/helpers.h"
 #include "helpers/virt_msr_helpers.h"
+#include "td_dispatcher/vm_exits/td_vmexit.h"
 
 #define POSTED_INTER_DESCRIPTOR_SIZE  64
 
@@ -274,7 +275,7 @@ static bool_t check_l2_procbased_exec_ctls3(const tdcs_t* tdcs_p, uint64_t wr_ma
         // For production TDs, this field's writable bits properties must comply with the virtual value of
         // IA32_VMX_PROCBASED_CTLS3, as known to L1.  This takes into account the TD configuration.
         // Bits that are not 1 in the write mask are not modified from the current value and therefore are not checked. */
-        if (ctls3.raw & wr_mask & ~tdcs_p->virt_msrs.virt_ia32_vmx_procbased_ctls3.raw)
+        if (ctls3.raw & wr_mask & ~tdcs_p->virt_msrs.virt_ia32_vmx_procbased_ctls3)
         {
             return false;
         }
@@ -776,15 +777,28 @@ static api_error_code_e md_vp_element_vmcs_wr_handle(md_field_id_t field_id, md_
     case VMX_GUEST_CR4_ENCODE:
     {
         // CR4 value is written as if written by the guest TD
-        uint64_t old_cr, guest_host_mask, rd_shadow;
-        ia32_vmread(VMX_GUEST_CR4_ENCODE, &old_cr);
-        ia32_vmread(VMX_CR4_GUEST_HOST_MASK_ENCODE, &guest_host_mask);
-        ia32_vmread(VMX_CR4_READ_SHADOW_ENCODE, &rd_shadow);
+        // We allow the guest to write any virtual value of CR4.MCE, however we save the virtual
+        // value to CR4 read shadow, and use a value of 1 to write the real guest CR4 value.
+        // For checking validity, we set the MCE bit of the guest / host mask to 0, so any value of
+        // MCE would pass.
+        ia32_cr4_t old_cr, guest_host_mask, rd_shadow;
+        ia32_vmread(VMX_GUEST_CR4_ENCODE, &old_cr.raw);
+        ia32_vmread(VMX_CR4_GUEST_HOST_MASK_ENCODE, &guest_host_mask.raw);
+        ia32_vmread(VMX_CR4_READ_SHADOW_ENCODE, &rd_shadow.raw);
 
-        if (!apply_cr0_cr4_controls_for_write(old_cr, wr_value, guest_host_mask, rd_shadow))
+        // We allow the guest to write any virtual value of CR4.MCE, however we save the virtual
+        // value to CR4 read shadow, and use a value of 1 to write the real guest CR4 value.
+        ia32_cr4_t cr4 = { .raw = *wr_value };
+        rd_shadow.mce = cr4.mce;
+        ia32_vmwrite(VMX_CR4_READ_SHADOW_ENCODE, rd_shadow.raw);
+        cr4.mce = 1;
+        guest_host_mask.mce = 0;   // Ignore MCE in the following check
+        if (!apply_cr0_cr4_controls_for_write(old_cr.raw, &cr4.raw, guest_host_mask.raw, rd_shadow.raw))
         {
             return TDX_METADATA_FIELD_VALUE_NOT_VALID;
         }
+
+        *wr_value = cr4.raw;
 
         // No need to check the compatibility of the CR4 value with the TD configuration.
         // This is implied by the guest/host mask and read shadow that were checked above.
@@ -889,9 +903,8 @@ static api_error_code_e md_vp_element_vmcs_wr_handle(md_field_id_t field_id, md_
     return TDX_SUCCESS;
 }
 
-static api_error_code_e md_vp_element_l2_vmcs_wr_handle(md_field_id_t field_id, md_access_t access_type,
-                                                        md_context_ptrs_t md_ctx, uint64_t wr_mask,
-                                                        uint64_t* wr_value, bool_t* write_done)
+static api_error_code_e md_vp_element_l2_vmcs_wr_handle(md_field_id_t field_id, md_access_t access_type, md_context_ptrs_t md_ctx,
+                                                        uint64_t wr_mask, uint64_t* wr_value, bool_t* write_done)
 {
     *write_done = false;
 
@@ -1023,7 +1036,7 @@ static api_error_code_e md_vp_element_l2_vmcs_wr_handle(md_field_id_t field_id, 
 
             if (!calculate_native_tsc(*wr_value,
                                       md_ctx.tdcs_ptr->executions_ctl_fields.tsc_multiplier,
-                                      md_ctx.tdcs_ptr->executions_ctl_fields.tsc_offset,
+                                      0,
                                       wr_value))
             {
                 return TDX_METADATA_FIELD_VALUE_NOT_VALID;
@@ -1103,8 +1116,8 @@ static api_error_code_e md_vp_element_l2_vmcs_wr_handle(md_field_id_t field_id, 
     return TDX_SUCCESS;
 }
 
-static api_error_code_e md_vp_element_tdvps_wr_handle(md_field_id_t field_id, md_access_t access_type,
-                                                      md_context_ptrs_t md_ctx, uint64_t* wr_value, bool_t* write_done)
+static api_error_code_e md_vp_element_tdvps_wr_handle(md_field_id_t field_id, md_access_t access_type, md_access_qualifier_t access_qual,
+                                                      md_context_ptrs_t md_ctx, uint64_t read_value, uint64_t* wr_value, bool_t* write_done)
 {
     *write_done = false;
 
@@ -1144,7 +1157,6 @@ static api_error_code_e md_vp_element_tdvps_wr_handle(md_field_id_t field_id, md
                 // This image resides at offset 0 of the PT component of XBUFF.
                 // XBUFF is defined as an array of 8-byte metadata fields. Therefore, FIELD_CODE is offset / 8.
 
-
                 if ((xfam.pt) && (field_id.field_code == md_ctx.tdcs_ptr->executions_ctl_fields.xbuff_offsets[XCR0_PT_BIT] / 8))
                 {
                     return TDX_METADATA_FIELD_NOT_WRITABLE;
@@ -1165,7 +1177,22 @@ static api_error_code_e md_vp_element_tdvps_wr_handle(md_field_id_t field_id, md
         }
         case MD_TDVPS_GUEST_MSR_STATE_CLASS_CODE:
         {
-            if (field_id.field_code == MD_TDVPS_IA32_SPEC_CTRL_FIELD_CODE)
+            if (field_id.field_code == MD_TDVPS_IA32_MISC_ENABLE_FIELD_CODE)
+            {
+                /* This field is written on import and by the host VMM for debuggable TDs.
+                   In both cases we allow the value to be written as if TDCS.TD_CTLS.REDUCE_VE is 1. */
+                tdx_debug_assert(MD_IMPORT_MUTABLE == access_type || (MD_HOST_WR == access_type && access_qual.host_qualifier.debug));
+                UNUSED(access_qual);
+
+                if (wrmsr_ia32_misc_enable(md_ctx.tdvps_ptr, md_ctx.tdcs_ptr, *wr_value) != TD_MSR_ACCESS_SUCCESS)
+                {
+                    return TDX_METADATA_FIELD_VALUE_NOT_VALID;
+                }
+
+                *write_done = true;
+                break;
+            }
+            else if (field_id.field_code == MD_TDVPS_IA32_SPEC_CTRL_FIELD_CODE)
             {
                 if (is_not_gnr_a0_stepping())
                 {
@@ -1190,10 +1217,39 @@ static api_error_code_e md_vp_element_tdvps_wr_handle(md_field_id_t field_id, md
             }
             break;
         }
+        case MD_TDVPS_CPUID_CONTROL_CLASS_CODE:
+        {
+            if (md_ctx.tdcs_ptr->executions_ctl_fields.td_ctls.lock)
+            {
+                if (*wr_value != read_value)
+                {
+                    return TDX_METADATA_FIELD_VALUE_NOT_VALID;
+                }
+                else
+                {
+                    *write_done = true;   // Write of the same value, ignore
+                }
+            }
+            break;
+        }
         case MD_TDVPS_MANAGEMENT_CLASS_CODE:
         {
             switch (field_id.field_code)
             {
+                case MD_TDVPS_CPUID_SUPERVISOR_VE_FIELD_CODE:
+                case MD_TDVPS_CPUID_USER_VE_FIELD_CODE:
+                    if (md_ctx.tdcs_ptr->executions_ctl_fields.td_ctls.lock)
+                    {
+                        if (*wr_value != read_value)
+                        {
+                            return TDX_METADATA_FIELD_VALUE_NOT_VALID;
+                        }
+                        else
+                        {
+                            *write_done = true;   // Write of the same value, ignore
+                        }
+                    }
+                    break;
                 case MD_TDVPS_VCPU_STATE_FIELD_CODE:
                 {
                     // Write the imported VCPU state only if the VCPU is disabled
@@ -1367,9 +1423,8 @@ static api_error_code_e md_vp_element_tdvps_wr_handle(md_field_id_t field_id, md
     return TDX_SUCCESS;
 }
 
-static api_error_code_e md_vp_element_special_wr_handle(md_field_id_t field_id, md_access_t access_type,
-                                                        md_context_ptrs_t md_ctx, uint64_t wr_mask,
-                                                        uint64_t* wr_value, bool_t* write_done)
+static api_error_code_e md_vp_element_special_wr_handle(md_field_id_t field_id, md_access_t access_type, md_access_qualifier_t access_qual,
+                                                        md_context_ptrs_t md_ctx, uint64_t wr_mask, uint64_t read_value, uint64_t* wr_value, bool_t* write_done)
 {
     api_error_code_e retval = TDX_SUCCESS;
     *write_done = false;
@@ -1382,12 +1437,11 @@ static api_error_code_e md_vp_element_special_wr_handle(md_field_id_t field_id, 
              (field_id.class_code == MD_TDVPS_VMCS_2_CLASS_CODE) ||
              (field_id.class_code == MD_TDVPS_VMCS_3_CLASS_CODE))
     {
-        retval = md_vp_element_l2_vmcs_wr_handle(field_id, access_type, md_ctx, wr_mask,
-                                                 wr_value, write_done);
+        retval = md_vp_element_l2_vmcs_wr_handle(field_id, access_type, md_ctx, wr_mask, wr_value, write_done);
     }
     else
     {
-        retval = md_vp_element_tdvps_wr_handle(field_id, access_type, md_ctx, wr_value, write_done);
+        retval = md_vp_element_tdvps_wr_handle(field_id, access_type, access_qual, md_ctx, read_value, wr_value, write_done);
     }
 
     return retval;
@@ -1513,8 +1567,8 @@ api_error_code_e md_vp_write_element(md_field_id_t field_id, const md_lookup_t* 
 
     if (entry->special_wr_handling)
     {
-        status = md_vp_element_special_wr_handle(field_id, access_type, md_ctx, combined_wr_mask,
-                                                 &wr_value, &write_done);
+        status = md_vp_element_special_wr_handle(field_id, access_type, access_qual, md_ctx, combined_wr_mask,
+                                                 read_value, &wr_value, &write_done);
         if (status != TDX_SUCCESS)
         {
             return status;

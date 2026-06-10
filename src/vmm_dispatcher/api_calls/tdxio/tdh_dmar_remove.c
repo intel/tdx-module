@@ -112,6 +112,13 @@ api_error_type tdh_dmar_remove(dmar_idx_t dmar_idx)
         break;
     case DMAR_PASIDTE_LVL:
 
+        // Nothing to do, in case the PASIDTE wasn't accepted
+        if (dmar_walk_res.pasidte_ptr->slptptr == 0)
+        {
+            return_val = TDX_SUCCESS;
+            goto EXIT_SUCCESS;
+        }
+
         sept_pa.page_4k_num = dmar_walk_res.pasidte_ptr->slptptr;
         sept_pamt_ptr = pamt_implicit_get(sept_pa, PT_4KB);
         tdr_pa = get_pamt_entry_owner(sept_pamt_ptr);
@@ -143,6 +150,8 @@ api_error_type tdh_dmar_remove(dmar_idx_t dmar_idx)
     default:
         FATAL_ERROR();
     }
+
+EXIT_SUCCESS:
 
     if (return_val == TDX_SUCCESS)
     {

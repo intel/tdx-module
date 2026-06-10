@@ -66,10 +66,12 @@ api_error_type tdg_mr_rtmr_extend(uint64_t extension_data_gpa, uint64_t index);
  * @brief Get Virtualization Exception Information for the recent #VE exception
  *
  * @note
+ * 
+ * @param version is the leaf version
  *
  * @return Success or Error type
  */
-api_error_type tdg_vp_veinfo_get(void);
+api_error_type tdg_vp_veinfo_get(uint8_t version);
 
 
 /**

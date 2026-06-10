@@ -139,7 +139,7 @@ void tdx_vmm_dispatcher(void)
         goto EXIT;
     }
 
-    if (!is_valid_tdx_io_host_call(leaf_opcode.raw))
+    if (!is_valid_tdx_io_host_call(leaf_opcode))
     {
         TDX_ERROR("tdx_vmm_dispatcher - TDX-IO not supported, invalid leaf = %d\n", leaf_opcode);
         local_data->vmm_regs.rax = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
@@ -157,6 +157,7 @@ void tdx_vmm_dispatcher(void)
             case TDH_MNG_RD_LEAF:
             case TDH_VP_RD_LEAF:
             case TDH_VP_INIT_LEAF:
+            case TDH_MEM_SHARED_SEPT_WR_LEAF:
                 break;
             default:
                 TDX_ERROR("Version greater than zero not supported for current leaf 0x%llx\n", leaf_opcode.raw);
@@ -288,7 +289,7 @@ void tdx_vmm_dispatcher(void)
     }
     case TDH_MNG_INIT_LEAF:
     {
-        local_data->vmm_regs.rax = tdh_mng_init(local_data->vmm_regs.rcx, local_data->vmm_regs.rdx);
+        local_data->vmm_regs.rax = tdh_mng_init(local_data->vmm_regs.rcx, local_data->vmm_regs.rdx, local_data->vmm_regs.r8);
         break;
     }
     case TDH_VP_INIT_LEAF:
@@ -328,7 +329,8 @@ void tdx_vmm_dispatcher(void)
 
         td_handle_and_flags_t target_tdr_and_flags = { .raw = local_data->vmm_regs.rdx };
 
-        local_data->vmm_regs.rax = tdh_mem_page_demote(page_info, target_tdr_and_flags);
+        local_data->vmm_regs.rax = tdh_mem_page_demote(page_info, target_tdr_and_flags,
+                                                       local_data->vmm_regs.r12, local_data->vmm_regs.r13);
         break;
     }
     case TDH_VP_ENTER_LEAF:
@@ -417,12 +419,12 @@ void tdx_vmm_dispatcher(void)
     }
     case TDH_SYS_CONFIG_LEAF:
     {
-        hkid_api_input_t global_private_hkid;
-        global_private_hkid.raw = local_data->vmm_regs.r8;
+        sys_config_options_t sysconfig_options;
+        sysconfig_options.raw = local_data->vmm_regs.r8;
 
         local_data->vmm_regs.rax = tdh_sys_config(local_data->vmm_regs.rcx,
                                                  local_data->vmm_regs.rdx,
-                                                 global_private_hkid);
+                                                 sysconfig_options);
         break;
     }
     case TDH_SYS_KEY_CONFIG_LEAF:
@@ -512,7 +514,6 @@ void tdx_vmm_dispatcher(void)
                                              local_data->vmm_regs.r9);
         break;
     }
-
     case TDH_SERVTD_BIND_LEAF:
         {
             servtd_attributes_t servtd_attr = {.raw = local_data->vmm_regs.r10};
@@ -805,15 +806,14 @@ void tdx_vmm_dispatcher(void)
     case TDH_DMAR_ADD_LEAF:
     {
         local_data->vmm_regs.rax = tdh_dmar_add((dmar_idx_t)local_data->vmm_regs.rcx,
-                                              (pa_t)local_data->vmm_regs.rdx,
+                                              local_data->vmm_regs.rdx,
                                               local_data->vmm_regs.r8,
                                               local_data->vmm_regs.r9,
                                               local_data->vmm_regs.r10,
                                               local_data->vmm_regs.r11,
                                               local_data->vmm_regs.r12,
                                               local_data->vmm_regs.r13,
-                                              local_data->vmm_regs.r14,
-                                              local_data->vmm_regs.r15);
+                                              local_data->vmm_regs.r14);
         break;
     }
     case TDH_DMAR_BLOCK_LEAF:
@@ -875,7 +875,7 @@ void tdx_vmm_dispatcher(void)
     case TDH_IQ_INV_REQUEST_LEAF:
     {
         local_data->vmm_regs.rax = tdh_iq_inv_request((iommu_id_reg_t)local_data->vmm_regs.rcx,
-                (inv_req_type_e) local_data->vmm_regs.rdx,
+                (inv_req_type_t) local_data->vmm_regs.rdx,
                 local_data->vmm_regs.r8,
                 local_data->vmm_regs.r9,
                 local_data->vmm_regs.r10,
@@ -892,7 +892,11 @@ void tdx_vmm_dispatcher(void)
     {
         local_data->vmm_regs.rax = tdh_mem_shared_sept_wr((page_info_api_input_t)local_data->vmm_regs.rcx,
                                                         (pa_t)local_data->vmm_regs.rdx,
-                                                        (ia32e_sept_t)local_data->vmm_regs.r8);
+                                                        (ia32e_sept_t)local_data->vmm_regs.r8,
+                                                        (ia32e_sept_t)local_data->vmm_regs.r9,
+                                                        (ia32e_sept_t)local_data->vmm_regs.r10,
+                                                        (ia32e_sept_t)local_data->vmm_regs.r11,
+                                                        leaf_opcode.version);
         break;
     }
     case TDH_DEVIF_MT_ADD_LEAF:

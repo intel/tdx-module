@@ -42,7 +42,6 @@
 #include "data_structures/tdx_tdvps.h"
 #include "error_reporting.h"
 #include "data_structures/tdxio/spdm_defs.h"
-#include "tdxio/io_accessors.h"
 
 #define PRIVATE_ONLY true
 #define PRIVATE_OR_SHARED false
@@ -102,6 +101,21 @@ _STATIC_INLINE_ pa_t page_info_to_pa(page_info_api_input_t page_info)
 _STATIC_INLINE_ uint64_t construct_wrmsr_value(uint64_t rdx, uint64_t rax)
 {
     return ((rdx << 32) | (rax & BIT_MASK_32BITS));
+}
+
+typedef enum
+{
+    VE_INFO_ARCH = 0x00,
+    VE_INFO_PENDING = 0x01,
+    VE_INFO_RESERVED_GPA_BITS = 0x02,
+    VE_INFO_CONFIG_PARAVIRT = 0x10,
+    VE_INFO_NON_CONFIG_PARAVIRT = 0x11,
+    VE_INFO_UNSUPPORTED_FEATURE = 0x80
+} ve_category_e;
+
+_STATIC_INLINE_ uint16_t construct_msr_status_with_ve_category(uint16_t status, ve_category_e ve_category)
+{
+    return (uint16_t)(((uint32_t)ve_category << 8) | (uint32_t)status);
 }
 
 _STATIC_INLINE_ bool_t are_gpa_bits_above_virt_maxpa_set(uint64_t gpa, bool_t gpaw, uint64_t virt_maxpa)
@@ -894,6 +908,38 @@ api_error_type check_and_walk_private_gpa_to_leaf(
         );
 
 /**
+ * @brief Checks a GPA to be valid, and GPA.SHARED bit == 0, translates it and returns requested
+ *        EPT entry, and the reached walking level.
+ *
+ * @note Function takes an exclusive lock over SEPT (TDCS.SEPT_LOCK). Lock should be freed after
+ *       the returned EPT entry is no longer used.
+ *
+ * @param tdcs_p - Linear pointer to the TDCS - used to get GPAW, SEPTP and acquire SEPT lock.
+ * @param operand_id - Operand ID number
+ * @param gpa - GPA - Guest Physical Address that needs to be checked and translated.
+ * @param lock_type - Type of lock to take on the SEPT root lock
+ * @param sept_entry - Returns a linear pointer to the SEPT entry at the requested level.
+ *                     Returns NULL if walk failed and didn't reach the requested level.
+ *                     Should be freed after finishing using it (only on success).
+ * @param level - Returns the EPT level
+ * @param cached_ept_entry - Pointer to a EPT entry parameter. On return contains cached value
+ *               of the last sampled EPT entry (even on failure).
+ * @param is_sept_locked - A boolean flag indicating if the TDCS.SEPT_LOCK was exclusively taken.
+ *
+ * @return Error code that states the reason of failure
+ */
+api_error_type lock_sept_check_and_walk_private_gpa_to_leaf(
+        tdcs_t* tdcs_p,
+        uint64_t operand_id,
+        pa_t gpa,
+        lock_type_t lock_type,
+        ia32e_sept_t** sept_entry_ptr,
+        ept_level_t* level,
+        ia32e_sept_t* cached_sept_entry,
+        bool_t* is_sept_locked
+        );
+
+/**
  * @brief Return true if gpa_page_info is a legal and aligned GPA.
  *        - Reserved bits are 0
  *        - Level is between specified minimum and maximum
@@ -958,6 +1004,24 @@ api_error_code_e check_walk_and_map_guest_side_gpa(
         uint16_t hkid,
         mapping_type_t mapping_type,
         bool_t check_gpa_is_private,
+        void ** la
+        );
+
+/**
+ * @brief If shared bit is 1, walks the shared EPT (taken from the TD VMCS)
+ *        Else walk the SEPT and finally maps the translated GPA
+ *
+ * @param tdcs_p Linear pointer to the TDCS - used to get GPAW and SEPTP
+ * @param gpa GPA - sGuest Physical Address that needs to be checked and translated.
+ * @param hkid HKID to be used during the SEPT page walk (accesses to SEPT entries)
+ * @param mapping_type RW access to mapped linear address
+ * @param la Pointer to linear address mapped from translated GPA
+ */
+void walk_and_map_guest_side_gpa(
+        const tdcs_t *const tdcs_p,
+        const pa_t gpa,
+        const uint16_t hkid,
+        const mapping_type_t mapping_type,
         void ** la
         );
 
@@ -1546,7 +1610,7 @@ typedef enum
  *
  * @return Success status or a #GP/#VE indicator
  */
-cr_write_status_e write_guest_cr0(uint64_t value, bool_t allow_pe_disable);
+uint16_t write_guest_cr0(uint64_t value, bool_t allow_pe_disable);
 
 /**
  * @brief Check if CR4 value is allowed by current TD attributes
@@ -1568,8 +1632,7 @@ bool_t is_guest_cr4_allowed_by_td_config(ia32_cr4_t cr4, tdcs_t* tdcs_p, ia32_xc
  *
  * @return Success status or a #GP/#VE indicator
  */
-cr_write_status_e write_guest_cr4(uint64_t value, tdcs_t* tdcs_p
-                                  );
+cr_write_status_e write_guest_cr4(uint64_t value, tdcs_t* tdcs_p);
 
 /**
  * @brief Checks the validity the TD attributes that will be set in the TDCS
@@ -1779,6 +1842,19 @@ typedef enum
     MSR_ACTION_VE,
     MSR_ACTION_GP,
     MSR_ACTION_GP_OR_VE,
+    MSR_ACTION_GP_OR_VE_BY_REDUCED_VE,
+    MSR_ACTION_GP_OR_VE_BY_EST,
+    MSR_ACTION_GP_OR_VE_BY_TM2,
+    MSR_ACTION_GP_OR_VE_BY_DCA,
+    MSR_ACTION_GP_OR_VE_BY_TSC_DEADLINE,
+    MSR_ACTION_GP_OR_VE_BY_MTRR,
+    MSR_ACTION_GP_OR_VE_BY_MCA,
+    MSR_ACTION_GP_OR_VE_BY_ACPI,
+    MSR_ACTION_GP_OR_VE_BY_RDT_M,
+    MSR_ACTION_GP_OR_VE_BY_RDT_A,
+    MSR_ACTION_GP_OR_VE_BY_TME,
+    MSR_ACTION_GP_OR_VE_BY_PCONFIG,
+    MSR_ACTION_GP_OR_VE_BY_CORE_CAPABILITIES,
     MSR_ACTION_FATAL_ERROR,
     MSR_ACTION_OTHER,
 } msr_bitmap_action;
@@ -1801,7 +1877,7 @@ void set_xbuff_offsets_and_size(tdcs_t* tdcs_ptr, uint64_t xfam);
  * Initialize TD-scope metadata.
  * For mutable state import:
  *   - Initialize fields marked as "IE" in the TDR/TDCS spreadsheet.
- *   - currently it does nothing
+ *   - Update mutable fields that are calculated based on imported fields.
  *
  * @param tdcs_ptr - pointer to tdcs
  */
@@ -2068,6 +2144,15 @@ tdx_static_assert(sizeof(servtd_hash_buff_t) == 58, servtd_hash_buff_t);
    4. Return the actual number of entries. */
 uint32_t prepare_servtd_hash_buff(tdcs_t* tdcs_ptr, servtd_hash_buff_t* servtd_has_buf);
 void calculate_servtd_hash(tdcs_t* tdcs_ptr, bool_t handle_avx_state);
+
+// Update TDCS.CPUID_FLAGS based on TD_CTLS.REDUCE_VE and FEATURE_PARAVIRT_CTLS
+// This helper is used on write by the guest TD and at the end of mutable TD state import
+void update_mutable_cpuid_flags(tdcs_t* tdcs_p);
+
+// Check the imported CPUID_FIXED0_BITMAP.  Each bit that is set to 1 must pass one of the two conditions:
+// The same bit in FIXED0_BITMAP of the local lookup table is 0, or
+// The applicable leaf is in the local lookup table, and all its sub-leaves virtual values in TDCS are 0.
+bool_t check_imported_cpuid_fixed0_bitmap(tdcs_t* tdcs_p);
 
 _STATIC_INLINE_ bool_t is_td_guest_in_64b_mode(void)
 {
@@ -2336,18 +2421,25 @@ api_error_type l2_sept_walk_guest_side(
  *          - If bit W is 1, bit R must be 1
  *          - If bit PWA is 1, bit R must be 1
  *          - Bit SVE must be 0
+ *          - If is_mmio is set - Bits Xs, Xu, VGP, PWA, SSS must be 0
  *
  * @param gpa_attr
  *
  * @return bool_t
  */
-_STATIC_INLINE_ bool_t is_gpa_attr_legal(const gpa_attr_single_vm_t gpa_attr_single_vm)
+_STATIC_INLINE_ bool_t is_gpa_attr_legal(
+    const gpa_attr_single_vm_t gpa_attr_single_vm,
+    const bool_t is_mmio)
 {
     if ((!gpa_attr_single_vm.valid && gpa_attr_single_vm.raw) ||
          gpa_attr_single_vm.reserved_14_8 ||
         (gpa_attr_single_vm.w && (!gpa_attr_single_vm.r)) ||
         (gpa_attr_single_vm.pwa && (!gpa_attr_single_vm.r)) ||
-         gpa_attr_single_vm.sve)
+         gpa_attr_single_vm.sve ||
+         (is_mmio &&
+          !(gpa_attr_single_vm.xs == 0 && gpa_attr_single_vm.xu == 0 &&
+            gpa_attr_single_vm.vgp == 0 && gpa_attr_single_vm.pwa == 0 &&
+            gpa_attr_single_vm.sss == 0)))
     {
         TDX_ERROR("Illegal attributes - 0x%llx\n", gpa_attr_single_vm.raw)
         return false;
@@ -2481,11 +2573,11 @@ _STATIC_INLINE_ void restore_td_xcr0_if_required(tdx_module_local_t* local_data_
  *
  * @param leaf_opcode
  */
-_STATIC_INLINE_ bool_t is_valid_tdx_io_host_call(const uint64_t leaf_opcode)
+_STATIC_INLINE_ bool_t is_valid_tdx_io_host_call(const tdx_leaf_and_version_t tdx_leaf_and_version)
 {
     return get_global_data()->tdx_io_supported ||
-           leaf_opcode < TDH_IOMMU_SETREG_LEAF ||
-           leaf_opcode > TDH_DEVIF_MT_RD_LEAF;
+           tdx_leaf_and_version.leaf < TDH_IOMMU_SETREG_LEAF ||
+           tdx_leaf_and_version.leaf > TDH_DEVIF_MT_RD_LEAF;
 }
 
 /**
@@ -2495,11 +2587,11 @@ _STATIC_INLINE_ bool_t is_valid_tdx_io_host_call(const uint64_t leaf_opcode)
  *
  * @param leaf_opcode
  */
-_STATIC_INLINE_ bool_t is_valid_tdx_io_guest_call(const uint64_t leaf_opcode)
+_STATIC_INLINE_ bool_t is_valid_tdx_io_guest_call(const tdx_leaf_and_version_t tdx_leaf_and_version)
 {
     return get_global_data()->tdx_io_supported ||
-           leaf_opcode < TDG_SPDM_TPA_SET_LEAF ||
-           leaf_opcode > TDG_MMIO_ACCEPT_LEAF;
+           tdx_leaf_and_version.leaf < TDG_SPDM_TPA_SET_LEAF ||
+           tdx_leaf_and_version.leaf > TDG_IQ_INV_REQUEST_LEAF;
 }
 
 /**
@@ -2568,7 +2660,27 @@ _STATIC_INLINE_ api_error_code_e check_no_tdx_io_device_attached(
 #define GNR_D_A0_CPUID 0xA06E0
 _STATIC_INLINE_ bool_t is_not_gnr_a0_stepping(void)
 {
-    return !get_global_data()->is_gnr_a0_gnr_d_cpuid;
+    tdx_module_global_t *tdx_global_data_ptr = get_global_data();
+
+    if (tdx_global_data_ptr->is_a0_wa_invoked)
+    {
+        // WA already invoked
+        return !(tdx_global_data_ptr->is_gnr_a0_cpuid || tdx_global_data_ptr->is_gnr_d_cpuid);
+    }
+
+    // WA invoked for the first time
+
+    uint32_t eax, ebx, ecx, edx;
+    ia32_cpuid(CPUID_VER_INFO_LEAF, 0,
+               &eax, &ebx,
+               &ecx, &edx);
+
+    tdx_global_data_ptr->is_gnr_a0_cpuid = (eax == GNR_A0_CPUID);
+    tdx_global_data_ptr->is_gnr_d_cpuid = (eax == GNR_D_A0_CPUID);
+
+    tdx_global_data_ptr->is_a0_wa_invoked = true;
+
+    return !(tdx_global_data_ptr->is_gnr_a0_cpuid || tdx_global_data_ptr->is_gnr_d_cpuid);
 }
 
 #define IA32_SPEC_CTRL_SSBD_BIT        BIT(2)
@@ -2585,6 +2697,30 @@ _STATIC_INLINE_ uint64_t GET_TDX_MODULE_IA32_SPEC_CTRL(void)
     res |= IA32_SPEC_CTRL_SSBD_BIT;
 
     return res;
+}
+
+_STATIC_INLINE_ void set_qword_bm(
+    uint64_t *bm_arr_ptr,
+    uint64_t idx,
+    bool_t enable_flag)
+{
+    uint64_t *entry_ptr = &bm_arr_ptr[idx / 64];
+    uint64_t val = (BIT(idx % 64));
+    if (enable_flag)
+    {
+        *entry_ptr |= val;
+    }
+    else
+    {
+        *entry_ptr &= ~val;
+    }
+}
+
+_STATIC_INLINE_ bool_t get_qword_bm(
+    uint64_t *bm_arr_ptr,
+    uint64_t idx)
+{
+    return (bm_arr_ptr[idx / 64] & BIT(idx % 64)) > 0;
 }
 
 #endif /* SRC_COMMON_HELPERS_HELPERS_H_ */

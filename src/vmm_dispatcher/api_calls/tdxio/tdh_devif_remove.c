@@ -134,6 +134,7 @@ api_error_type tdh_devif_remove(function_id_reg_t function_id_reg)
     if (return_val != TDX_SUCCESS)
     {
         TDX_ERROR("Failed to get and lock DEVIFCS root pamt\n")
+        return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
         goto EXIT;
     }
 

@@ -37,7 +37,7 @@ void init_virt_ia32_vmx_msrs(tdcs_t* tdcs_ptr)
     tdcs_ptr->virt_msrs.virt_ia32_vmx_true_pinbased_ctls  = calc_virt_ia32_vmx_true_pinbased_ctls();
     tdcs_ptr->virt_msrs.virt_ia32_vmx_true_procbased_ctls = calc_virt_ia32_vmx_true_procbased_ctls(tdcs_ptr);
     tdcs_ptr->virt_msrs.virt_ia32_vmx_procbased_ctls2     = calc_virt_ia32_vmx_procbased_ctls2(tdcs_ptr);
-    tdcs_ptr->virt_msrs.virt_ia32_vmx_procbased_ctls3.raw = calc_virt_ia32_vmx_procbased_ctls3();
+    tdcs_ptr->virt_msrs.virt_ia32_vmx_procbased_ctls3     = calc_virt_ia32_vmx_procbased_ctls3();
     tdcs_ptr->virt_msrs.virt_ia32_vmx_true_exit_ctls      = calc_virt_ia32_vmx_true_vmexit_ctls(tdcs_ptr);
     tdcs_ptr->virt_msrs.virt_ia32_vmx_true_entry_ctls     = calc_virt_ia32_vmx_true_vmentry_ctls(tdcs_ptr);
 

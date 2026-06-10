@@ -38,8 +38,10 @@ typedef enum
     INV_REQ_CTE     = 0x02,
     INV_REQ_PDE     = 0x03,
     INV_REQ_PASIDTE = 0x04,
-    INV_REQ_MAX     = INV_REQ_PASIDTE + 1
+    INV_REQ_TD      = 0x05,
+    INV_REQ_MAX
 } inv_req_type_e;
+typedef uint32_t inv_type_t;
 
 typedef enum
 {
@@ -56,6 +58,7 @@ typedef enum
 #define CC_G_GLOBAL (1)
 #define PC_G_PASID_SELECTIVE_WITHIN_DOMAIN (1)
 #define IOTLB_G_DOMAIN_SELECTIVE (2)
+#define IOTLB_G_PAGE_SELECTIVE_WITHIN_DOMAIN (3)
 
 /**
  * @struct iotlb_inv_tracker_t
@@ -185,6 +188,7 @@ tdx_static_assert(sizeof(inv_desc_wait_t) == 32, inv_desc_wait_t);
  */
 typedef union
 {
+    uint64_t type : 4;
     inv_desc_cc_t cc;
     inv_desc_pc_t pc;
     inv_desc_iotlb_t iotlb;
@@ -226,6 +230,20 @@ typedef union
     uint64_t raw;
 } rid_pasid_t;
 tdx_static_assert(sizeof(rid_pasid_t) == 8, rid_pasid_t);
+
+#define MAX_TD_INV_DES_COUNT (TDX_PAGE_SIZE_IN_BYTES / sizeof(inv_desc_t))
+
+typedef union
+{
+    struct
+    {
+        inv_type_t inv_type;
+        uint16_t pool_size; // Number of descriptors VMM commits in this request
+        uint16_t reserved;  // must be zero
+    };
+    uint64_t raw;
+} inv_req_type_t;
+tdx_static_assert(sizeof(inv_req_type_t) == 8, inv_req_type_t);
 
 #pragma pack(pop)
 

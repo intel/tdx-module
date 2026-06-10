@@ -354,7 +354,6 @@ api_error_type tdh_mmio_unmap(
  * @note
  *
  * @param dmar_idx
- * @param tdr_pa
  * @param dmar_val_1
  * @param dmar_val_2
  * @param dmar_val_3
@@ -368,7 +367,6 @@ api_error_type tdh_mmio_unmap(
  */
 api_error_type tdh_dmar_add(
     dmar_idx_t dmar_idx,
-    pa_t tdr_pa,
     uint64_t dmar_val_1,
     uint64_t dmar_val_2,
     uint64_t dmar_val_3,
@@ -450,7 +448,7 @@ api_error_type tdh_spdm_delete(
  */
 api_error_type tdh_iq_inv_request(
     iommu_id_reg_t iommu_id_reg,
-    inv_req_type_e inv_req_type,
+    inv_req_type_t inv_req_type,
     uint64_t inv_target,
     uint64_t inv_wait_dsc_qword_1,
     uint64_t inv_wait_dsc_qword_2,
@@ -481,6 +479,10 @@ api_error_type tdh_iq_inv_process(iommu_id_reg_t iommu_id_reg);
 api_error_type tdh_mem_shared_sept_wr(
     page_info_api_input_t gpa_page_info,
     pa_t tdr_pa,
-    ia32e_sept_t ept_entry);
+    ia32e_sept_t ept_entry_0,
+    ia32e_sept_t ept_entry_1,
+    ia32e_sept_t ept_entry_2,
+    ia32e_sept_t ept_entry_3,
+    uint64_t version);
 
 #endif // __TDXIO_VMM_API_HANDLERS_H_INCLUDED__

@@ -333,6 +333,8 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
         return api_error_with_operand_id(TDX_INCORRECT_MSR_VALUE, IA32_MISC_ENABLES_MSR_ADDR);
     }
 
+    global_data_ptr->plt_common_config.ia32_misc_enable.raw = misc_enable.raw;
+
     uint32_t last_base_leaf, last_extended_leaf;
     uint32_t ebx, ecx, edx;
 
@@ -1362,13 +1364,6 @@ api_error_type tdh_sys_init(void)
     tdx_local_data_ptr->vmm_regs.r8 = 0;
     tdx_local_data_ptr->vmm_regs.r9 = 0;
     tdx_local_data_ptr->vmm_regs.r10 = 0;
-
-    uint32_t eax, ebx, ecx, edx;
-    ia32_cpuid(CPUID_VER_INFO_LEAF, 0,
-               &eax, &ebx,
-               &ecx, &edx);
-
-    tdx_global_data_ptr->is_gnr_a0_gnr_d_cpuid = eax == GNR_A0_CPUID || eax == GNR_D_A0_CPUID;
 
     // Acquire an exclusive lock to the whole TDX-SEAM module
     if (acquire_sharex_lock_ex(&tdx_global_data_ptr->global_lock) != LOCK_RET_SUCCESS)

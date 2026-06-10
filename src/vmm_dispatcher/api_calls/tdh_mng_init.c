@@ -229,6 +229,10 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
     attributes.raw = tdcs_ptr->executions_ctl_fields.attributes.raw;
     xfam.raw = tdcs_ptr->executions_ctl_fields.xfam;
 
+    // Initialize CPUID_FIXED0_BITMAP to the constant derived from the CPUID spreadsheet.
+    // This value is migrated with the TD.
+    tdcs_ptr->executions_ctl2_fields.cpuid_fixed0_bitmap = CPUID_FIXED0_BITMAP;
+
     for (cpuid_index = 0; cpuid_index < MAX_NUM_CPUID_LOOKUP; cpuid_index++)
     {
         cpuid_leaf_subleaf = cpuid_lookup[cpuid_index].leaf_subleaf;
@@ -320,8 +324,28 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
             cpuid_01_ecx.raw = final_tdcs_values.ecx;
 
             tdcs_ptr->executions_ctl_fields.cpuid_flags.monitor_mwait_supported = cpuid_01_ecx.monitor;
-            tdcs_ptr->executions_ctl_fields.cpuid_flags.dca_supported = cpuid_01_ecx.dca;
-            tdcs_ptr->executions_ctl_fields.cpuid_flags.tsc_deadline_supported = cpuid_01_ecx.tsc_deadline;
+            tdcs_ptr->executions_ctl_fields.cpuid_flags.dca_supported           = cpuid_01_ecx.dca;
+            tdcs_ptr->executions_ctl_fields.cpuid_flags.tsc_deadline_supported  = cpuid_01_ecx.tsc_deadline;
+            tdcs_ptr->executions_ctl_fields.cpuid_flags.est_supported           = cpuid_01_ecx.est;
+            tdcs_ptr->executions_ctl_fields.cpuid_flags.tm2_supported           = cpuid_01_ecx.tm2;
+            tdcs_ptr->executions_ctl_fields.cpuid_flags.xtpr_update_supported   = cpuid_01_ecx.xtpr_update_control;
+
+            cpuid_01_edx_t cpuid_01_edx;
+            cpuid_01_edx.raw = final_tdcs_values.edx;
+
+            // By default, the following flags don't depend on CPUID configuration.  This gets updated later if the TD sets TDCS.TD_CTLS.REDUCE_VE.
+            tdcs_ptr->executions_ctl_fields.cpuid_flags.mce_not_supported  = false;
+            tdcs_ptr->executions_ctl_fields.cpuid_flags.mca_not_supported  = false;
+            tdcs_ptr->executions_ctl_fields.cpuid_flags.mtrr_not_supported = false;
+            tdcs_ptr->executions_ctl_fields.cpuid_flags.acpi_supported =  cpuid_01_edx.acpi;
+        }
+        else if (cpuid_leaf_subleaf.leaf == 4)
+        {
+            // Sample the native values of the first NUM_CPUID4_NATIVE subleaves into TDCS.  They were sampled on TDH.SYS.INIT.
+            if (cpuid_leaf_subleaf.subleaf < NUM_CPUID4_NATIVE)
+            {
+                tdcs_ptr->executions_ctl2_fields.cpuid4_native_values[cpuid_leaf_subleaf.subleaf] = global_data_ptr->cpuid_values[cpuid_index].values;
+            }
         }
         else if (cpuid_leaf_subleaf.leaf == 5)
         {
@@ -357,6 +381,8 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
                }
 
                tdcs_ptr->executions_ctl_fields.cpuid_flags.tsx_supported = cpuid_07_00_ebx.hle;
+               tdcs_ptr->executions_ctl_fields.cpuid_flags.rdt_a_supported = cpuid_07_00_ebx.rdt_a;
+               tdcs_ptr->executions_ctl_fields.cpuid_flags.rdt_m_supported = cpuid_07_00_ebx.rdt_m;
 
                cpuid_07_00_ecx.raw = final_tdcs_values.ecx;
                // CPUID(0x7, 0x0).ECX.PKS reflects ATTRIBUTES.PKS
@@ -373,6 +399,8 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
 
                cpuid_07_00_edx.raw = final_tdcs_values.edx;
                tdcs_ptr->executions_ctl_fields.cpuid_flags.pconfig_supported = cpuid_07_00_edx.pconfig_mktme;
+               // By default, the following flag doesn't depend on CPUID configuration.  This gets updated later if the TD sets TDCS.TD_CTLS.REDUCE_VE.
+               tdcs_ptr->executions_ctl_fields.cpuid_flags.core_capabilities_not_supported = false;
            }
            else if (cpuid_leaf_subleaf.subleaf == 1)
            {
@@ -582,7 +610,7 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
         // Write the CPUID values to TDCS and set the CPUID_VALID flag
         tdcs_ptr->cpuid_config_vals[cpuid_index].low = final_tdcs_values.low;
         tdcs_ptr->cpuid_config_vals[cpuid_index].high = final_tdcs_values.high;
-        tdcs_ptr->executions_ctl_fields.cpuid_valid[cpuid_index] = cpuid_lookup[cpuid_index].valid_entry? !cpuid_lookup[cpuid_index].faulting: false;
+        tdcs_ptr->executions_ctl_fields.cpuid_valid[cpuid_index] = true;
     }
 
     // Check the virtual topology configuration of CPUID(0x1F) and derive CPUID(0xB).
@@ -595,6 +623,7 @@ static api_error_type read_and_set_cpuid_configurations(tdcs_t * tdcs_ptr,
 
     // May be cleared later if not configured for all VCPUs
     tdcs_ptr->executions_ctl_fields.topology_enum_configured = true;
+    tdcs_ptr->executions_ctl_fields.ve_reduction_valid = true;
 
     // Check reserved3 bits are 0
     if (!tdx_memcmp_to_zero(td_params_ptr->reserved_3, TD_PARAMS_RESERVED3_SIZE))
@@ -609,7 +638,7 @@ EXIT:
     return return_val;
 }
 
-api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa)
+api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa, uint64_t event_filters_info_params)
 {
     // Global data
     tdx_module_global_t * global_data_ptr = get_global_data();
@@ -632,8 +661,11 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
     crypto_api_error      sha_error_code;
     api_error_type        return_val = UNINITIALIZE_ERROR;
 
-    tdr_pa.raw = target_tdr_pa;
+    bool_t event_filtering = target_tdr_pa & BIT(0);
+    tdr_pa.raw = target_tdr_pa & BITS(63, 1);
     td_params_pa.raw = target_td_params_pa;
+    event_filter_info_t event_filters_info = { .raw = event_filters_info_params };
+    event_filter_t* event_filters_p = NULL;
 
     // By default, no extended error code is returned
     local_data_ptr->vmm_regs.rcx = 0ULL;
@@ -708,6 +740,59 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
         goto EXIT;
     }
 
+    // ---------------------------------------------
+    //         Read the Perfmon Event Filters
+    // ---------------------------------------------
+
+    if (event_filtering && tdcs_ptr->executions_ctl_fields.attributes.perfmon)
+    {
+        if (event_filters_info.reserved ||
+            event_filters_info.event_filters_num == 0 ||
+            event_filters_info.event_filters_num > MAX_EVENT_FILTERS ||
+            (TDX_SUCCESS != shared_hpa_check_with_pwr_2_alignment((pa_t)(event_filters_info.raw & ~BITS(11, 0)), _4KB)))
+        {
+            TDX_ERROR("Illegal event filters info = 0x%lx\n", event_filters_info.raw);
+            return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
+            goto EXIT;
+        }
+
+        tdcs_ptr->executions_ctl2_fields.event_filters_num = event_filters_info.event_filters_num;
+
+        event_filters_p = (event_filter_t*)map_pa((void*)(event_filters_info.raw & ~BITS(11, 0)), TDX_RANGE_RO);
+
+        for (uint16_t i = 0; i < event_filters_info.event_filters_num; i++)
+        {
+            event_filter_internal_t event_filter_internal;
+            event_filter_t event_filter = event_filters_p[i];
+
+            // Check the provided event filter entry. We currently support only basic filtering and only 8-bit UMASK.
+            if (event_filter.reserved_0 ||
+                event_filter.umask > 0xFF ||
+                event_filter.negative ||
+                event_filter.umask_mask != 0xFFFF)
+            {
+                TDX_ERROR("Illegal event filter [%d] = 0x%lx\n", i, event_filter.raw);
+                return_val = api_error_with_operand_id(TDX_EVENT_FILTER_INVALID, i);
+                goto EXIT;
+            }
+
+            event_filter_internal.event_select = (uint8_t)event_filter.event_select;
+            event_filter_internal.umask = (uint8_t)event_filter.umask;
+
+            if ((i != 0) && (tdcs_ptr->event_filters_internal[i - 1].raw >= event_filter_internal.raw))
+            {
+                TDX_ERROR("Event filters array must be sorted\n");
+                return_val = api_error_with_operand_id(TDX_EVENT_FILTER_ORDER_INVALID, i);
+                goto EXIT;
+            }
+
+            tdcs_ptr->event_filters_internal[i] = event_filter_internal;
+        }
+
+        free_la(event_filters_p);
+        event_filters_p = NULL;
+    }
+
     /**
      *  Handle CPUID Configuration
      */
@@ -720,6 +805,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
         goto EXIT;
     }
 
+    // Check and initialize the virtual IA32_ARCH_CAPABILITIES MSR
     if (is_not_gnr_a0_stepping())
     {
         // Check and initialize the virtual IA32_ARCH_CAPABILITIES MSR
@@ -731,6 +817,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
             goto EXIT;
         }
     }
+
 
     if (!td_immutable_state_cross_check(tdcs_ptr))
     {
@@ -771,6 +858,10 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
 
 EXIT:
     // Release all acquired locks and free keyhole mappings
+    if (event_filters_p)
+    {
+        free_la(event_filters_p);
+    }
     if (tdr_locked_flag)
     {
         pamt_unwalk(tdr_pa, tdr_pamt_block, tdr_pamt_entry_ptr, TDX_LOCK_EXCLUSIVE, PT_4KB);

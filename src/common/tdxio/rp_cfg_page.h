@@ -41,11 +41,14 @@ _STATIC_INLINE_ rp_cfg_page_t *map_rp_mmcfg(
     return (rp_cfg_page_t *)map_pa_with_global_hkid_uncached(rp_mmcfg_pa.raw_void, TDX_RANGE_RW);
 }
 
-_STATIC_INLINE_ ide_ecap_t *get_rp_ide_ecap_regaddr(const socket_io_info_t *const socket_io_info_ptr, const rp_cfg_page_t *const rp_cfg_page_ptr)
+
+_STATIC_INLINE_ ide_ecap_t *get_rp_ide_ecap_regaddr(
+    const socket_io_info_t *const socket_io_info_ptr,
+    const rp_cfg_page_t *const rp_cfg_page_ptr)
 {
     pcie_cap_id_t *pci_cap_id = (pcie_cap_id_t *)((uint64_t)rp_cfg_page_ptr + (uint64_t)socket_io_info_ptr->ide_ecap_ofst);
 
-    if (pci_cap_id->id == PCIE_CAP_ID_IDE)
+    if (pci_cap_id->id == PCIE_ECAP_IDE_ID)
     {
         return (ide_ecap_t *)pci_cap_id;
     }

@@ -230,7 +230,6 @@ api_error_type tdh_mmio_map(
         goto EXIT;
     }
 
-
     // Check MMIO page falls within DEVIF associated Selective IDE address range
     devif_id_t devif_id = devif_verify_param.devifcs_ptr->devif_id;
     iommu_id_t iommu_id = devif_id.iommu_id;
@@ -250,23 +249,6 @@ api_error_type tdh_mmio_map(
     }
 
     stream_info_ptr = map_stream_info_from_devifcs(devif_id, iommu_config_ptr);
-
-    pa_t mmiomt_pa = {.raw = 0};
-    switch(mmiomt_idx.level)
-    {
-        case MMIOMT_L2:
-            mmiomt_pa.page_1g_num = mmiomt_idx.page_1g_num;
-            break;
-        case MMIOMT_L1:
-            mmiomt_pa.page_2m_num = mmiomt_idx.page_2m_num;
-            break;
-        case MMIOMT_L0:
-            mmiomt_pa.page_4k_num = mmiomt_idx.pa;
-            break;
-        default:
-            FATAL_ERROR();
-    }
-
     // IDE-Stream must not be blocked
     if (stream_info_ptr->stream_sts.stream_block == 1)
     {
@@ -298,7 +280,6 @@ EXIT:
     release_iommu_lock(is_iommu_locked, iommu_config_ptr);
 
     devif_unmap_devifcs(&devif_verify_param);
-
 
     if (is_mmiomt_walked)
     {

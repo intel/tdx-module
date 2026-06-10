@@ -76,14 +76,14 @@ NOTE: In order to run on Windows, replace the mount line with: -v "%CD%":$HOME/t
 ## Make targets
 Binary's generation includes the date it was compiled at, build number, module's update version and a TPA hash signature.
 
-Build date, build number and update version could be extracted from the production binary, please use TDH.SYS.RD SEAMCALL (leaf #34) with MD_SYS_TDX_MODULE_VERSION_CLASS_CODE(8) as a class_code and MD_SYS_BUILD_DATE_FIELD_CODE(1)/MD_SYS_BUILD_NUM_FIELD_CODE(2)/MD_SYS_UPDATE_VERSION_FIELD_CODE(5) as field codes. The date format should be YYYYMMDD.
+Build date, build number and update version could be extracted from the production binary, please use TDH.SYS.RD SEAMCALL (leaf #34) with MD_SYS_TDX_MODULE_VERSION_CLASS_CODE(8) as a class_code and MD_SYS_BUILD_DATE_FIELD_CODE(1)/MD_SYS_BUILD_NUM_FIELD_CODE(2)/MD_SYS_UPDATE_VERSION_FIELD_CODE(5) as field codes. The date format should be YYYYMMDD.  
 
-Current TDX version was built with: TDX_MODULE_BUILD_DATE=20240814 TDX_MODULE_BUILD_NUM=786 TDX_MODULE_UPDATE_VER=2 TPA_HASH=efc7707c07cadb8128809c0055e7ff95bcbdc0969f24cebc91f9c5ef849266826536f09be3026bc305c84be8d00a6ac4
+Current TDX version was built with: TDX_MODULE_BUILD_DATE=20250109 TDX_MODULE_BUILD_NUM=859 TDX_MODULE_UPDATE_VER=4 TPA_HASH=4608ca0fec65127769d3eb00aef42a6e189b18f3c32536e5fadd040b3be58583fb9938237b9a8c1c03e2accf2d74cb46
 
 1) In order to reproduce the exact binary, it is required to specify the original date, build number, update version and TPA hash signature:
 
 	```bash
-	make RELEASE=1 TDX_MODULE_BUILD_DATE=20240814 TDX_MODULE_BUILD_NUM=786 TDX_MODULE_UPDATE_VER=2 TPA_HASH=efc7707c07cadb8128809c0055e7ff95bcbdc0969f24cebc91f9c5ef849266826536f09be3026bc305c84be8d00a6ac4
+	make RELEASE=1 TDX_MODULE_BUILD_DATE=20250109 TDX_MODULE_BUILD_NUM=859 TDX_MODULE_UPDATE_VER=4 TPA_HASH=4608ca0fec65127769d3eb00aef42a6e189b18f3c32536e5fadd040b3be58583fb9938237b9a8c1c03e2accf2d74cb46
 	```
 
 	In case binary reproduction is not required, "make RELEASE=1" will suffice.
@@ -102,4 +102,4 @@ Current TDX version was built with: TDX_MODULE_BUILD_DATE=20240814 TDX_MODULE_BU
 
 
 ## Expected module hash (MRSEAM)
-0x685F891EA5C20E8FA27B151BF34BF3B50FBAF7143CC53662727CBDB167C0AD8385F1F6F3571539A91E104A1C96D75E04
+0x64CAE497E0C6221176FE8D3BC9D0CF25B4C97BB24CC16499F77102451F15BB24249F1AA3E5D3BF8897BE74AD6C84E648

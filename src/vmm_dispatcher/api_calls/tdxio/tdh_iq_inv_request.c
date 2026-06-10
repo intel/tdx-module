@@ -32,7 +32,7 @@
 
 api_error_type tdh_iq_inv_request(
     iommu_id_reg_t iommu_id_reg,
-    inv_req_type_e inv_req_type,
+    inv_req_type_t inv_req_type,
     uint64_t inv_subject,
     uint64_t inv_wait_dsc_qword_1,
     uint64_t inv_wait_dsc_qword_2,
@@ -64,6 +64,22 @@ api_error_type tdh_iq_inv_request(
     inv_desc_t *iq_ptr = NULL;
     iq_ctx_entry_t *iq_ctx_ptr = NULL;
 
+    tdcs_tdxio_fields_t *tdcs_tdxio_fields_ptr = NULL;
+    bool_t is_tdinv_locked = false;
+
+    get_local_data()->vmm_regs.rcx = 0;
+
+    // INV_REQ_TYPE must be valid and trusted IQ must have enough space per INV_REQ_TYPE
+    if (inv_req_type.inv_type >= INV_REQ_MAX ||
+        inv_req_type.reserved != 0 ||
+        (inv_req_type.inv_type == INV_REQ_TD && inv_req_type.pool_size == 0) ||
+        (inv_req_type.inv_type != INV_REQ_TD && inv_req_type.pool_size != 0))
+    {
+        TDX_ERROR("Invalid invalidation request type (0x%llx)\n", inv_req_type.raw);
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
+        goto EXIT;
+    }
+
     return_val = tdh_check_and_lock_iommu_config(
         iommu_id_reg.raw,
         OPERAND_ID_RCX,
@@ -75,25 +91,17 @@ api_error_type tdh_iq_inv_request(
         goto EXIT;
     }
 
-    // INV_REQ_TYPE must be valid and trusted IQ must have enough space per INV_REQ_TYPE
-    if (inv_req_type >= INV_REQ_MAX)
-    {
-        TDX_ERROR("Invalid invalidation request type (%u)\n", inv_req_type);
-        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
-        goto EXIT;
-    }
-
     uint16_t req_num_desc;
 
-    if (inv_req_type == INV_REQ_RTE || inv_req_type == INV_REQ_PDE)
+    if (inv_req_type.inv_type == INV_REQ_RTE || inv_req_type.inv_type == INV_REQ_PDE)
     {
         req_num_desc = INV_WAIT_DESC_SIZE;
     }
-    else if (inv_req_type == INV_REQ_PASIDTE)
+    else if (inv_req_type.inv_type == INV_REQ_PASIDTE)
     {
         req_num_desc = INV_REQ_WAIT_AND_IOTLB_DESC_SIZE;
     }
-    else
+    else // INV_REQ_TD, INV_REQ_IOTLB, INV_REQ_CTE
     {
         req_num_desc = INV_REQ_AND_WAIT_DESC_SIZE;
     }
@@ -105,7 +113,8 @@ api_error_type tdh_iq_inv_request(
         goto EXIT;
     }
 
-    if (inv_req_type == INV_REQ_IOTLB)
+    if (inv_req_type.inv_type == INV_REQ_IOTLB ||
+        inv_req_type.inv_type == INV_REQ_TD)
     {
         // Lock TDR page
         return_val = check_lock_and_map_explicit_tdr(
@@ -139,30 +148,54 @@ api_error_type tdh_iq_inv_request(
         }
         op_state_locked_flag = true;
 
-        // Acquire TDCS epoch lock or fail with TDX_OPERAND_BUSY
-        if (acquire_sharex_lock_sh(&tdcs_ptr->epoch_tracking.epoch_lock) != LOCK_RET_SUCCESS)
+        if (inv_req_type.inv_type == INV_REQ_IOTLB)
         {
-            return_val = api_error_with_operand_id(TDX_OPERAND_BUSY, OPERAND_ID_TD_EPOCH);
-            TDX_ERROR("Failed to acquire TDCS epoch lock - error = 0x%llx\n", return_val);
-            goto EXIT;
-        }
-        is_epoch_locked = true;
+            // Acquire TDCS epoch lock or fail with TDX_OPERAND_BUSY
+            if (acquire_sharex_lock_sh(&tdcs_ptr->epoch_tracking.epoch_lock) != LOCK_RET_SUCCESS)
+            {
+                return_val = api_error_with_operand_id(TDX_OPERAND_BUSY, OPERAND_ID_TD_EPOCH);
+                TDX_ERROR("Failed to acquire TDCS epoch lock - error = 0x%llx\n", return_val);
+                goto EXIT;
+            }
+            is_epoch_locked = true;
 
-        // Check that IOTLB invalidation session is not in progress or not required
-        iotlb_inv_tracker_t iotlb_inv_tracker = tdcs_ptr->tdxio_fields.iotlb_track_array[iommu_id_reg.iommu_id.raw];
-        if (iotlb_inv_tracker.inv_epoch == (tdcs_ptr->epoch_tracking.epoch_and_refcount.td_epoch & BIT(0)) ||
-            iotlb_inv_tracker.pasidte_ref_cnt == 0)
-        {
-            TDX_ERROR("IOTLB invalidation is not required\n");
-            return_val = TDX_IOMMU_IOTLB_TRACKING_NOT_REQUIRED;
-            goto EXIT;
-        }
+            // Check that IOTLB invalidation session is not in progress or not required
+            iotlb_inv_tracker_t iotlb_inv_tracker = tdcs_ptr->tdxio_fields.iotlb_track_array[iommu_id_reg.iommu_id.raw];
+            if (iotlb_inv_tracker.inv_epoch == (tdcs_ptr->epoch_tracking.epoch_and_refcount.td_epoch & BIT(0)) ||
+                iotlb_inv_tracker.pasidte_ref_cnt == 0)
+            {
+                TDX_ERROR("IOTLB invalidation is not required\n");
+                return_val = TDX_IOMMU_IOTLB_TRACKING_NOT_REQUIRED;
+                goto EXIT;
+            }
 
-        if (iotlb_inv_tracker.inv_req != 0)
+            if (iotlb_inv_tracker.inv_req != 0)
+            {
+                TDX_ERROR("IOTLB invalidation is in progress\n");
+                return_val = TDX_IOMMU_IOTLB_TRACKING_NOT_DONE;
+                goto EXIT;
+            }
+        }
+        else // INV_REQ_TD
         {
-            TDX_ERROR("IOTLB invalidation is in progress\n");
-            return_val = TDX_IOMMU_IOTLB_TRACKING_NOT_DONE;
-            goto EXIT;
+            tdcs_tdxio_fields_ptr = &tdcs_ptr->tdxio_fields;
+            return_val = acquire_sharex_lock_hp_ex(&tdcs_tdxio_fields_ptr->tdinv_lock, false);
+            if (return_val != TDX_SUCCESS)
+            {
+                TDX_ERROR("Failed to acquire lock on tdinv_lock\n")
+                return_val = api_error_with_operand_id(return_val, OPERAND_ID_R8);
+                goto EXIT;
+            }
+            is_tdinv_locked = true;
+
+            if ((!tdcs_tdxio_fields_ptr->is_req_active) ||
+                (get_qword_bm(tdcs_tdxio_fields_ptr->req_iommu_bm.qwords, iommu_id_reg.raw) == 0) ||
+                (tdcs_tdxio_fields_ptr->iotlb_committed[iommu_id_reg.raw] == tdcs_tdxio_fields_ptr->req_num))
+            {
+                TDX_ERROR("TD invalidation failed\n");
+                return_val = api_error_with_operand_id(TDX_GUEST_INV_NOT_REQUIRED, OPERAND_ID_R8);
+                goto EXIT;
+            }
         }
     }
     else // inv_req_type == INV_REQ_PASIDTE || INV_REQ_PDE || INV_REQ_CTE || INV_REQ_RTE
@@ -182,7 +215,7 @@ api_error_type tdh_iq_inv_request(
             .iommu_id = iommu_id_reg.iommu_id,
         };
 
-        switch (inv_req_type)
+        switch (inv_req_type.inv_type)
         {
         case INV_REQ_CTE:
             dmar_idx.level = DMAR_CTE_LVL;
@@ -234,7 +267,7 @@ api_error_type tdh_iq_inv_request(
     }
 
     // inv_wait_desc must be valid
-    inv_desc_t inv_wait_desc = {{0}};
+    inv_desc_t inv_wait_desc = {0};
     inv_wait_desc.wait.raw.qwords[0] = inv_wait_dsc_qword_1;
     inv_wait_desc.wait.raw.qwords[1] = inv_wait_dsc_qword_2;
     inv_wait_desc.wait.raw.qwords[2] = inv_wait_dsc_qword_3;
@@ -247,8 +280,8 @@ api_error_type tdh_iq_inv_request(
         (inv_wait_desc.wait.pg_request_drain == 1 && iommu_config_ptr->iommu_cap.pds == 0) || // PD must be 0 if IOMMU ECAP_REG.PSD is 0
         inv_wait_desc.wait.fence_flag == 0)
     {
-        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R9);
         TDX_ERROR("Invalid wait descriptor 0x%llx, error - 0x%llx\n", inv_wait_desc.wait.raw, return_val);
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R9);
         goto EXIT;
     }
 
@@ -288,9 +321,9 @@ api_error_type tdh_iq_inv_request(
 
     iq_ctx_entry_t iq_ctx_desc = {{0}};
     pa_t inv_subject_pa = {.raw = 0};
-    inv_desc_t inv_desc = {{0}};
+    inv_desc_t inv_desc = {0};
 
-    switch (inv_req_type)
+    switch (inv_req_type.inv_type)
     {
     case INV_REQ_RTE:
         inv_subject_pa = dmar_walk_res.rte_pa;
@@ -329,7 +362,7 @@ api_error_type tdh_iq_inv_request(
             &t_iqt_idx);
 
         // Queue a IOTLB invalidation descriptor
-        inv_desc_t iotlb_inv_desc = {{0}};
+        inv_desc_t iotlb_inv_desc = {0};
         iotlb_inv_desc.iotlb.type = INV_DESC_IOTLB;
         iotlb_inv_desc.iotlb.granularity = IOTLB_G_DOMAIN_SELECTIVE;
         iotlb_inv_desc.iotlb.did = (uint16_t)dmar_walk_res.pasidte_ptr->did;
@@ -363,11 +396,61 @@ api_error_type tdh_iq_inv_request(
         // Mark invalidation queued
         tdcs_ptr->tdxio_fields.iotlb_track_array[iommu_id_reg.iommu_id.raw].inv_req = 1;
         break;
+    case INV_REQ_TD:
+        inv_subject_pa = tdr_pa;
+
+        // Queue a TD invalidation descriptor
+        req_num_desc = MIN(tdcs_tdxio_fields_ptr->req_num - tdcs_tdxio_fields_ptr->iotlb_committed[iommu_id_reg.raw], inv_req_type.pool_size) + 1;
+        if (iommu_config_ptr->iq_free_cnt < req_num_desc)
+        {
+            // IQ_FREE_CNT has at least INV_REQ_AND_WAIT_DESC_SIZE free slots
+            req_num_desc = iommu_config_ptr->iq_free_cnt;
+        }
+
+        // The module keeps track of TD initiated invalidations
+        iq_ctx_desc.track_flag = 1;
+        iq_ctx_desc.inv_req_type = inv_req_type.inv_type;
+        iq_ctx_desc.inv_target_pa = inv_subject_pa;
+
+        inv_desc.iotlb.type = INV_DESC_IOTLB;
+        inv_desc.iotlb.did = (uint16_t)(tdr_ptr->key_management_fields.hkid | BIT(iommu_config_ptr->iommu_cap.did_msb));
+        inv_desc.iotlb.drain_reads = 1;
+        inv_desc.iotlb.drain_writes = 1;
+
+        inv_desc_t *inv_desc_buff = (inv_desc_t *)tdcs_ptr->td_inv_req_buff;
+
+        for (uint16_t i = 0; i < req_num_desc - 1; i++)
+        {
+            uint16_t inv_desc_idx = tdcs_tdxio_fields_ptr->iotlb_committed[iommu_id_reg.raw];
+            inv_desc.iotlb.granularity = inv_desc_buff[inv_desc_idx].iotlb.granularity;
+            // NOTE, the bitfields ADDR and AM are zero in case of IOTLB_G_DOMAIN_SELECTIVE
+            inv_desc.iotlb.addr = inv_desc_buff[inv_desc_idx].iotlb.addr;
+            inv_desc.iotlb.am = inv_desc_buff[inv_desc_idx].iotlb.am;
+
+            iq_enqueue(
+                iommu_config_ptr,
+                &inv_desc,
+                &iq_ctx_desc,
+                &iq_ptr,
+                &iq_ctx_ptr,
+                &t_iqt_idx);
+
+            // Update commited IOTLB counter
+            tdcs_tdxio_fields_ptr->iotlb_committed[iommu_id_reg.raw]++;
+        }
+
+        break;
     default:
         FATAL_ERROR();
     }
 
-    if (inv_req_type != INV_REQ_IOTLB)
+    if (inv_req_type.inv_type == INV_REQ_TD)
+    {
+        get_local_data()->vmm_regs.rcx = tdcs_tdxio_fields_ptr->req_num - tdcs_tdxio_fields_ptr->iotlb_committed[iommu_id_reg.raw];
+    }
+
+    if (inv_req_type.inv_type != INV_REQ_IOTLB &&
+        inv_req_type.inv_type != INV_REQ_TD)
     {
         // Update DMAR entry INV state
         dmar_state_info.inv_sts = DMAR_INV_QUEUED;
@@ -376,7 +459,7 @@ api_error_type tdh_iq_inv_request(
 
     // Queue inv_dsc_wait and tracking IQ context
     iq_ctx_desc.track_flag = 1;
-    iq_ctx_desc.inv_req_type = inv_req_type;
+    iq_ctx_desc.inv_req_type = inv_req_type.inv_type;
     iq_ctx_desc.inv_target_pa = inv_subject_pa;
     iq_enqueue(
         iommu_config_ptr,
@@ -416,6 +499,11 @@ EXIT:
     if (is_dmar_walked)
     {
         dmar_unwalk(&dmar_walk_res);
+    }
+
+    if (is_tdinv_locked)
+    {
+        release_sharex_lock_hp_ex(&tdcs_tdxio_fields_ptr->tdinv_lock);
     }
 
     if (is_epoch_locked)

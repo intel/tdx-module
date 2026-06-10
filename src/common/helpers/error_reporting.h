@@ -56,13 +56,14 @@ void tdx_arch_fatal_error(void);
 #define SCEC_TD_DISPATCHER_SOURCE      0x0007
 #define SCEC_VMM_DISPATCHER_SOURCE     0x0008
 #define SCEC_TDEXIT_SOURCE             0x0009
-#define SCEC_DMAR_SOURCE               0x000A
-#define SCEC_IDE_STREAM_SOURCE         0x000B
-#define SCEC_METADATA_HANDLER_SOURCE   0x000C
-#define SCEC_SPDM_SOURCE               0x000D
-#define SCEC_DEVIF_SOURCE              0x000E
-#define SCEC_DOE_GEN_SOURCE            0x000F
-#define SCEC_MMIOMT                    0x0010
+#define SCEC_METADATA_HANDLER_SOURCE   0x000A
+#define SCEC_MSR_ACEESS_SOURCE         0x000B
+#define SCEC_DMAR_SOURCE               0x000C
+#define SCEC_IDE_STREAM_SOURCE         0x000D
+#define SCEC_SPDM_SOURCE               0x000E
+#define SCEC_DEVIF_SOURCE              0x000F
+#define SCEC_DOE_GEN_SOURCE            0x0010
+#define SCEC_MMIOMT                    0x0011
 #define SCEC_TDCALL_SOURCE(n)          (0xA000 | ((n) & 0xFF))
 #define SCEC_SEAMCALL_SOURCE(n)        (0xB000 | ((n) & 0xFF))
 #define SCEC_CANARY_CORRUPT_SOURCE     0xC000

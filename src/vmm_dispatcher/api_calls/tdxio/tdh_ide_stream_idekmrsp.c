@@ -92,15 +92,14 @@ _STATIC_INLINE_ api_error_type enable_ide_stream(
         vol_write_reg32(&lnk_ide_stream_reg_block->control, lnk_ide_stream_reg_block->control.raw);
     }
 
-    // HW indicates the key is ready for use in [Rx/Rx]_Ready_Key_Set_[0/1] register
-    bool_t is_key_ready = is_ide_key_ready(
+    // HW indicates the key is ready for use in [Rx/Tx]_Ready_Key_Set_[0/1] register
+    bool_t is_key_ready = is_ide_ks_ready(
         kcbar_ptr,
         stream_info_ptr->key_id,
-        ide_km_param.direction,
         ide_km_param.key_set);
     if (!is_key_ready)
     {
-        TDX_ERROR("OBJECT_ID is K_SET_GO, and not all keys for this key set and direction key set have been primed in Key Config BAR\n");
+        TDX_ERROR("Failed to enable IDE stream KS is not ready yet\n");
         return_val = api_error_with_operand_id(TDX_IDE_STREAM_IDEKM_KEYS_NOT_READY, OPERAND_ID_RDX);
         goto EXIT;
     }

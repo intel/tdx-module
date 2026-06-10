@@ -54,7 +54,7 @@ void td_l2_exception_or_nmi_exit(vm_vmexit_exit_reason_t vm_exit_reason,
 /**
  * @brief Handler for CR access from L2 TD
  */
-cr_write_status_e td_l2_cr_access_exit(vmx_exit_qualification_t vm_exit_qualification, uint16_t vm_id);
+uint16_t td_l2_cr_access_exit(vmx_exit_qualification_t vm_exit_qualification, uint16_t vm_id);
 
 /**
  * @brief Handler for EPT violations occurred in L2 TD

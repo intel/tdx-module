@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -103,7 +103,7 @@ static api_error_type get_all_l2_sept_entries(tdr_t *tdr_ptr, tdcs_t *tdcs_ptr, 
             if (is_gpa_attr_present(new_gpa_attr->attr_arr[vm_id]))
             {
                 // Check if the updated L2 attributes are legal
-                if (!is_gpa_attr_legal(new_gpa_attr->attr_arr[vm_id]))
+                if (!is_gpa_attr_legal(new_gpa_attr->attr_arr[vm_id], is_ept_pt_mmio(&l1_sept_entry_copy)))
                 {
                     // Don't abort yet.  Continue to loop on all VMs to collect the current attributes
                     attribute_status = TDX_PAGE_ATTR_INVALID;
@@ -115,7 +115,7 @@ static api_error_type get_all_l2_sept_entries(tdr_t *tdr_ptr, tdcs_t *tdcs_ptr, 
         else if (is_gpa_attr_present(single_vm_masked_gpa_attr))
         {
             // Check if the updated L2 attributes are legal
-            if (!is_gpa_attr_legal(single_vm_masked_gpa_attr))
+            if (!is_gpa_attr_legal(single_vm_masked_gpa_attr, is_ept_pt_mmio(&l1_sept_entry_copy)))
             {
                 // Don't abort yet.  Continue to loop on all VMs to collect the current attributes
                 attribute_status = TDX_PAGE_ATTR_INVALID;
@@ -338,7 +338,8 @@ api_error_type tdg_mem_page_attr_wr(
             // The L2 SEPT entry is created as L2_BLOCKED if the page is pending
             sept_l2_set_leaf_given_hpa_with_hkid(l2_septe_ptr[vm_id], new_gpa_attr.attr_arr[vm_id],
                                                     sept_get_pa(&page_sept_entry_copy),
-                                                    sept_state_is_any_pending(page_sept_entry_copy));
+                                                    sept_state_is_any_pending_inc_mmiol(page_sept_entry_copy),
+                                                    is_ept_pt_mmio(&page_sept_entry_copy));
 
             sept_set_aliased(page_sept_entry_ptr, vm_id);
         }
@@ -355,7 +356,7 @@ api_error_type tdg_mem_page_attr_wr(
 
     // Update the return values
     gpa_mapping_and_flags.raw = gpa_mappings.raw;
-    gpa_mapping_and_flags.pending = sept_state_is_any_pending(page_sept_entry_copy);
+    gpa_mapping_and_flags.pending = sept_state_is_any_pending_inc_mmiol(page_sept_entry_copy);
 
     tdvps_ptr->guest_state.gpr_state.rcx = gpa_mapping_and_flags.raw;
     tdvps_ptr->guest_state.gpr_state.rdx = new_gpa_attr.raw;

@@ -166,7 +166,7 @@ typedef struct ALIGN(TDMR_ENTRY_ALIGNMENT) PACKED tdmr_entry_s
 
     uint64_t pamt_1g_base; /**< Base address of the PAMT_1G range */
     uint64_t pamt_2m_base; /**< Base address of the PAMT_2M range */
-    uint64_t pamt_4k_base; /**< Base address of the PAMT_4K range */
+    uint64_t pamt_4k_base; /**< Base address of the PAMT_4K range, or PAMT bitmap for dynamic PAMT */
 
     uint32_t num_of_pamt_blocks; /**< number of PAMT blocks in this TDMR region */
     uint32_t num_of_rsvd_areas;
@@ -186,7 +186,8 @@ typedef struct
 
     uint64_t                        ia32_tsc_adjust;
 
-    //MSRs
+    ia32_misc_enable_t              ia32_misc_enable;
+
     ia32_vmx_basic_t                ia32_vmx_basic;
     ia32_vmx_misc_t                 ia32_vmx_misc;
     ia32_vmx_allowed_bits_t         ia32_vmx_true_pinbased_ctls;
@@ -392,8 +393,9 @@ typedef struct tdx_module_global_s
     uint256_t mmiomt_root_node;
     uint64_t devifmt_root_node;
     // TODO: remove define once WA is removed
-    bool_t is_gnr_a0_gnr_d_cpuid;
-
+    bool_t is_a0_wa_invoked;
+    bool_t is_gnr_a0_cpuid;
+    bool_t is_gnr_d_cpuid;
 } tdx_module_global_t;
 tdx_static_assert(offsetof(tdx_module_global_t, global_lock) % 2 == 0, global_lock);
 

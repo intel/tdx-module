@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -99,7 +99,7 @@ bool_t td_cr_access_exit(vmx_exit_qualification_t vm_exit_qualification)
 {
     uint64_t   value;
     ia32_cr0_t cr0;
-    cr_write_status_e status = CR_ACCESS_SUCCESS;
+    uint16_t status = CR_ACCESS_SUCCESS;
 
     tdx_module_local_t* tdx_local_data_ptr = get_local_data();
 
@@ -131,13 +131,16 @@ bool_t td_cr_access_exit(vmx_exit_qualification_t vm_exit_qualification)
                     // MOV to CR4
                     // All valid cases of accessing CR4 are controlled by the CR4 guest/host mask
                     // and CR4 read shadow fields of the TD VMCS, and do not cause a VM exit.
-                    status = write_guest_cr4(value, tdcs_p);
+                    status = (uint16_t)write_guest_cr4(value, tdcs_p);
                     break;
 
                 default:
                     // VM exits due to other CR accesses are not expected
                     return false;
             }
+
+            uint16_t status_category = (status >> 8) & 0xFF;
+            status &= 0xFF;
 
             if (status == CR_ACCESS_GP)
             {
@@ -146,7 +149,7 @@ bool_t td_cr_access_exit(vmx_exit_qualification_t vm_exit_qualification)
             }
             else if (status == CR_ACCESS_NON_ARCH)
             {
-                tdx_inject_ve(VMEXIT_REASON_CR_ACCESS, vm_exit_qualification.raw, tdvps_p, 0, 0);
+                tdx_inject_ve(VMEXIT_REASON_CR_ACCESS, vm_exit_qualification.raw, status_category, tdvps_p, 0, 0);
                 return true;
             }
 
@@ -242,17 +245,15 @@ void tdx_ept_misconfig_exit_to_vmm(pa_t gpa)
     async_tdexit_to_vmm(TDX_SUCCESS, vm_exit_reason, 0, 0, gpa.raw, 0);
 }
 
-void tdx_inject_ve(uint64_t vm_exit_reason, uint64_t exit_qualification, tdvps_t* tdvps_p,
-        uint64_t gpa, uint64_t gla)
+void tdx_inject_ve(uint64_t vm_exit_reason, uint64_t exit_qualification,
+                   ve_category_e category, tdvps_t* tdvps_p, uint64_t gpa, uint64_t gla)
 {
     bool_t ve_info_mapped = false;
     tdvps_ve_info_t* ve_info_p;
 
     // Before we inject a #VE, reinject IDT vectoring events that happened during VM exit, if any
     tdx_debug_assert(tdvps_p->management.curr_vm == 0);
-    {
-        ve_info_p = &tdvps_p->ve_info;
-    }
+    ve_info_p = &tdvps_p->ve_info;
 
     // TDX-SEAM first checks VE_INFO.VALID to make sure VE_INFO does not contain information that
     // hasn’t been read yet using TDGVPVEINFOGET.
@@ -274,6 +275,7 @@ void tdx_inject_ve(uint64_t vm_exit_reason, uint64_t exit_qualification, tdvps_t
         ve_info_p->gla = gla;
         ve_info_p->gpa = gpa;
         ve_info_p->eptp_index = (uint16_t)eptp_index;
+        ve_info_p->ve_category = (uint8_t)category;
         ve_info_p->instruction_length = (uint32_t)length;
         ve_info_p->instruction_info = (uint32_t)info;
 

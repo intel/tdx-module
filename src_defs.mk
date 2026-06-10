@@ -74,5 +74,4 @@ TOOLS_DIR := $(PROJ_DIR)/tools
 PAD_BINARY_PY := $(TOOLS_DIR)/pad_binary/pad_binary.py
 
 #Python scripts
-AUTO_GEN_PATH := $(PROJ_DIR)/include/auto_gen
 TPA_HASH_PARSER := $(TOOLS_DIR)/tpa_hash_parser.py

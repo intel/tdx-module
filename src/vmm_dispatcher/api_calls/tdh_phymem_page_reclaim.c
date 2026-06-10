@@ -97,10 +97,11 @@ api_error_type tdh_phymem_page_reclaim(uint64_t page_pa)
     if ((reclaimed_page_pamt_entry_ptr->pt == PT_NDA) ||
         (reclaimed_page_pamt_entry_ptr->pt == PT_RSVD))
     {
-        TDX_WARN("Page to reclaim is NDA or reserved\n");
+        TDX_WARN("Page to reclaim is NDA, PAMT or reserved\n");
         return_val = api_error_with_operand_id(TDX_PAGE_METADATA_INCORRECT, OPERAND_ID_RCX);
         goto EXIT;
     }
+
 
     if ((reclaimed_page_pamt_entry_ptr->pt == PT_DEVIFCS_R) ||
         (reclaimed_page_pamt_entry_ptr->pt == PT_DEVIFCS_NR) ||

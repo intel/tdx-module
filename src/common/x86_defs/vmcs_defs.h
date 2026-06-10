@@ -65,12 +65,13 @@ tdx_static_assert(sizeof(vmcs_header_t) == 8, vmcs_header_t);
 #define IA32_VMX_EXIT_CTLS_MSR_ADDR           0x483
 #define IA32_VMX_ENTRY_CTLS_MSR_ADDR          0x484
 #define IA32_VMX_MISC_MSR_ADDR                0x485
-#define IA32_VMX_EPT_VPID_CAP_MSR_ADDR        0x48C
 #define IA32_VMX_CR0_FIXED0_MSR_ADDR          0x486
 #define IA32_VMX_CR0_FIXED1_MSR_ADDR          0x487
 #define IA32_VMX_CR4_FIXED0_MSR_ADDR          0x488
 #define IA32_VMX_CR4_FIXED1_MSR_ADDR          0x489
+#define IA32_VMX_VMCS_ENUM_MSR_ADDR           0x48A
 #define IA32_VMX_PROCBASED_CTLS2_MSR_ADDR     0x48B
+#define IA32_VMX_EPT_VPID_CAP_MSR_ADDR        0x48C
 #define IA32_VMX_TRUE_PINBASED_CTLS_MSR_ADDR  0x48D
 #define IA32_VMX_TRUE_PROCBASED_CTLS_MSR_ADDR 0x48E
 #define IA32_VMX_TRUE_EXIT_CTLS_MSR_ADDR      0x48F

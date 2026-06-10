@@ -139,6 +139,44 @@ _STATIC_INLINE_ void vol_write_reg64(
 }
 
 /**
+ * @brief Write to the PCI space
+ *
+ * @param pci_reg_pa
+ * @param val
+ */
+_STATIC_INLINE_ void pci_64bit_write(
+    pa_t pci_reg_pa,
+    const uint64_t val)
+{
+    uint32_t *pci_reg_ptr = (uint32_t *)map_pa_with_global_hkid_uncached(
+        pci_reg_pa.raw_void,
+        TDX_RANGE_RW);
+
+    vol_write_reg32(pci_reg_ptr, (uint32_t)val);
+
+    // Check if moving the pointer would cross the page boundary the LA resides in
+    if (((uint64_t)pci_reg_ptr / TDX_PAGE_SIZE_IN_BYTES) != (((uint64_t)pci_reg_ptr + sizeof(uint32_t)) / TDX_PAGE_SIZE_IN_BYTES))
+    {
+        // Forwarding the original pointer crosses the page boundary
+        // Free the LA and remap it with the modified PA
+        free_la(pci_reg_ptr);
+        pci_reg_pa.raw += sizeof(uint32_t);
+        pci_reg_ptr = (uint32_t *)map_pa_with_global_hkid_uncached(
+            pci_reg_pa.raw_void,
+            TDX_RANGE_RW);
+    }
+    else
+    {
+        // Forwarding the original pointer doesn't crosses the page boundary
+        pci_reg_ptr++;
+    }
+
+    vol_write_reg32(pci_reg_ptr, (uint32_t)(val >> 32));
+
+    free_la((void *)pci_reg_ptr);
+}
+
+/**
  * @brief Reaf from the PCI space
  *
  * @param pci_reg_pa
@@ -147,7 +185,7 @@ _STATIC_INLINE_ void vol_write_reg64(
  */
 _STATIC_INLINE_ uint64_t pci_64bit_read(pa_t pci_reg_pa)
 {
-    uint32_t *pci_reg_ptr = (uint32_t *)map_pa_non_wb(
+    uint32_t *pci_reg_ptr = (uint32_t *)map_pa_with_global_hkid_uncached(
         pci_reg_pa.raw_void,
         TDX_RANGE_RO);
 
@@ -160,7 +198,7 @@ _STATIC_INLINE_ uint64_t pci_64bit_read(pa_t pci_reg_pa)
         // Free the LA and remap it with the modified PA
         free_la(pci_reg_ptr);
         pci_reg_pa.raw += sizeof(uint32_t);
-        pci_reg_ptr = (uint32_t *)map_pa_non_wb(
+        pci_reg_ptr = (uint32_t *)map_pa_with_global_hkid_uncached(
             pci_reg_pa.raw_void,
             TDX_RANGE_RO);
     }
@@ -177,42 +215,5 @@ _STATIC_INLINE_ uint64_t pci_64bit_read(pa_t pci_reg_pa)
     return (uint64_t)((pci_reg_h << 32) | pci_reg_l);
 }
 
-/**
- * @brief Write to the PCI space
- *
- * @param pci_reg_pa
- * @param val
- */
-_STATIC_INLINE_ void pci_64bit_write(
-    pa_t pci_reg_pa,
-    const uint64_t val)
-{
-    uint32_t *pci_reg_ptr = (uint32_t *)map_pa_non_wb(
-        pci_reg_pa.raw_void,
-        TDX_RANGE_RW);
-
-    vol_write_reg32(pci_reg_ptr, (uint32_t)val);
-
-    // Check if moving the pointer would cross the page boundary the LA resides in
-    if (((uint64_t)pci_reg_ptr / TDX_PAGE_SIZE_IN_BYTES) != (((uint64_t)pci_reg_ptr + sizeof(uint32_t)) / TDX_PAGE_SIZE_IN_BYTES))
-    {
-        // Forwarding the original pointer crosses the page boundary
-        // Free the LA and remap it with the modified PA
-        free_la(pci_reg_ptr);
-        pci_reg_pa.raw += sizeof(uint32_t);
-        pci_reg_ptr = (uint32_t *)map_pa_non_wb(
-            pci_reg_pa.raw_void,
-            TDX_RANGE_RW);
-    }
-    else
-    {
-        // Forwarding the original pointer doesn't crosses the page boundary
-        pci_reg_ptr++;
-    }
-
-    vol_write_reg32(pci_reg_ptr, (uint32_t)(val >> 32));
-
-    free_la((void *)pci_reg_ptr);
-}
 
 #endif // IO_ACCESSORS_H_

@@ -95,7 +95,9 @@ api_error_type tdh_devif_mt_remove(devifmt_idx_t devifmt_idx)
     }
 
     // Unmap the parent DEVIFMT_ENTRY
-    devifmt_parent_ptr->p = 0;
+    devifmt_entry_t devifmt_parent_ptr_copy = {.raw = devifmt_parent_ptr->raw};
+    devifmt_parent_ptr_copy.p = 0;
+    atomic_mem_write_64b(&devifmt_parent_ptr->raw, devifmt_parent_ptr_copy.raw);
     // Free PAMT child entry
     devifmt_pamt_entry_ptr->pt = PT_NDA;
 

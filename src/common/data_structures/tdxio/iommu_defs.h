@@ -174,7 +174,7 @@ typedef union
     };
     uint16_t raw;
 } pmem_pcicmd_t;
-tdx_static_assert(sizeof(hiop_pmem_bar_range_t) == 24, hiop_pmem_bar_range_t);
+tdx_static_assert(sizeof(pmem_pcicmd_t) == 2, pmem_pcicmd_t);
 
 typedef ALIGN(8) struct
 {
@@ -200,12 +200,14 @@ typedef ALIGN(8) struct
     uint64_t hiop_wac_value;
     uint64_t kcb_wac_value;
     uint64_t rp_wac_value[NUM_OF_RP];
-    hiop_pmem_bar_range_t pmem_range[NUM_OF_RP];
+    hiop_pmem_bar_range_t pmem_range_arr[NUM_OF_RP];
+    uint8_t secbus_arr[NUM_OF_RP];
+    uint8_t subbus_arr[NUM_OF_RP];
     bool_t config_in_progress;
     bool_t clear_in_progress;
 } iommu_config_t;
 tdx_static_assert((offsetof(iommu_config_t, iommu_generation) % sizeof(uint64_t)) == 0, iommu_config_t);
-tdx_static_assert(sizeof(iommu_config_t) == 362, iommu_config_t);
+tdx_static_assert(sizeof(iommu_config_t) == 378, iommu_config_t);
 
 #pragma pack(pop)
 
@@ -225,7 +227,6 @@ typedef struct
 } hiop_info_t;
 tdx_static_assert(sizeof(hiop_info_t) == 48, hiop_info_t);
 
-// HIOP shadow registers. Note, BANKn_BAR_1_1_0_CFG register is the part of hiop_info_t above.
 typedef struct
 {
     uint16_t pcicmd_offst;

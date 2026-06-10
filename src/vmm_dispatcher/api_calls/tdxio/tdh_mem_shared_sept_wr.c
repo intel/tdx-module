@@ -32,8 +32,13 @@
 api_error_type tdh_mem_shared_sept_wr(
     page_info_api_input_t gpa_page_info,
     pa_t tdr_pa,
-    ia32e_sept_t ept_entry)
+    ia32e_sept_t ept_entry_0,
+    ia32e_sept_t ept_entry_1,
+    ia32e_sept_t ept_entry_2,
+    ia32e_sept_t ept_entry_3,
+    uint64_t version)
 {
+    api_error_type return_val = UNINITIALIZE_ERROR;
     tdx_module_local_t *local_data_ptr = get_local_data();
 
     // TDR related variables
@@ -46,16 +51,25 @@ api_error_type tdh_mem_shared_sept_wr(
 
     // GPA and SEPT related variables
     pa_t gpa_pa = {.raw = 0};                                        // Target page GPA
-    ia32e_sept_t *page_sept_entry_ptr = NULL;                        // SEPT entry of the page
-    ia32e_sept_t cached_sept_entry;                                  // Cached SEPT entry of the page
+    ia32e_sept_t *septe_ptr_arr[MAX_VMS] = {0};                      // SEPT entry array of the page
+    ia32e_sept_t cached_sept_arr[MAX_VMS];                           // Cached SEPT entry array of the page
     ept_level_t page_level_entry = (ept_level_t)gpa_page_info.level; // SEPT entry level of the page
     bool_t is_sept_locked = false;                                   // Indicate SEPT is locked
-
-    api_error_type return_val = UNINITIALIZE_ERROR;
 
     // By default, no extended error code is returned
     local_data_ptr->vmm_regs.rcx = 0;
     local_data_ptr->vmm_regs.rdx = 0;
+
+    // Partitioning specific vars
+    ia32e_sept_t ept_entry_val_arr[MAX_VMS] = {ept_entry_0, ept_entry_1, ept_entry_2, ept_entry_3};
+
+    if (version > 1)
+    {
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
+        TDX_ERROR("Version is greater than the max allowed value = %lu\n", version);
+        goto EXIT;
+    }
+
 
     // Check, lock and map the owner TDR page
     return_val = check_lock_and_map_explicit_tdr(
@@ -102,42 +116,84 @@ api_error_type tdh_mem_shared_sept_wr(
         goto EXIT;
     }
 
-    // Walk the Secure-EPT based on GPA and LEVEL to locate the EPT entry
     gpa_pa.page_4k_num = gpa_page_info.gpa;
-    return_val = lock_sept_and_walk_gpa(
-        tdcs_ptr,
-        OPERAND_ID_RCX,
-        gpa_pa,
-        TDX_LOCK_SHARED,
-        &page_sept_entry_ptr,
-        &page_level_entry,
-        &cached_sept_entry,
-        &is_sept_locked);
-    if (return_val != TDX_SUCCESS)
-    {
 
-        if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
+    if (version == 0 || ept_entry_0.raw != NULL_PA)
+    {
+        // Walk the Secure-EPT based on GPA and LEVEL to locate the EPT entry
+        return_val = lock_sept_and_walk_gpa(
+            tdcs_ptr,
+            OPERAND_ID_RCX,
+            gpa_pa,
+            TDX_LOCK_SHARED,
+            &septe_ptr_arr[0],
+            &page_level_entry,
+            &cached_sept_arr[0],
+            &is_sept_locked);
+        if (return_val != TDX_SUCCESS)
         {
-            TDX_ERROR("Failed on SEPT lock or walk - error = %llx\n", return_val);
-            // Update output register operands
-            set_arch_septe_details_in_vmm_regs(cached_sept_entry, page_level_entry, local_data_ptr);
+
+            if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
+            {
+                TDX_ERROR("Failed on SEPT lock or walk - error = %llx\n", return_val);
+                // Update output register operands
+                set_arch_septe_details_in_vmm_regs(cached_sept_arr[0], page_level_entry, local_data_ptr);
+            }
+            goto EXIT;
         }
-        goto EXIT;
     }
 
-    //	Set the EPT entry value to EPTE_VAL
-    page_sept_entry_ptr->raw = ept_entry.raw;
+    if (version > 0)
+    {
+        for (uint16_t vm_id = 1; vm_id <= tdcs_ptr->management_fields.num_l2_vms; vm_id++)
+        {
+            if (ept_entry_val_arr[vm_id].raw != NULL_PA)
+            {
+                return_val = l2_sept_walk_guest_side(tdr_ptr, tdcs_ptr, vm_id, gpa_pa,
+                                                    &page_level_entry, &cached_sept_arr[vm_id], &septe_ptr_arr[vm_id]);
+                if (return_val != TDX_SUCCESS)
+                {
+                    TDX_ERROR("L2 SEPT walk failed on VM(%d), level %d\n", vm_id, page_level_entry)
+                    return_val = api_error_with_l2_details(TDX_L2_SEPT_WALK_FAILED, vm_id, (uint16_t)page_level_entry);
+                    goto EXIT;
+                }
+            }
+        }
+
+        for (uint16_t vm_id = 1; vm_id <= tdcs_ptr->management_fields.num_l2_vms; vm_id++)
+        {
+            if (ept_entry_val_arr[vm_id].raw != NULL_PA)
+            {
+                // Write the L2 SEPT entry
+                *septe_ptr_arr[vm_id] = ept_entry_val_arr[vm_id];
+            }
+        }
+    }
+
+    if (version == 0 || ept_entry_0.raw != NULL_PA)
+    {
+        //	Set the EPT entry value to EPTE_VAL
+        septe_ptr_arr[0]->raw = ept_entry_0.raw;
+    }
 
     // Success
     return_val = TDX_SUCCESS;
 
 EXIT:
+
     if (is_sept_locked)
     {
         release_sharex_lock_sh(&tdcs_ptr->executions_ctl_fields.secure_ept_lock);
-        if (page_sept_entry_ptr != NULL)
+    }
+
+    if (tdcs_ptr != NULL)
+    {
+        for (uint16_t vm_id = 0; vm_id <= tdcs_ptr->management_fields.num_l2_vms; vm_id++)
         {
-            free_la(page_sept_entry_ptr);
+            if (septe_ptr_arr[vm_id] != NULL)
+            {
+                free_la(septe_ptr_arr[vm_id]);
+            }
         }
     }
 

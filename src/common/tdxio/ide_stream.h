@@ -116,10 +116,9 @@ void prime_rc_ide_keys(
     const ide_stream_direction_t direction,
     const ide_stream_key_set_sel_t key_set_select);
 
-bool_t is_ide_key_ready(
+bool_t is_ide_ks_ready(
     kcbar_t *const kcbar_ptr,
     const uint8_t key_id,
-    const ide_stream_direction_t direction,
     const ide_stream_key_set_sel_t key_set_select);
 
 void set_rc_tx_ide_key_set(
@@ -162,7 +161,6 @@ bool_t verify_idekm_message_content(
 bool_t is_ide_disabled(
     const socket_io_info_t *const socket_io_info_ptr,
     const rp_cfg_page_t *const rp_cfg_page_ptr);
-
 
 
 #endif /* SRC_COMMON_TDXIO_IDE_STREAM_H_ */

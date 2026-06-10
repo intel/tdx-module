@@ -24,6 +24,7 @@
  * @brief IOMMU handlers
  */
 
+#ifndef IOMMU_H_
 #define IOMMU_H_
 
 #include "tdx_basic_types.h"
@@ -244,7 +245,7 @@ _STATIC_INLINE_ uint16_t hiop_read_reg16(
 {
     pa_t hiop_reg_pa = {.raw = hiop_info_ptr->hiop_mmcfg_base + reg_offset};
 
-    uint16_t *hiop_reg_ptr = (uint16_t *)map_pa_non_wb(
+    uint16_t *hiop_reg_ptr = (uint16_t *)map_pa_with_global_hkid_uncached(
         hiop_reg_pa.raw_void,
         TDX_RANGE_RO);
     uint16_t hiop_val = vol_read_reg16(hiop_reg_ptr);
@@ -286,3 +287,17 @@ _STATIC_INLINE_ void hiop_write_reg64(
 }
 
 
+// TODO: remove getter after A0 support is deprecated
+_STATIC_INLINE_ uint16_t get_shadow_rp_mapping(const uint16_t rp_idx)
+{
+    if (get_global_data()->is_gnr_a0_cpuid)
+    {
+        // WA - https://hsdes.intel.com/appstore/article/#/13012256686
+        const uint8_t bank_decoder_to_rp_mapping[] = {0, 4, 1, 5, 2, 6, 3, 7};
+        return bank_decoder_to_rp_mapping[rp_idx];
+    }
+    // 1:1 mapping
+    return rp_idx;
+}
+
+#endif // IOMMU_H_

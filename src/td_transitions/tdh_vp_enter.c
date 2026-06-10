@@ -138,8 +138,7 @@ static void emulate_ept_violation_td_exit(tdx_module_local_t* local_data_ptr, pa
     exit_qualification.vm = vm_id;
 
     // Emulate an Async TDEXIT
-    initialize_extended_state(local_data_ptr->vp_ctx.xfam);
-
+    initialize_extended_state(tdcs_ptr->executions_ctl_fields.xfam);
     tdvps_ptr->management.state = VCPU_READY;
     tdvps_ptr->management.last_td_exit = LAST_EXIT_ASYNC_FAULT;
 
@@ -277,7 +276,19 @@ static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* td
         for (uint32_t i = 0; i < NUM_PMC; i++)
         {
             safe_wrmsr(IA32_A_PMC0_MSR_ADDR + i, tdvps_ptr->guest_msr_state.ia32_a_pmc[i]);
-            safe_wrmsr(IA32_PERFEVTSEL0_MSR_ADDR + i, tdvps_ptr->guest_msr_state.ia32_perfevtsel[i]);
+
+            ia32_perfevtsel_t perfevtsel_value = { .raw = tdvps_ptr->guest_msr_state.ia32_perfevtsel[i] };
+            if (perfevtsel_value.forbidden) // if forbidden
+            {
+                /* The Perfmon event has been filtered out.  Write the value but clear the ENABLE bit (22) to 0.
+                   This ensures that the IA32_PERF_GLOBAL_INUSE MSR returns the in-use status bit for this
+                   counter as if it is being used, since the bit is set if and only if IA32_PERFEVTSELx
+                   EVENT_SELECT bits (7:0) are not 0. */
+                perfevtsel_value.forbidden = 0;
+                perfevtsel_value.en = 0;
+            }
+
+            safe_wrmsr(IA32_PERFEVTSEL0_MSR_ADDR + i, perfevtsel_value.raw);
         }
 
         for (uint32_t i = 0; i < 2; i++)
@@ -807,7 +818,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
     else if ((filter_result == FILTER_OK_NOTIFY_EPS_FAULT) && can_inject_epf_ve(exit_qualification, tdvps_ptr))
     {
         tdx_debug_assert(tdvps_ptr->management.curr_vm == 0);
-        tdx_inject_ve((uint32_t)exit_reason.raw, exit_qualification.raw, tdvps_ptr, faulting_gpa.raw, 0);
+        tdx_inject_ve((uint32_t)exit_reason.raw, exit_qualification.raw, VE_INFO_ARCH, tdvps_ptr, faulting_gpa.raw, 0);
     }
 
     /*-------------------------------------------------------------------------------------

@@ -182,7 +182,7 @@ api_error_code_e dmar_walk(
         goto EXIT;
     }
 
-    uint64_t max_pde = BIT(PDTS_IDX_CONST + dmar_walk_res->cte_ptr->pdts);
+    uint64_t max_pde = GET_PD_NUM_OF_ENTRIES(dmar_walk_res->cte_ptr);
     if (dmar_walk_res->cte_ptr->pd_idx >= max_pde)
     {
         TDX_ERROR("PD index (%u) is greater than max pd entries (%u)\n", dmar_walk_res->cte_ptr->pd_idx, max_pde);
@@ -352,7 +352,7 @@ _STATIC_INLINE_ api_error_type dmar_table_alloc(
         pa_t next_page_pa = {.raw = start_pa.raw + alloc_page_cnt * TDX_PAGE_SIZE_IN_BYTES};
         return_val = check_and_lock_explicit_4k_private_hpa(
             next_page_pa,
-            OPERAND_ID_R8,
+            OPERAND_ID_RDX,
             TDX_LOCK_EXCLUSIVE,
             PT_NDA,
             &next_page_pamt_block,
@@ -515,7 +515,7 @@ api_error_type dmar_rte_add(
     if (!is_valid_dmar_rte(rte_ptr))
     {
         TDX_ERROR("Invalid RTE entry = 0x%llx\n", rte_ptr->raw);
-        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
         goto EXIT;
     }
 
@@ -605,7 +605,8 @@ api_error_type dmar_cte_add(
             if (expected_cte_value.raw.qwords[curr_q ] != cte_ptr->raw.qwords[curr_q ])
             {
                 TDX_ERROR("dmar_val_%u  != 0\n", curr_q);
-                return api_error_with_operand_id(TDX_OPERAND_INVALID, curr_q + OPERAND_ID_R8);
+                uint16_t operand_id = curr_q == 0? OPERAND_ID_RDX: curr_q + OPERAND_ID_R8 - 1;
+                return api_error_with_operand_id(TDX_OPERAND_INVALID, operand_id);
             }
         }
     }
@@ -673,7 +674,7 @@ api_error_type dmar_pde_add(
     if (!is_valid_dmar_pde(pde_ptr))
     {
         TDX_ERROR("Invalid PASID DIR entry = 0x%llx\n", pde_ptr->raw);
-        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
         goto EXIT;
     }
 
@@ -715,59 +716,15 @@ api_error_type dmar_pasidte_add(
     dmar_walk_res_t *const dmar_walk_res,
     dmar_state_info_t dmar_state_info,
     dmar_entry_t *const dmar_entry_ptr,
-    const dmar_idx_t dmar_idx,
-    const pa_t tdr_pa,
-    const tdr_t *const tdr_ptr,
-    tdcs_t *const tdcs_ptr)
+    const iommu_id_t iommu_id)
 {
     api_error_type return_val = UNINITIALIZE_ERROR;
     dmar_pasidte_t *pasidte_ptr = &dmar_entry_ptr->pasidte;
-    devif_verify_param_t devif_verify_param = {0};
 
-    bool_t is_epoch_locked = false;
-
-    if ((return_val = is_valid_dmar_pasidte(pasidte_ptr, tdcs_ptr)) != TDX_SUCCESS)
+    if ((return_val = is_valid_dmar_pasidte(pasidte_ptr)) != TDX_SUCCESS)
     {
         TDX_ERROR("Invalid PASIDTE entry\n");
         goto EXIT;
-    }
-
-    function_id_reg_t function_id_reg = {.raw = 0};
-    function_id_reg.function_id.rid = dmar_idx.rid;
-    // Lock and map devifcs
-    return_val = tdh_devifmt_get_devifcs(
-        function_id_reg,
-        TDX_RANGE_RW,
-        OPERAND_ID_RCX, // RCX is the operand for dmar_idx
-        &devif_verify_param);
-    if (return_val != TDX_SUCCESS)
-    {
-        goto EXIT;
-    }
-
-    if (devif_verify_param.devifcs_ptr->tdr_pa.raw != tdr_pa.raw)
-    {
-        TDX_ERROR("TD is not the page owner (page owner = 0x%llx, tdr_pa = 0x%llx)\n",
-                  devif_verify_param.devifcs_ptr->tdr_pa.raw, tdr_pa.raw);
-        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RDX);
-        goto EXIT;
-    }
-
-    pa_t eptp_pa = {.raw = 0};
-    eptp_pa.page_4k_num = tdcs_ptr->executions_ctl_fields.eptp.fields.base_pa;
-    eptp_pa = set_hkid_to_pa(eptp_pa, tdr_ptr->key_management_fields.hkid);
-
-    // Determine SLPTR according to EPT level and GPAW
-    if (tdcs_ptr->executions_ctl_fields.eptp.fields.ept_pwl == LVL_PML4 ||
-        tdcs_ptr->executions_ctl_fields.gpaw)
-    {
-        pasidte_ptr->slptptr = eptp_pa.page_4k_num;
-    }
-    else
-    { // 5-level EPTP enabled && GPAW 48
-        ia32e_ept_t *eptp_page = (ia32e_ept_t *)map_pa(eptp_pa.raw_void, TDX_RANGE_RO);
-        pasidte_ptr->slptptr = eptp_page[0].fields_4k.base;
-        free_la(eptp_page);
     }
 
     /*
@@ -775,24 +732,8 @@ api_error_type dmar_pasidte_add(
      * Domain-ID is the TD-HKID with the MSB bit of the maximum supported domain ID set
      */
     tdx_module_global_t *tdx_global_data_ptr = get_global_data();
-    iommu_config_t *iommu_config_ptr = &tdx_global_data_ptr->iommu_configs[dmar_idx.iommu_id.raw];
-    pasidte_ptr->did = tdr_ptr->key_management_fields.hkid | BIT(iommu_config_ptr->iommu_cap.did_msb);
-
-    // Acquire TDCS epoch lock or fail with TDX_OPERAND_BUSY
-    if (acquire_sharex_lock_sh(&tdcs_ptr->epoch_tracking.epoch_lock) != LOCK_RET_SUCCESS)
-    {
-        TDX_ERROR("Failed to acquire epoch lock on TDCS\n");
-        return_val = api_error_with_operand_id(TDX_OPERAND_BUSY, OPERAND_ID_TD_EPOCH);
-        goto EXIT;
-    }
-    is_epoch_locked = true;
-
-    // Update IOTLB tracking
-    if (increment_iotlb_tracker_pasidte_ref_cnt(&tdcs_ptr->tdxio_fields.iotlb_track_array[dmar_idx.iommu_id.raw], 1) == 0)
-    {
-        _lock_xadd_64b(&tdcs_ptr->tdxio_fields.curr_iotlb_cnt, 1);
-        tdcs_ptr->tdxio_fields.iotlb_track_array[dmar_idx.iommu_id.raw].inv_epoch = (tdcs_ptr->epoch_tracking.epoch_and_refcount.td_epoch & BIT(0));
-    }
+    iommu_config_t *iommu_config_ptr = &tdx_global_data_ptr->iommu_configs[iommu_id.raw];
+    pasidte_ptr->did = BIT(iommu_config_ptr->iommu_cap.did_msb);
 
     // Update state to pending
     dmar_state_info.map_sts = DMAR_PENDING;
@@ -807,13 +748,6 @@ api_error_type dmar_pasidte_add(
     return_val = TDX_SUCCESS;
 
 EXIT:
-    devif_unmap_devifcs(&devif_verify_param);
-
-    if (is_epoch_locked)
-    {
-        release_sharex_lock_sh(&tdcs_ptr->epoch_tracking.epoch_lock);
-    }
-
     return return_val;
 }
 
@@ -1085,48 +1019,52 @@ bool_t is_dmar_child_entires_free(const dmar_walk_res_t *const dmar_walk_res)
     case DMAR_RTE_LVL:
     {
         entry_pa.page_4k_num = dmar_walk_res->rte_ptr->ctp;
-
-        dmar_cte_t *cte_base_ptr = (dmar_cte_t *)map_pa_with_global_hkid(
+        dmar_cte_t *cte_ptr = (dmar_cte_t *)map_pa_with_global_hkid(
             entry_pa.raw_void,
             TDX_RANGE_RO);
+        entry_ptr = cte_ptr;
 
-        entry_ptr = cte_base_ptr;
-
-        for (uint8_t cte_page_idx = 0; cte_page_idx < cte_base_ptr->pde_cnt; cte_page_idx++)
+        for (uint8_t i = 0; i < MAX_CT_ENTRIES_PER_PAGE; i++)
         {
-            pa_t new_page_pa = {.raw = entry_pa.raw + cte_page_idx * TDX_PAGE_SIZE_IN_BYTES};
-            dmar_cte_t *cte_ptr = map_pa_with_global_hkid(new_page_pa.raw_void, TDX_RANGE_RW);
-
-            for (uint8_t i = 0; i < MAX_CT_ENTRIES_PER_PAGE; i++)
+            if (dmar_get_cte_state(cte_ptr + i) != DMAR_CTE_FREE)
             {
-                if (dmar_get_cte_state(cte_ptr + i) != DMAR_CTE_FREE)
-                {
-                    TDX_ERROR("CT entry %u not in DMAR_CTE_FREE state\n", i);
-                    free_la(cte_ptr);
-                    ret_val = false;
-                    goto EXIT;
-                }
+                TDX_ERROR("CT entry %u not in DMAR_CTE_FREE state\n", i);
+                ret_val = false;
+                goto EXIT;
             }
-            free_la(cte_ptr);
         }
         break;
     }
     case DMAR_CTE_LVL:
     {
         entry_pa.page_4k_num = dmar_walk_res->cte_ptr->pasiddirptr;
-        dmar_pde_t *pde_ptr = (dmar_pde_t *)map_pa_with_global_hkid(
+        dmar_pde_t *pde_base_ptr = (dmar_pde_t *)map_pa_with_global_hkid(
             entry_pa.raw_void,
             TDX_RANGE_RO);
-        entry_ptr = pde_ptr;
+        entry_ptr = pde_base_ptr;
 
-        for (uint16_t i = 0; i < MAX_PD_ENTRIES_PER_PAGE; i++)
+        uint64_t total_num_of_pde_entries = GET_PD_NUM_OF_ENTRIES(dmar_walk_res->cte_ptr);
+        uint64_t tatal_number_of_pages = (total_num_of_pde_entries % MAX_PD_ENTRIES_PER_PAGE) == 0? (total_num_of_pde_entries / MAX_PD_ENTRIES_PER_PAGE): (total_num_of_pde_entries / MAX_PD_ENTRIES_PER_PAGE + 1);
+
+        for (uint8_t pde_page_idx = 0; pde_page_idx < tatal_number_of_pages; pde_page_idx++)
         {
-            if (dmar_get_pde_state(pde_ptr + i) != DMAR_PDE_FREE)
+            pa_t new_page_pa = {.raw = entry_pa.raw + pde_page_idx * TDX_PAGE_SIZE_IN_BYTES};
+            dmar_pde_t *pde_ptr = map_pa_with_global_hkid(new_page_pa.raw_void, TDX_RANGE_RO);
+
+            uint64_t pd_entries_in_curr_page = MIN(MAX_PD_ENTRIES_PER_PAGE, total_num_of_pde_entries);
+            total_num_of_pde_entries -= pd_entries_in_curr_page;
+
+            for (uint64_t i = 0; i < pd_entries_in_curr_page; i++)
             {
-                TDX_ERROR("PD entry %u not in DMAR_PDE_FREE state\n", i);
-                ret_val = false;
-                goto EXIT;
+                if (dmar_get_pde_state(pde_ptr + i) != DMAR_PDE_FREE)
+                {
+                    TDX_ERROR("PD entry %u not in DMAR_PDE_FREE state\n", i);
+                    ret_val = false;
+                    free_la(pde_ptr);
+                    goto EXIT;
+                }
             }
+            free_la(pde_ptr);
         }
         break;
     }

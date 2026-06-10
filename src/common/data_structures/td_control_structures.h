@@ -69,22 +69,22 @@ tdx_static_assert(sizeof(td_lifecycle_state_t) == 4, td_lifecycle_state_t);
  */
 typedef enum
 {
-    MSR_BITMAPS_PAGE_INDEX = 3,
-    SEPT_ROOT_PAGE_INDEX   = 4,
-    ZERO_PAGE_INDEX        = 5,
-    MIGSC_LINKS_PAGE_INDEX = 6,
-    L2_SEPT_ROOT_PAGE_BASE_INDEX = 7,  // First L2 SEPT Root page
+    MSR_BITMAPS_PAGE_INDEX = 5,
+    SEPT_ROOT_PAGE_INDEX   = 6,
+    ZERO_PAGE_INDEX        = 7,
+    MIGSC_LINKS_PAGE_INDEX = 8,
+    L2_SEPT_ROOT_PAGE_BASE_INDEX = 9,  // First L2 SEPT Root page
     L2_SEPT_ROOT_PAGE_BASE_INC   = 1,  // How much the base index is incremented for each VM
 
-    L2_SEPT_ROOT_1_PAGE_INDEX    = 7,
-    L2_SEPT_ROOT_2_PAGE_INDEX    = 8,
-    L2_SEPT_ROOT_3_PAGE_INDEX    = 9,
+    L2_SEPT_ROOT_1_PAGE_INDEX    = 9,
+    L2_SEPT_ROOT_2_PAGE_INDEX    = 10,
+    L2_SEPT_ROOT_3_PAGE_INDEX    = 11,
 
     TDCS_PAGES_PER_L2_VM         = 1,  // Additional TDCS pages per L2 VM
 
-    MAX_NUM_TDCS_PAGES           = 10,  // Maximum total number of TDCS pages
+    MAX_NUM_TDCS_PAGES           = 12,  // Maximum total number of TDCS pages
 
-    MIN_NUM_TDCS_PAGES           = 7,  // Minimum total number of TDCS pages
+    MIN_NUM_TDCS_PAGES           = 9,  // Minimum total number of TDCS pages
 
     MAX_MAPPED_TDCS_PAGES  = MAX_NUM_TDCS_PAGES
 } tdcs_page_index_t;
@@ -366,7 +366,25 @@ typedef struct cpuid_flags_s
     bool_t la57_supported;             // virtual CPUID(0x7, 0x0).ECX[16]
     bool_t fred_supported;             // virtual CPUID(0x7, 0x1).EAX[18] & [17] FRED & LKGS
     bool_t perfmon_ext_leaf_supported; // virtual CPUID(0x7, 0x1).EAX[8]
-    uint8_t reserved[20];
+    bool_t umsr_supported;             // virtual CPUID(0x7, 0x1).EAX[15]
+    bool_t arch_pebs_supported;        // virtual CPUID(0x23, 0x0).EAX[5]
+    bool_t kl_no_backup_supported;     // virtual CPUID(0x19).ECX[0]
+    bool_t kl_random_supported;        // virtual CPUID(0x19).ECX[1]
+    bool_t avx10_512vl_supported;      // virtual CPUID(0x24, 0x0).EBX[18] is not 0
+    bool_t avx10_supported;            // virtual CPUID(0x7, 0x1).EDX[19]
+
+    bool_t core_capabilities_not_supported; // !virtual CPUID(7, 0).EDX[30] (support IA32_CORE_CAPABILITIES)
+    bool_t est_supported;                   // virtual CPUID(1).ECX[7] (Enhanced Intel SpeedStep technology)
+    bool_t mce_not_supported;               // !virtual CPUID(1).EDX[7] (Machine Check Exception)
+    bool_t mca_not_supported;               // !virtual CPUID(1).EDX[14] (Machine Check Architecture)
+    bool_t mtrr_not_supported;              // !virtual CPUID(1).EDX[12] (Memory Type Range Registers)
+    bool_t rdt_a_supported;                 // virtual CPUID(7, 0).EBX[15] (RDT-A)
+    bool_t rdt_m_supported;                 // virtual CPUID(7, 0).EBX[12] (RDT-M)
+    bool_t acpi_supported;                  // virtual CPUID(1).EDX[22] (Thermal Monitor and Software Controlled Clock Facilities)
+    bool_t tm2_supported;                   // virtual CPUID(1).ECX[8] (TM2)
+    bool_t xtpr_update_supported;           // virtual CPUID(1).ECX[14](xTPR Update Control)
+
+    uint8_t reserved[4];
 } cpuid_flags_t;
 tdx_static_assert(sizeof(cpuid_flags_t) == 32, cpuid_flags_t);
 
@@ -401,11 +419,74 @@ typedef union
         uint64_t pending_ve_disable : 1; // Bit 0:  Control the way guest TD access to a PENDING page is processed
         uint64_t enum_topology      : 1; // Bit 1:  Controls the enumeration of virtual platform topology
         uint64_t virt_cpuid2        : 1; // Bit 2:  Controls the virtualization of CPUID(2)
-        uint64_t reserved           : 61;
+        uint64_t reduce_ve          : 1; // Bit 3:  Control #VE reduction
+        uint64_t reserved           : 59;
+        uint64_t lock               : 1; // Bit 63: Lock
     };
     uint64_t raw;
 } td_ctls_t;
 tdx_static_assert(sizeof(td_ctls_t) == 8, td_ctls_t);
+
+// Permon Events Filtering
+#define MAX_EVENT_FILTERS 512
+typedef union event_filter_internal_s
+{
+    struct
+    {
+        uint8_t event_select;
+        uint8_t umask;
+    };
+    uint16_t raw;
+} event_filter_internal_t;
+tdx_static_assert(sizeof(event_filter_internal_t) == 2, event_filter_internal_t);
+
+typedef union event_filter_s
+{
+    struct
+    {
+        uint64_t event_select            :  8;      // Bits 0:7
+        uint64_t reserved_0              : 23;      // Bits 8:30
+        uint64_t negative                :  1;      // Bit  31
+        uint64_t umask                   : 16;      // Bits 32:47
+        uint64_t umask_mask              : 16;      // Bits 48:63
+    };
+    uint64_t raw;
+} event_filter_t;
+tdx_static_assert(sizeof(event_filter_t) == 8, event_filter_t);
+
+typedef union event_filter_info_s
+{
+    struct
+    {
+        uint64_t event_filters_num       : 12;      // Bits  0:11
+        uint64_t event_filters_hpa_51_12 : 40;      // Bits 12:51
+        uint64_t reserved                : 12;      // Bits 52:63
+    };
+    uint64_t raw;
+} event_filter_info_t;
+tdx_static_assert(sizeof(event_filter_info_t) == 8, event_filter_info_t);
+
+typedef union feature_paravirt_ctls_u
+{
+    struct
+    {
+        uint64_t core_capabilities :  1; // Bit 0
+        uint64_t dca               :  1; // Bit 1
+        uint64_t est               :  1; // Bit 2
+        uint64_t mca               :  1; // Bit 3
+        uint64_t mtrr              :  1; // Bit 4
+        uint64_t pconfig           :  1; // Bit 5
+        uint64_t rdt_a             :  1; // Bit 6
+        uint64_t rdt_m             :  1; // Bit 7
+        uint64_t acpi              :  1; // Bit 8
+        uint64_t tm2               :  1; // Bit 9
+        uint64_t tme               :  1; // Bit 10
+        uint64_t tsc_deadline      :  1; // Bit 11
+        uint64_t reserved          : 52; // Bits 12-63
+    };
+    uint64_t raw;
+} feature_paravirt_ctls_t;
+tdx_static_assert(sizeof(feature_paravirt_ctls_t) == 8, feature_paravirt_ctls_t);
 
 // Limits of HP_LOCK_TIMEOUT, in usec units
 #define MIN_HP_LOCK_TIMEOUT_USEC      10000UL      // 10 msec
@@ -457,14 +538,17 @@ typedef struct tdcs_execution_control_fields_s
     uint8_t                      virt_maxpa;
     uint8_t                      reserved_2[3];
     bool_t                       topology_enum_configured;
-    uint8_t                      reserved_3[7];
-    uint8_t                      cpuid_valid[80];
+    bool_t                       ve_reduction_valid;
+    uint8_t                      reserved_3[2];
+    uint32_t                     perfmon_ext_subleaves_bitmap;
+    uint8_t                      cpuid_valid[160];
     ALIGN(16) uint32_t           xbuff_offsets[XBUFF_OFFSETS_NUM];
-    uint8_t                      reserved_4[36];
+    uint8_t                      reserved_4[80];
 } tdcs_execution_control_fields_t;
-tdx_static_assert(sizeof(tdcs_execution_control_fields_t) == 384, tdcs_execution_control_fields_t);
+tdx_static_assert(sizeof(tdcs_execution_control_fields_t) == 512, tdcs_execution_control_fields_t);
 // Validate that the size of gpaw (bool_t) is 1 byte
 tdx_static_assert(sizeof(bool_t) == 1, gpaw);
+
 
 #define TDCS_MEASUREMEMNT_MRTD_CTX_SIZE         352
 
@@ -560,7 +644,7 @@ typedef struct tdcs_virt_msrs_s
     ia32_vmx_allowed_bits_t         virt_ia32_vmx_true_exit_ctls;
     ia32_vmx_allowed_bits_t         virt_ia32_vmx_true_entry_ctls;
     uint64_t                        virt_ia32_vmx_vmfunc;
-    vmx_procbased_ctls3_t           virt_ia32_vmx_procbased_ctls3;
+    uint64_t                        virt_ia32_vmx_procbased_ctls3;
     uint64_t                        virt_ia32_vmx_exit_ctls2;
     uint64_t                        virt_ia32_arch_capabilities;
 
@@ -605,11 +689,33 @@ typedef struct tdcs_service_td_fields_s
     */
     ALIGN(16) servtd_binding_t servtd_bindings_table[MAX_SERV_TDS];
 
-    uint8_t                    reserved_1[752];
+    uint8_t                    reserved_1[240];
 } tdcs_service_td_fields_t;
-tdx_static_assert(sizeof(tdcs_service_td_fields_t) == 1024, tdcs_service_td_fields_t);
+tdx_static_assert(sizeof(tdcs_service_td_fields_t) == 512, tdcs_service_td_fields_t);
 
-#define MAX_POSSIBLE_CPUID_LOOKUP           80
+#define NUM_CPUID4_NATIVE           4
+
+/**
+ * @struct tdcs_service_td_fields_t
+ *
+ * @brief Holds TDCSs service td fields
+ */
+typedef struct tdcs_execution_control2_field_s
+{
+    uint32_t                     cpuid_last_base_leaf;
+    uint32_t                     cpuid_last_ext_leaf;
+    uint64_t                     cpuid_fixed0_bitmap;
+    cpuid_config_return_values_t cpuid4_native_values[NUM_CPUID4_NATIVE];
+    bool_t                       cpuid4_native_valid[NUM_CPUID4_NATIVE];
+    feature_paravirt_ctls_t      feature_paravirt_ctls;
+    uint64_t                     filtered_events_count[MAX_VMS];
+    uint16_t                     event_filters_num;
+
+    uint8_t                      reserved[382];
+} tdcs_execution_control2_field_t;
+tdx_static_assert(sizeof(tdcs_execution_control2_field_t) == 512, tdcs_execution_control2_field_t);
+
+#define MAX_POSSIBLE_CPUID_LOOKUP           160
 
 /**
  * @struct tdcs_tdxio_fields_t
@@ -620,11 +726,38 @@ typedef struct tdcs_tdxio_fields_s
 {
     uint64_t curr_iotlb_cnt;
     uint64_t prev_iotlb_cnt;
-    uint8_t reserved1[32];
+    bool_t is_req_active;
+    uint8_t req_num;
+    uint8_t reserved0[14];
+    uint128_t req_iommu_bm;
+    bool_t status_complete_write;
+    uint8_t reserved1[3];
+    uint32_t status_complete_data;
+    pa_t status_complete_gpa;
+    uint8_t reserved2[16];
     iotlb_inv_tracker_t iotlb_track_array[TOT_NUM_IOMMUS];
-    uint8_t reserved2[176];
+    uint8_t iotlb_committed[TOT_NUM_IOMMUS];
+    uint8_t iotlb_complete[TOT_NUM_IOMMUS];
+    uint8_t reserved3[48];
+    sharex_hp_lock_t tdinv_lock;
+    uint8_t reserved_cacheline[62];
+    uint8_t reserved4[576];
 } tdcs_tdxio_fields_t;
-tdx_static_assert(sizeof(tdcs_tdxio_fields_t) == 1248, tdcs_tdxio_fields_t);
+tdx_static_assert(sizeof(tdcs_tdxio_fields_t) == TDX_PAGE_SIZE_IN_BYTES / 2, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, curr_iotlb_cnt) == 0, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, prev_iotlb_cnt) == 0x8, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, is_req_active) == 0x10, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, req_num) == 0x11, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, req_iommu_bm) == 0x20, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, status_complete_write) == 0x30, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, status_complete_data) == 0x34, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, status_complete_gpa) == 0x38, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, iotlb_track_array) == 0x50, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, iotlb_committed) == 0x450, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, iotlb_complete) == 0x4D0, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, tdinv_lock) == 0x580, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, reserved_cacheline) == 0x582, tdcs_tdxio_fields_t);
+tdx_static_assert(offsetof(tdcs_tdxio_fields_t, reserved4) == 0X5C0, tdcs_tdxio_fields_t);
 
 #if (MAX_POSSIBLE_CPUID_LOOKUP < MAX_NUM_CPUID_LOOKUP)
 #error "Invalid number of MAX_POSSIBLE_CPUID_LOOKUP"
@@ -668,7 +801,11 @@ typedef struct ALIGN(TDX_PAGE_SIZE_IN_BYTES) tdcs_s
      */
     tdcs_service_td_fields_t               service_td_fields;
 
+    tdcs_execution_control2_field_t        executions_ctl2_fields;
+
     uint32_t                               x2apic_ids[MAX_VCPUS_PER_TD];
+
+    event_filter_internal_t                event_filters_internal[MAX_EVENT_FILTERS];
 
     /**
      * TDXIO Fields
@@ -676,23 +813,27 @@ typedef struct ALIGN(TDX_PAGE_SIZE_IN_BYTES) tdcs_s
     tdcs_tdxio_fields_t tdxio_fields;
 
     /**
-     * TDCX 2nd page - MSR Bitmaps
-     * TDCX 3rd page - MSR Bitmaps
+     * TDCX 4th page - TD invalidation requests buffer
+     */
+    ALIGN(4096) uint8_t td_inv_req_buff[TDX_PAGE_SIZE_IN_BYTES];
+
+    /**
+     * TDCX 5th page - MSR Bitmaps
      */
     ALIGN(4096) uint8_t MSR_BITMAPS[TDX_PAGE_SIZE_IN_BYTES]; /**< TD-scope RDMSR/WRMSR exit control bitmaps */
 
     /**
-     * TDCX 4th page - Secure EPT Root Page
+     * TDCX 6th page - Secure EPT Root Page
      */
     uint8_t sept_root_page[TDX_PAGE_SIZE_IN_BYTES];
 
     /**
-     * TDCX 5th page - Zero Page
+     * TDCX 7th page - Zero Page
      */
     uint8_t zero_page[TDX_PAGE_SIZE_IN_BYTES];
 
     /**
-     * TDCX 6th page - MIGSC links page
+     * TDCX 8th page - MIGSC links page
      */
     union
     {
@@ -705,16 +846,27 @@ typedef struct ALIGN(TDX_PAGE_SIZE_IN_BYTES) tdcs_s
     };
 
     /**
-     * TDCX 7th-9th page - L2 Secure EPT Root
+     * TDCX 9th-11th page - L2 Secure EPT Root
      */
     uint8_t L2_SEPT_ROOT_1[TDX_PAGE_SIZE_IN_BYTES];
     uint8_t L2_SEPT_ROOT_2[TDX_PAGE_SIZE_IN_BYTES];
     uint8_t L2_SEPT_ROOT_3[TDX_PAGE_SIZE_IN_BYTES];
-
 } tdcs_t;
 tdx_static_assert(sizeof(tdcs_t) == TDX_PAGE_SIZE_IN_BYTES*MAX_NUM_TDCS_PAGES, tdcs_t);
-tdx_static_assert(sizeof_field(tdcs_t, cpuid_config_vals) == 1280, cpuid_config_vals);
-tdx_static_assert(offsetof(tdcs_t, cpuid_config_vals) == 0x800, cpuid_config_vals_offset);
+tdx_static_assert(offsetof(tdcs_t, executions_ctl_fields) == 0x80, executions_ctl_fields);
+tdx_static_assert(offsetof(tdcs_t, epoch_tracking) == 0x280, epoch_tracking);
+tdx_static_assert(offsetof(tdcs_t, measurement_fields) == 0x2C0, measurement_fields);
+tdx_static_assert(offsetof(tdcs_t, migration_fields) == 0x600, migration_fields);
+tdx_static_assert(offsetof(tdcs_t, virt_msrs) == 0x780, virt_msrs);
+tdx_static_assert(sizeof_field(tdcs_t, cpuid_config_vals) == 2560, cpuid_config_vals);
+tdx_static_assert(offsetof(tdcs_t, cpuid_config_vals) == 0x880, cpuid_config_vals_offset);
+tdx_static_assert(offsetof(tdcs_t, service_td_fields) == 0x1280, service_td_fields);
+tdx_static_assert(offsetof(tdcs_t, executions_ctl2_fields) == 0x1480, executions_ctl2_fields);
+tdx_static_assert(offsetof(tdcs_t, x2apic_ids) == 0x1680, x2apic_ids);
+tdx_static_assert(sizeof_field(tdcs_t, x2apic_ids) == 5504, x2apic_ids);
+tdx_static_assert(offsetof(tdcs_t, event_filters_internal) == 0x2C00, event_filters_internal);
+tdx_static_assert(offsetof(tdcs_t, tdxio_fields) == 0x3000, tdxio_fields);
+tdx_static_assert(offsetof(tdcs_t, td_inv_req_buff) == 0x4000, tdxio_fields);
 tdx_static_assert(offsetof(tdcs_t, MSR_BITMAPS)      == TDX_PAGE_SIZE_IN_BYTES*MSR_BITMAPS_PAGE_INDEX, tdcs_t);
 tdx_static_assert(offsetof(tdcs_t, sept_root_page)   == TDX_PAGE_SIZE_IN_BYTES*SEPT_ROOT_PAGE_INDEX, tdcs_t);
 tdx_static_assert(offsetof(tdcs_t, zero_page)        == TDX_PAGE_SIZE_IN_BYTES*ZERO_PAGE_INDEX, tdcs_t);
@@ -723,11 +875,32 @@ tdx_static_assert(offsetof(tdcs_t, L2_SEPT_ROOT_1)   == TDX_PAGE_SIZE_IN_BYTES *
 tdx_static_assert(offsetof(tdcs_t, L2_SEPT_ROOT_2)   == TDX_PAGE_SIZE_IN_BYTES * L2_SEPT_ROOT_2_PAGE_INDEX, tdcs_t);
 tdx_static_assert(offsetof(tdcs_t, L2_SEPT_ROOT_3)   == TDX_PAGE_SIZE_IN_BYTES * L2_SEPT_ROOT_3_PAGE_INDEX, tdcs_t);
 
-
 _STATIC_INLINE_ bool_t is_required_tdcs_allocated(tdr_t *tdr_p, uint16_t num_l2_vms)
 {
     return (tdr_p->management_fields.num_tdcx >=
             (uint32_t)(MIN_NUM_TDCS_PAGES + (TDCS_PAGES_PER_L2_VM * num_l2_vms)));
+}
+
+// Get the last CPUID base leaf while handling the case of update from a previous version where this field was reserved-0.
+_STATIC_INLINE_ uint32_t get_tdcs_cpuid_last_base_leaf(tdcs_t* tdcs_p)
+{
+    if (tdcs_p->executions_ctl2_fields.cpuid_last_base_leaf == 0)
+    {
+        tdcs_p->executions_ctl2_fields.cpuid_last_base_leaf = CPUID_LAST_BASE_LEAF;
+    }
+
+    return tdcs_p->executions_ctl2_fields.cpuid_last_base_leaf;
+}
+
+// Get the last CPUID ext leaf while handling the case of update from a previous version where this field was reserved-0.
+_STATIC_INLINE_ uint32_t get_tdcs_cpuid_last_ext_leaf(tdcs_t* tdcs_p)
+{
+    if (tdcs_p->executions_ctl2_fields.cpuid_last_ext_leaf == 0)
+    {
+        tdcs_p->executions_ctl2_fields.cpuid_last_ext_leaf = CPUID_LAST_EXTENDED_LEAF;
+    }
+
+    return tdcs_p->executions_ctl2_fields.cpuid_last_ext_leaf;
 }
 
 #endif /* SRC_COMMON_DATA_STRUCTURES_TD_CONTROL_STRUCTURES_H_ */

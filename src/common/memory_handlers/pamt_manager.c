@@ -31,7 +31,8 @@
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
 
-bool_t pamt_get_block(pa_t pa, pamt_block_t* pamt_block)
+
+static tdmr_entry_t* get_covering_tdmr_for_hpa(pa_t pa)
 {
     tdmr_entry_t* covering_tdmr = NULL;
     tdx_module_global_t* global_data_ptr = get_global_data();
@@ -53,6 +54,20 @@ bool_t pamt_get_block(pa_t pa, pamt_block_t* pamt_block)
     }
 
     if (covering_tdmr == NULL || pa_addr >= (covering_tdmr->base + covering_tdmr->size))
+    {
+        return NULL;
+    }
+
+    return covering_tdmr;
+}
+
+bool_t pamt_get_block(pa_t pa, pamt_block_t* pamt_block)
+{
+    uint64_t pa_addr = get_addr_from_pa(pa);
+
+    tdmr_entry_t* covering_tdmr = get_covering_tdmr_for_hpa(pa);
+
+    if (covering_tdmr == NULL)
     {
         TDX_ERROR("Couldn't find covering TDMR for PA = 0x%llx\n", pa_addr);
         return false;
@@ -76,16 +91,13 @@ bool_t pamt_get_block(pa_t pa, pamt_block_t* pamt_block)
             + (uint64_t)(pamt_block_num * sizeof(pamt_entry_t)));
     pamt_block->pamt_2mb_p = (pamt_entry_t*) (covering_tdmr->pamt_2m_base
             + (uint64_t)(pamt_block_num * sizeof(pamt_entry_t) * PAMT_2MB_ENTRIES_IN_1GB));
-    pamt_block->pamt_4kb_p = (pamt_entry_t*) (covering_tdmr->pamt_4k_base
+    pamt_block->pamt_4kb_p = (pamt_entry_t*)(covering_tdmr->pamt_4k_base
             + (uint64_t)(pamt_block_num * sizeof(pamt_entry_t) * PAMT_4KB_ENTRIES_IN_1GB));
+
+    pamt_block->tdmr_base = covering_tdmr->base;
 
     return true;
 }
-
-
-#define PAMT_4K_ENTRIES_IN_2MB    (_2MB / _4KB)
-#define PAMT_4K_ENTRIES_IN_1GB    (_1GB / _4KB)
-#define PAMT_4K_ENTRIES_IN_CACHE  (MOVDIR64_CHUNK_SIZE / sizeof(pamt_entry_t))
 
 _STATIC_INLINE_ bool_t is_page_reserved(uint64_t page_offset, tdmr_entry_t *tdmr_entry, uint32_t* last_rsdv_idx)
 {
@@ -155,13 +167,18 @@ _STATIC_INLINE_ void pamt_4kb_init(pamt_block_t* pamt_block, uint64_t num_4k_ent
     }
 }
 
+
 _STATIC_INLINE_ void pamt_nodes_init(uint64_t start_pamt_4k_p, uint64_t end_pamt_4k_p,
-        pamt_entry_t* nodes_array, uint64_t entries_in_node, tdmr_entry_t *tdmr_entry)
+        pamt_entry_t* nodes_array, uint64_t entries_in_node, tdmr_entry_t *tdmr_entry, page_size_t node_size)
 {
     pamt_entry_t* pamt_entry;
 
     uint64_t entries_start = (start_pamt_4k_p - tdmr_entry->pamt_4k_base) / (entries_in_node * (uint64_t)sizeof(pamt_entry_t));
     uint64_t entries_end   = (end_pamt_4k_p - tdmr_entry->pamt_4k_base) / (entries_in_node * (uint64_t)sizeof(pamt_entry_t));
+
+    uint64_t current_2m_page_idx = ((uint64_t)nodes_array - tdmr_entry->pamt_2m_base) / sizeof(pamt_entry_t);
+
+    uint32_t last_rsdv_idx = 0;
 
     uint32_t i = 0;
     while ((entries_end - (uint64_t)i) > entries_start)
@@ -172,10 +189,14 @@ _STATIC_INLINE_ void pamt_nodes_init(uint64_t start_pamt_4k_p, uint64_t end_pamt
         {
             zero_cacheline(pamt_entry);
         }
+
+        UNUSED(last_rsdv_idx);
+        UNUSED(node_size);
         pamt_entry->pt = PT_NDA;
 
         free_la(pamt_entry);
         i++;
+        current_2m_page_idx++;
     }
 }
 
@@ -185,8 +206,8 @@ void pamt_init(pamt_block_t* pamt_block, uint64_t num_4k_entries, tdmr_entry_t *
     uint64_t end_pamt_4k_p = start_pamt_4k_p + (num_4k_entries * (uint64_t)sizeof(pamt_entry_t));
 
     pamt_4kb_init(pamt_block, num_4k_entries, tdmr_entry);
-    pamt_nodes_init(start_pamt_4k_p, end_pamt_4k_p, pamt_block->pamt_2mb_p, PAMT_4K_ENTRIES_IN_2MB, tdmr_entry);
-    pamt_nodes_init(start_pamt_4k_p, end_pamt_4k_p, pamt_block->pamt_1gb_p, PAMT_4K_ENTRIES_IN_1GB, tdmr_entry);
+    pamt_nodes_init(start_pamt_4k_p, end_pamt_4k_p, pamt_block->pamt_2mb_p, PAMT_4K_ENTRIES_IN_2MB, tdmr_entry, PT_2MB);
+    pamt_nodes_init(start_pamt_4k_p, end_pamt_4k_p, pamt_block->pamt_1gb_p, PAMT_4K_ENTRIES_IN_1GB, tdmr_entry, PT_1GB);
 }
 
 api_error_code_e pamt_walk(pa_t pa, pamt_block_t pamt_block, lock_type_t leaf_lock_type,
@@ -195,7 +216,7 @@ api_error_code_e pamt_walk(pa_t pa, pamt_block_t pamt_block, lock_type_t leaf_lo
 {
     pamt_entry_t* pamt_1gb = map_pa_with_global_hkid(pamt_block.pamt_1gb_p, TDX_RANGE_RW);
     pamt_entry_t* pamt_2mb = map_pa_with_global_hkid(&pamt_block.pamt_2mb_p[pa.pamt_2m.idx], TDX_RANGE_RW);
-    pamt_entry_t* pamt_4kb = map_pa_with_global_hkid(&pamt_block.pamt_4kb_p[pa.pamt_4k.idx], TDX_RANGE_RW);
+    pamt_entry_t* pamt_4kb = NULL;
 
     pamt_entry_t* ret_entry_pp = NULL;
 
@@ -215,7 +236,7 @@ api_error_code_e pamt_walk(pa_t pa, pamt_block_t pamt_block, lock_type_t leaf_lo
     }
 
     // Return pamt_1g entry if it is currently a leaf entry
-    if ((pamt_1gb->pt == PT_REG) || (target_size == PT_1GB))
+    if ((pamt_1gb->pt != PT_NDA) || (target_size == PT_1GB))
     {
         // Promote PAMT lock to exclusive if needed
         if ((leaf_lock_type == TDX_LOCK_EXCLUSIVE) &&
@@ -237,7 +258,7 @@ api_error_code_e pamt_walk(pa_t pa, pamt_block_t pamt_block, lock_type_t leaf_lo
     }
 
     // Return pamt_2m entry if it is leaf
-    if ((pamt_2mb->pt == PT_REG) || (target_size == PT_2MB))
+    if ((pamt_2mb->pt != PT_NDA) || (target_size == PT_2MB))
     {
         // Promote PAMT lock to exclusive if needed
         if ((leaf_lock_type == TDX_LOCK_EXCLUSIVE) &&
@@ -252,6 +273,12 @@ api_error_code_e pamt_walk(pa_t pa, pamt_block_t pamt_block, lock_type_t leaf_lo
         goto EXIT;
     }
 
+    pa_t pamt_4kb_pp;
+
+    pamt_4kb_pp.raw_void = &pamt_block.pamt_4kb_p[pa.pamt_4k.idx];
+
+    pamt_4kb = map_pa_with_global_hkid(pamt_4kb_pp.raw_void, TDX_RANGE_RW);
+
     // Acquire PAMT 4KB entry lock as shared/exclusive based on the lock flag
     if ((retval = acquire_sharex_lock_hp(&pamt_4kb->entry_lock, leaf_lock_type, is_guest)) != TDX_SUCCESS)
     {
@@ -259,7 +286,7 @@ api_error_code_e pamt_walk(pa_t pa, pamt_block_t pamt_block, lock_type_t leaf_lo
     }
 
     *leaf_size = PT_4KB;
-    ret_entry_pp = &pamt_block.pamt_4kb_p[pa.pamt_4k.idx];
+    ret_entry_pp = pamt_4kb_pp.raw_void;
 
     goto EXIT;
 
@@ -273,7 +300,10 @@ EXIT_FAILURE_RELEASE_ROOT:
 EXIT:
     free_la(pamt_1gb);
     free_la(pamt_2mb);
-    free_la(pamt_4kb);
+    if (pamt_4kb)
+    {
+        free_la(pamt_4kb);
+    }
 
     if (ret_entry_pp != NULL)
     {
@@ -289,17 +319,29 @@ void pamt_unwalk(pa_t pa, pamt_block_t pamt_block, pamt_entry_t* pamt_entry_p,
 {
     pamt_entry_t* pamt_1gb = map_pa_with_global_hkid(pamt_block.pamt_1gb_p, TDX_RANGE_RW);
     pamt_entry_t* pamt_2mb = map_pa_with_global_hkid(&pamt_block.pamt_2mb_p[pa.pamt_2m.idx], TDX_RANGE_RW);
-    pamt_entry_t* pamt_4kb = map_pa_with_global_hkid(&pamt_block.pamt_4kb_p[pa.pamt_4k.idx], TDX_RANGE_RW);
+
+    pa_t pamt_4kb_pp;
+
+    if (leaf_size == PT_4KB)
+    {
+        pamt_4kb_pp.raw_void = &pamt_block.pamt_4kb_p[pa.pamt_4k.idx];
+    }
 
     switch (leaf_size)
     {
         case PT_4KB:
+        {
+            pamt_entry_t* pamt_4kb = map_pa_with_global_hkid(pamt_4kb_pp.raw_void, TDX_RANGE_RW);
+
             release_sharex_lock_hp(&pamt_4kb->entry_lock, leaf_lock_type);
+
+            free_la(pamt_4kb);
+
             release_sharex_lock_hp_sh(&pamt_2mb->entry_lock);
             release_sharex_lock_hp_sh(&pamt_1gb->entry_lock);
 
             break;
-
+        }
         case PT_2MB:
             release_sharex_lock_hp(&pamt_2mb->entry_lock, leaf_lock_type);
             release_sharex_lock_hp_sh(&pamt_1gb->entry_lock);
@@ -317,169 +359,10 @@ void pamt_unwalk(pa_t pa, pamt_block_t pamt_block, pamt_entry_t* pamt_entry_p,
 
     free_la(pamt_1gb);
     free_la(pamt_2mb);
-    free_la(pamt_4kb);
 
     free_la(pamt_entry_p);
 
     return;
-
-}
-
-api_error_code_e pamt_promote(pa_t pa, page_size_t new_leaf_size)
-{
-    pamt_entry_t* promoted_pamt_entry = NULL;
-    pamt_entry_t* pamt_entry_children_pa = NULL;
-    pamt_entry_t* pamt_entry_children_la = NULL;
-    pamt_block_t pamt_block;
-    api_error_code_e retval = UNINITIALIZE_ERROR;
-
-    tdx_sanity_check((new_leaf_size == PT_2MB) || (new_leaf_size == PT_1GB), SCEC_PAMT_MANAGER_SOURCE, 3);
-
-    // Get PAMT block of the merge page address (should never fail)
-    if (!pamt_get_block(pa, &pamt_block))
-    {
-        FATAL_ERROR();
-    }
-
-    if (new_leaf_size == PT_2MB)
-    {
-        promoted_pamt_entry = map_pa_with_global_hkid(&pamt_block.pamt_2mb_p[pa.pamt_2m.idx], TDX_RANGE_RW);
-        pamt_entry_children_pa = &pamt_block.pamt_4kb_p[pa.pamt_4k.idx];
-    }
-    else // No other case except PT_1GB here, enforced by sanity check above
-    {
-        promoted_pamt_entry = map_pa_with_global_hkid(pamt_block.pamt_1gb_p, TDX_RANGE_RW);
-        pamt_entry_children_pa = &pamt_block.pamt_2mb_p[pa.pamt_2m.idx];
-    }
-
-    tdx_sanity_check(promoted_pamt_entry->pt == PT_NDA, SCEC_PAMT_MANAGER_SOURCE, 4);
-
-    // Acquire exclusive lock on the promoted entry
-    if ((retval = acquire_sharex_lock_hp_ex(&promoted_pamt_entry->entry_lock, false)) != TDX_SUCCESS)
-    {
-        goto EXIT;
-    }
-
-    // PAMT_CHILD_ENTRIES pamt entries take more than 1 page size, this is why
-    // we need to do a new map each time we reach new page in the entries array
-    // Since we work with chunks of PAMT_CHILD_ENTRIES entries it time,
-    // the start address is always aligned on 4K page
-    uint32_t pamt_entries_in_page = TDX_PAGE_SIZE_IN_BYTES / sizeof(pamt_entry_t);
-    uint32_t pamt_pages = PAMT_CHILD_ENTRIES / pamt_entries_in_page;
-
-    tdx_sanity_check(((uint64_t)pamt_entry_children_pa % TDX_PAGE_SIZE_IN_BYTES) == 0,
-            SCEC_PAMT_MANAGER_SOURCE, 5);
-
-    for (uint32_t i = 0; i < pamt_pages; i++)
-    {
-        pamt_entry_children_la = map_pa_with_global_hkid(
-                &pamt_entry_children_pa[pamt_entries_in_page * i], TDX_RANGE_RW);
-
-        for (uint32_t j = 0; j < pamt_entries_in_page; j++)
-        {
-            if (i == 0 && j == 0)
-            {
-                // Copy the first child leaf metadata to the merged new leaf entry
-                // making its page type PT_REG and inheriting its owner
-                promoted_pamt_entry->pt = pamt_entry_children_la[0].pt;
-                promoted_pamt_entry->owner = pamt_entry_children_la[0].owner;
-            }
-
-            tdx_sanity_check((promoted_pamt_entry->pt == pamt_entry_children_la[j].pt) &&
-                       (promoted_pamt_entry->owner == pamt_entry_children_la[j].owner),
-                       SCEC_PAMT_MANAGER_SOURCE, 6);
-
-            pamt_entry_children_la[j].pt = PT_NDA;
-        }
-
-        free_la(pamt_entry_children_la);
-    }
-
-    // Release previously acquired exclusive lock
-    release_sharex_lock_hp_ex(&promoted_pamt_entry->entry_lock);
-
-    retval = TDX_SUCCESS;
-
-EXIT:
-    free_la(promoted_pamt_entry);
-
-    return retval;
-}
-
-api_error_code_e pamt_demote(pa_t pa, page_size_t leaf_size)
-{
-    pamt_entry_t* demoted_pamt_entry = NULL;
-    pamt_entry_t* pamt_entry_children_pa = NULL;
-    pamt_entry_t* pamt_entry_children_la = NULL;
-    pamt_block_t pamt_block;
-    api_error_code_e retval = UNINITIALIZE_ERROR;
-
-    tdx_sanity_check((leaf_size == PT_2MB) || (leaf_size == PT_1GB), SCEC_PAMT_MANAGER_SOURCE, 7);
-
-    // Get PAMT block (should never fail)
-    if (!pamt_get_block(pa, &pamt_block))
-    {
-        FATAL_ERROR();
-    }
-
-    if (leaf_size == PT_2MB)
-    {
-        demoted_pamt_entry = map_pa_with_global_hkid(&pamt_block.pamt_2mb_p[pa.pamt_2m.idx], TDX_RANGE_RW);
-        pamt_entry_children_pa = &pamt_block.pamt_4kb_p[pa.pamt_4k.idx];
-    }
-    else // No other case except PT_1GB here, enforced by sanity check above
-    {
-        demoted_pamt_entry = map_pa_with_global_hkid(pamt_block.pamt_1gb_p, TDX_RANGE_RW);
-        pamt_entry_children_pa = &pamt_block.pamt_2mb_p[pa.pamt_2m.idx];
-    }
-
-    tdx_sanity_check(demoted_pamt_entry->pt == PT_REG, SCEC_PAMT_MANAGER_SOURCE, 8);
-
-    // Acquire exclusive lock on the demoted entry
-    if ((retval = acquire_sharex_lock_hp_ex(&demoted_pamt_entry->entry_lock, false)) != TDX_SUCCESS)
-    {
-        goto EXIT;
-    }
-
-    // PAMT_CHILD_ENTRIES pamt entries take more than 1 page size, this is why
-    // we need to do a new map each time we reach new page in the entries array
-    // Since we work with chunks of PAMT_CHILD_ENTRIES entries it time,
-    // the start address is always aligned on 4K page
-    uint32_t pamt_entries_in_page = TDX_PAGE_SIZE_IN_BYTES / sizeof(pamt_entry_t);
-    uint32_t pamt_pages = PAMT_CHILD_ENTRIES / pamt_entries_in_page;
-
-    tdx_sanity_check(((uint64_t)pamt_entry_children_pa % TDX_PAGE_SIZE_IN_BYTES) == 0,
-            SCEC_PAMT_MANAGER_SOURCE, 9);
-
-    for (uint32_t i = 0; i < pamt_pages; i++)
-    {
-        pamt_entry_children_la = map_pa_with_global_hkid(
-                &pamt_entry_children_pa[pamt_entries_in_page * i], TDX_RANGE_RW);
-
-        for (uint32_t j = 0; j < pamt_entries_in_page; j++)
-        {
-            // Copy the leaf entry metadata to its 512 child entries
-            pamt_entry_children_la[j].pt = demoted_pamt_entry->pt;
-            pamt_entry_children_la[j].owner = demoted_pamt_entry->owner;
-            pamt_entry_children_la[j].bepoch.raw = 0;
-        }
-
-        free_la(pamt_entry_children_la);
-    }
-
-    // Convert parent entry type from regular to NDA
-    demoted_pamt_entry->pt = PT_NDA;
-
-    // Release previously acquired exclusive lock
-    release_sharex_lock_hp_ex(&demoted_pamt_entry->entry_lock);
-
-    retval = TDX_SUCCESS;
-
-EXIT:
-
-    free_la(demoted_pamt_entry);
-    return retval;
-
 }
 
 pamt_entry_t* pamt_implicit_get(pa_t pa, page_size_t leaf_size)
@@ -502,14 +385,21 @@ pamt_entry_t* pamt_implicit_get(pa_t pa, page_size_t leaf_size)
             pamt_entry_p = map_pa_with_global_hkid(&pamt_block.pamt_2mb_p[pa.pamt_2m.idx], TDX_RANGE_RW);
             break;
         case PT_4KB:
-            pamt_entry_p = map_pa_with_global_hkid(&pamt_block.pamt_4kb_p[pa.pamt_4k.idx], TDX_RANGE_RW);
+        {
+            pa_t pamt_4kb_pp;
+
+            pamt_4kb_pp.raw_void = &pamt_block.pamt_4kb_p[pa.pamt_4k.idx];
+
+            pamt_entry_p = map_pa_with_global_hkid(pamt_4kb_pp.raw_void, TDX_RANGE_RW);
             break;
+        }
         default:
             FATAL_ERROR();
             break;
     }
 
     tdx_sanity_check((pamt_entry_p->pt != PT_NDA) && (pamt_entry_p->pt != PT_RSVD), SCEC_PAMT_MANAGER_SOURCE, 10);
+
 
     return pamt_entry_p;
 }
@@ -566,4 +456,178 @@ bool_t pamt_is_2mb_range_free(pa_t hpa, pamt_block_t* pamt_block)
     }
 
     return true;
+}
+
+api_error_code_e pamt_promote(pa_t pa, page_size_t new_leaf_size, uint64_t removed_child_pages[DEFAULT_NUM_PAMT_PAGES])
+{
+    pamt_entry_t* promoted_pamt_entry = NULL;
+    pamt_entry_t* pamt_entry_children_la = NULL;
+    pamt_block_t pamt_block;
+    api_error_code_e retval = UNINITIALIZE_ERROR;
+
+    tdx_sanity_check((new_leaf_size == PT_2MB) || (new_leaf_size == PT_1GB), SCEC_PAMT_MANAGER_SOURCE, 3);
+
+    // Get PAMT block of the merge page address (should never fail)
+    if (!pamt_get_block(pa, &pamt_block))
+    {
+        FATAL_ERROR();
+    }
+
+    if (new_leaf_size == PT_2MB)
+    {
+        promoted_pamt_entry = map_pa_with_global_hkid(&pamt_block.pamt_2mb_p[pa.pamt_2m.idx], TDX_RANGE_RW);
+
+        removed_child_pages[0] = (uint64_t)&pamt_block.pamt_4kb_p[pa.pamt_4k.idx];
+        removed_child_pages[1] = removed_child_pages[0] + _4KB;
+    }
+    else // No other case except PT_1GB here, enforced by sanity check above
+    {
+        promoted_pamt_entry = map_pa_with_global_hkid(pamt_block.pamt_1gb_p, TDX_RANGE_RW);
+
+        removed_child_pages[0] = (uint64_t)&pamt_block.pamt_2mb_p[pa.pamt_2m.idx];
+        removed_child_pages[1] = removed_child_pages[0] + _4KB;
+    }
+
+    tdx_sanity_check(promoted_pamt_entry->pt == PT_NDA, SCEC_PAMT_MANAGER_SOURCE, 4);
+
+    // Acquire exclusive lock on the promoted entry
+    if ((retval = acquire_sharex_lock_hp_ex(&promoted_pamt_entry->entry_lock, false)) != TDX_SUCCESS)
+    {
+        goto EXIT;
+    }
+
+    // PAMT_CHILD_ENTRIES pamt entries take more than 1 page size, this is why
+    // we need to do a new map each time we reach new page in the entries array
+    // Since we work with chunks of PAMT_CHILD_ENTRIES entries it time,
+    // the start address is always aligned on 4K page
+    uint32_t pamt_entries_in_page = TDX_PAGE_SIZE_IN_BYTES / sizeof(pamt_entry_t);
+    uint32_t pamt_pages = PAMT_CHILD_ENTRIES / pamt_entries_in_page;
+
+    tdx_sanity_check(pamt_pages == DEFAULT_NUM_PAMT_PAGES, SCEC_PAMT_MANAGER_SOURCE, 5);
+
+    for (uint32_t i = 0; i < pamt_pages; i++)
+    {
+        // Map as RW since static PAMT case use it for writing
+        pamt_entry_children_la = map_pa_with_global_hkid((void*)removed_child_pages[i], TDX_RANGE_RW);
+
+        if (i == 0)
+        {
+            // Copy the first child leaf metadata to the merged new leaf entry
+            // making its page type PT_REG and inheriting its owner
+            promoted_pamt_entry->pt = pamt_entry_children_la[0].pt;
+            promoted_pamt_entry->owner = pamt_entry_children_la[0].owner;
+        }
+
+        for (uint32_t j = 0; j < pamt_entries_in_page; j++)
+        {
+            tdx_sanity_check((promoted_pamt_entry->pt == pamt_entry_children_la[j].pt) &&
+                (promoted_pamt_entry->owner == pamt_entry_children_la[j].owner),
+                SCEC_PAMT_MANAGER_SOURCE, 6);
+
+            pamt_entry_children_la[j].pt = PT_NDA;
+        }
+
+        free_la(pamt_entry_children_la);
+    }
+
+
+    // Release previously acquired exclusive lock
+    release_sharex_lock_hp_ex(&promoted_pamt_entry->entry_lock);
+
+    retval = TDX_SUCCESS;
+
+EXIT:
+    free_la(promoted_pamt_entry);
+
+    return retval;
+}
+
+api_error_code_e pamt_demote(pa_t pa, page_size_t leaf_size, uint64_t pamt_hpa0, uint64_t pamt_hpa1)
+{
+    pamt_entry_t* demoted_pamt_entry = NULL;
+    uint64_t pamt_entry_children_pa[DEFAULT_NUM_PAMT_PAGES];
+    pamt_entry_t* pamt_entry_children_la = NULL;
+    pamt_block_t pamt_block;
+    api_error_code_e retval = UNINITIALIZE_ERROR;
+
+    UNUSED(pamt_hpa0);
+    UNUSED(pamt_hpa1);
+
+    bool_t demoted_entry_locked = false;
+
+    tdx_sanity_check((leaf_size == PT_2MB) || (leaf_size == PT_1GB), SCEC_PAMT_MANAGER_SOURCE, 7);
+
+    // Get PAMT block (should never fail)
+    if (!pamt_get_block(pa, &pamt_block))
+    {
+        FATAL_ERROR();
+    }
+
+    if (leaf_size == PT_2MB)
+    {
+        demoted_pamt_entry = map_pa_with_global_hkid(&pamt_block.pamt_2mb_p[pa.pamt_2m.idx], TDX_RANGE_RW);
+
+        pamt_entry_children_pa[0] = (uint64_t)&pamt_block.pamt_4kb_p[pa.pamt_4k.idx];
+        pamt_entry_children_pa[1] = pamt_entry_children_pa[0] + _4KB;
+    }
+    else // No other case except PT_1GB here, enforced by sanity check above
+    {
+        demoted_pamt_entry = map_pa_with_global_hkid(pamt_block.pamt_1gb_p, TDX_RANGE_RW);
+
+        pamt_entry_children_pa[0] = (uint64_t)&pamt_block.pamt_2mb_p[pa.pamt_2m.idx];
+        pamt_entry_children_pa[1] = pamt_entry_children_pa[0] + _4KB;
+    }
+
+    tdx_sanity_check(demoted_pamt_entry->pt == PT_REG, SCEC_PAMT_MANAGER_SOURCE, 8);
+
+    // Acquire exclusive lock on the demoted entry
+    if ((retval = acquire_sharex_lock_hp_ex(&demoted_pamt_entry->entry_lock, false)) != TDX_SUCCESS)
+    {
+        retval = api_error_with_operand_id(retval, OPERAND_ID_RCX);
+        goto EXIT;
+    }
+
+    demoted_entry_locked = true;
+
+    // PAMT_CHILD_ENTRIES pamt entries take more than 1 page size, this is why
+    // we need to do a new map each time we reach new page in the entries array
+    // Since we work with chunks of PAMT_CHILD_ENTRIES entries it time,
+    // the start address is always aligned on 4K page
+    uint32_t pamt_entries_in_page = TDX_PAGE_SIZE_IN_BYTES / sizeof(pamt_entry_t);
+    uint32_t pamt_pages = PAMT_CHILD_ENTRIES / pamt_entries_in_page;
+
+    tdx_sanity_check(pamt_pages == DEFAULT_NUM_PAMT_PAGES, SCEC_PAMT_MANAGER_SOURCE, 9);
+
+    for (uint32_t i = 0; i < pamt_pages; i++)
+    {
+        pamt_entry_children_la = map_pa_with_global_hkid((void*)pamt_entry_children_pa[i], TDX_RANGE_RW);
+
+        // Use MOVDIR64B for dynamic PAMT case, and regular copies for non-dynamic PAMT
+        for (uint32_t j = 0; j < pamt_entries_in_page; j++)
+        {
+            // Copy the leaf entry metadata to its 512 child entries
+            pamt_entry_children_la[j].pt = demoted_pamt_entry->pt;
+            pamt_entry_children_la[j].owner = demoted_pamt_entry->owner;
+            pamt_entry_children_la[j].bepoch.raw = 0;
+        }
+
+        free_la(pamt_entry_children_la);
+    }
+
+    // Convert parent entry type from regular to NDA
+    demoted_pamt_entry->pt = PT_NDA;
+
+    retval = TDX_SUCCESS;
+
+EXIT:
+
+
+    if (demoted_entry_locked)
+    {
+        // Release previously acquired exclusive lock
+        release_sharex_lock_hp_ex(&demoted_pamt_entry->entry_lock);
+    }
+
+    free_la(demoted_pamt_entry);
+    return retval;
 }

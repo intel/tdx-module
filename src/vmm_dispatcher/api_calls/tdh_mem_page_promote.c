@@ -236,6 +236,19 @@ api_error_type tdh_mem_page_promote(page_info_api_input_t gpa_page_info, uint64_
     }
     op_state_locked_flag = true;
 
+    if (is_non_blocking_export_configured() && OP_STATE_PAUSED_EXPORT == tdcs_ptr->management_fields.op_state)
+    {
+        TDX_ERROR("TDH.MEM.PAGE.PROMOTE is not allowed when the export is paused\n");
+        return_val = api_error_with_operand_id(TDX_OP_STATE_INCORRECT,(uint64_t)tdcs_ptr->management_fields.op_state);
+        goto EXIT;
+    }
+
+    return_val = check_td_for_export_mode(tdr_ptr, tdcs_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
 
     if (!verify_page_info_input(gpa_mappings, LVL_PD, LVL_PDPT))
     {
@@ -264,7 +277,7 @@ api_error_type tdh_mem_page_promote(page_info_api_input_t gpa_page_info, uint64_
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
         {
             // Update output register operands
-            set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, merged_sept_parent_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, merged_sept_parent_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         }
 
         TDX_ERROR("Failed on GPA check, SEPT lock or walk - error = %llx\n", return_val);
@@ -287,7 +300,7 @@ api_error_type tdh_mem_page_promote(page_info_api_input_t gpa_page_info, uint64_
     if (TDX_SUCCESS != return_val)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, gpa_mappings.level, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, gpa_mappings.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Failed on SEPT host-side lock attempt\n");
         goto EXIT;
     }
@@ -300,7 +313,7 @@ api_error_type tdh_mem_page_promote(page_info_api_input_t gpa_page_info, uint64_
     if (!sept_state_is_seamcall_leaf_allowed(TDH_MEM_PAGE_PROMOTE_LEAF, merged_sept_page_sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, gpa_mappings.level, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, gpa_mappings.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Is leaf entry, or not allowed in current SEPT entry - 0x%llx!\n", merged_sept_page_sept_entry_copy.raw);
         goto EXIT;
     }
@@ -328,7 +341,7 @@ api_error_type tdh_mem_page_promote(page_info_api_input_t gpa_page_info, uint64_
         if (!sept_state_is_any_blocked(merged_sept_page_sept_entry_copy))
         {
             return_val = api_error_with_operand_id(TDX_GPA_RANGE_NOT_BLOCKED, OPERAND_ID_RCX);
-            set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, gpa_mappings.level, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, gpa_mappings.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
             TDX_ERROR("Promoted SEPT entry is not blocked - 0x%llx\n", merged_sept_page_sept_entry_copy.raw);
             goto EXIT;
         }
@@ -360,7 +373,7 @@ api_error_type tdh_mem_page_promote(page_info_api_input_t gpa_page_info, uint64_
     {
         TDX_ERROR("Target SEPT is not valid for merging\n");
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, gpa_mappings.level, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, gpa_mappings.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         goto EXIT;
     }
 
@@ -426,7 +439,7 @@ api_error_type tdh_mem_page_promote(page_info_api_input_t gpa_page_info, uint64_
             {
                 TDX_ERROR("Target L2 (%d) SEPT is not valid for merging\n", vm_id);
                 return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-                set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, gpa_mappings.level, local_data_ptr);
+                set_arch_septe_details_in_vmm_regs(merged_sept_page_sept_entry_copy, gpa_mappings.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
                 goto EXIT;
             }
         }
@@ -484,7 +497,12 @@ api_error_type tdh_mem_page_promote(page_info_api_input_t gpa_page_info, uint64_
         {
             // The first SEPTE of VM 0 is locked so the large page SEPTE remains locked.
             ia32e_sept_t tmp_merged_sept_page_copy = merged_sept_page_ptr[vm_id]->sept[0];
-            
+            if (is_non_blocking_export_configured())
+            {
+                tmp_merged_sept_page_copy.a = 1;
+                tmp_merged_sept_page_copy.d = 1;
+            }
+
             if (vm_id == 0)
             {
                 tmp_merged_sept_page_copy.tdel = 1;
@@ -515,6 +533,10 @@ api_error_type tdh_mem_page_promote(page_info_api_input_t gpa_page_info, uint64_
         }
     }
 
+    if (sept_state_is_any_blocked(merged_sept_page_sept_entry_copy))
+    {
+        (void)_lock_xadd_64b(&tdcs_ptr->executions_ctl2_fields.blocked_count, (uint64_t)-(BIT(9 * merged_sept_parent_level_entry)));
+    }
 
     local_data_ptr->vmm_regs.rcx = remove_hkid_from_pa(merged_sept_page_pa[0]).raw;
 

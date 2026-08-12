@@ -20,7 +20,7 @@
 #//
 #// SPDX-License-Identifier: MIT
 
-# proj_defs.mk - Project related defintions
+# proj_defs.mk - Project related definitions
 
 PROJ_FLAGS =
 
@@ -46,20 +46,21 @@ endif # TDX_MODULE_BUILD_NUM
 ifdef TDX_MODULE_INTERNAL_VER
 PROJ_FLAGS += -DTDX_MODULE_INTERNAL_VER=$(TDX_MODULE_INTERNAL_VER)
 else # TDX_MODULE_INTERNAL_VER
-PROJ_FLAGS += -DTDX_MODULE_INTERNAL_VER=4
+PROJ_FLAGS += -DTDX_MODULE_INTERNAL_VER=0
 endif # TDX_MODULE_INTERNAL_VER
 
 ifdef TDX_MODULE_SEAM_MINOR_SVN
  PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=$(TDX_MODULE_SEAM_MINOR_SVN)
 else # TDX_MODULE_SEAM_MINOR_SVN
- PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=14
+ PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=15
 endif # TDX_MODULE_SEAM_MINOR_SVN
 
  ########################################
  PROJ_FLAGS += -DTDX_MODULE_MAJOR_VER=1
  PROJ_FLAGS += -DTDX_MODULE_MINOR_VER=5
- PROJ_FLAGS += -DTDX_MODULE_UPDATE_VER=28
+ PROJ_FLAGS += -DTDX_MODULE_UPDATE_VER=34
  ########################################
+
 
 ################################################################
 
@@ -69,16 +70,15 @@ endif # TDX_MODULE_SEAM_MINOR_SVN
 # Default features
 PROJ_FLAGS += -DNO_SPEC_CTRL_VIRT_SUPPORT
 PROJ_FLAGS += -DDYNAMIC_PAMT_SUPPORT
-
-
+PROJ_FLAGS += -DHSD_18042345067_WA # https://hsdes.intel.com/appstore/article/#/18042345067
  PROJ_FLAGS += -DINTR_STATE_SUPPORTED
-
  PROJ_FLAGS += -DVEINFO_INTR_STATE_SUPPORTED
-
 PROJ_FLAGS += -DTD_MIGRATION_SUPPORTED
-
 PROJ_FLAGS += -DTD_PART_MIGRATION_SUPPORTED
-
+PROJ_FLAGS += -DNON_BLOCKING_EXPORT_SUPPORTED
+PROJ_FLAGS += -DNBE_EXPORT_RESTORE_SUPPORTED
+ PROJ_FLAGS += -DTDID_VMID_REPORTING_SUPPORTED
+ PROJ_FLAGS += -DSEALING_SUPPORTED
 
 ################################################################
 
@@ -94,7 +94,7 @@ endif # DBG_TRACE
 ################################################################
 
 ################################################################
-## Miscelaneous features
+## Miscellaneous features
 
 
 PROJ_FLAGS += -D_NO_IPP_DEPRECATED
@@ -107,10 +107,10 @@ PRODUCTION_FLAGS =
 ################################################################
 
 
-#Architecture git data
+# Architecture git data
 ################################################################
-    COMMIT_ID = f97a493
-    ARCHITECTURE_BRANCH_NAME = TDX_Module_1.5.28_v0.98
+    COMMIT_ID = 8fac3b4
+    ARCHITECTURE_BRANCH_NAME = TDX_Module_1.5.32_v0.99
     CPUID_EXCEL_VERSION_SUPPORTED = 10
     MSR_EXCEL_VERSION_SUPPORTED = 6
     TDVPS_EXCEL_VERSION_SUPPORTED = 28

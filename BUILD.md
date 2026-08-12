@@ -61,16 +61,16 @@ ICP will be automatically built by project's makefile.
 - Tools that are required to build ICP crypto lib described in the following [link](https://github.com/intel/cryptography-primitives/blob/v1.0.1/BUILD.md)
 
 ## Make targets
-Binary's generation includes the date it was compiled at, build number and module's update version.
+Binary's generation includes the date it was compiled at, build number and module's update version.  
 
 Build date, build number and update version could be extracted from the production binary, please use TDH.SYS.RD SEAMCALL (leaf #34) with MD_SYS_TDX_MODULE_VERSION_CLASS_CODE(8) as a class_code and MD_SYS_BUILD_DATE_FIELD_CODE(1)/MD_SYS_BUILD_NUM_FIELD_CODE(2)/MD_SYS_UPDATE_VERSION_FIELD_CODE(5) as field codes. The date format should be YYYYMMDD.  
 
-Current TDX version was built with: TDX_MODULE_BUILD_DATE=20251126 TDX_MODULE_BUILD_NUM=989  TDX_MODULE_UPDATE_VER=28
+Current TDX version was built with: TDX_MODULE_BUILD_DATE=20260330 TDX_MODULE_BUILD_NUM=1024 TDX_MODULE_UPDATE_VER=34
 
 1) In order to reproduce the exact binary, it is required to specify the original date, build number and update version:
 
 	```bash
-	make RELEASE=1 TDX_MODULE_BUILD_DATE=20251126 TDX_MODULE_BUILD_NUM=989 TDX_MODULE_UPDATE_VER=28
+	make RELEASE=1 TDX_MODULE_BUILD_DATE=20260330 TDX_MODULE_BUILD_NUM=1024 TDX_MODULE_UPDATE_VER=34
 	```
 
 	In case binary reproduction is not required, "make RELEASE=1" will suffice.
@@ -89,4 +89,4 @@ Current TDX version was built with: TDX_MODULE_BUILD_DATE=20251126 TDX_MODULE_BU
 
 
 ## Expected module hash (MRSEAM)
-0x346BC77A1846CAC214DD2E8EDEB9EE4349449D6C3F9FF2C52149A634C27B7FD1BD314C2EF6B973EEEBD55742952531A1
+0xAB62561A173ACBD18EE50FF37750DB44184C6CF5E886DF74247CC575E163B04C34B9E18374757C235AFFA614D4127F6B

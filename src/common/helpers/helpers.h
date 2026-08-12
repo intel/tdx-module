@@ -1327,6 +1327,15 @@ _STATIC_INLINE_ void revert_tlb_tracking_state(tdcs_t* tdcs_ptr, tdvps_t* tdvps_
  */
 uint32_t get_cpuid_lookup_entry(uint32_t leaf, uint32_t subleaf);
 
+/**
+ * @brief retrieve index in ORDERED_CPUID_LOOKUP matching input leaf_subleaf
+ *
+ * @param leaf
+ * @param subleaf
+ * @return the index if exist, otherwise -1
+ */
+uint32_t get_ordered_cpuid_lookup_entry(uint32_t leaf, uint32_t subleaf);
+
 
 /**
  * @brief Return the current CPL of the guest TD
@@ -1599,6 +1608,11 @@ _STATIC_INLINE_ bool_t op_state_is_export_in_order(op_state_e op_state)
     return state_flags_lookup[op_state].export_in_order;
 }
 
+_STATIC_INLINE_ bool_t op_state_is_export_in_progress(op_state_e op_state)
+{
+    tdx_debug_assert(op_state < NUM_OP_STATES);
+    return state_flags_lookup[op_state].export_in_progress;
+}
 
 _STATIC_INLINE_ bool_t op_state_is_import_in_order(op_state_e op_state)
 {
@@ -1766,10 +1780,12 @@ void prepare_td_vmcs(tdvps_t *tdvps_p, uint16_t vm_id);
  * @param tdr_p - pointer to the current TDR
  * @param vmid - VMID to be used in TDINFO_STRUCT
  * @param calc_servtd - if true, calculate SERVTD fields in TDINFO_STRUCT
+ * @param report_type - type of report
  * @return
  */
 api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap_t ignore_tdinfo, td_info_t* td_info,
-                                            measurement_t* tee_info_hash, bool_t is_guest, tdr_t* tdr_p, uint8_t vmid, bool_t calc_servtd);
+                                            measurement_t* tee_info_hash, bool_t is_guest, tdr_t* tdr_p, uint8_t vmid,
+                                            bool_t calc_servtd, uint8_t report_type);
 
 /**
  * @brief Calculate TDINFO_STRUCT SHA384 hash
@@ -2286,7 +2302,7 @@ _STATIC_INLINE_ void bhb_drain_sequence(tdx_module_global_t* tdx_global_data_ptr
             "xabort $0\n"
             "lfence\n"
             "AbortTarget: nop\n"
-            : : : );
+            : : : "eax", "memory", "cc");
     }
     else
     {
@@ -2485,5 +2501,23 @@ void update_vcpu_state_details_for_l2(tdvps_t* tdvps_p);
 
 tdx_features_enum0_t get_tdx_features_enum0(void);
 
+void update_eptp_enable_ad_bits(tdcs_t* tdcs_p);
+
+_STATIC_INLINE_ api_error_type is_binding_allowed(tdcs_t* tdcs_p)
+{
+    if(tdcs_p->service_td_fields.servtd_num)
+    {
+        TDX_ERROR("The MigTD already has a Service TD bound to it.\n");
+        return TDX_SERVTD_NESTING_NOT_ALLOWED;
+    }
+
+    if(tdcs_p->executions_ctl_fields.attributes.migratable)
+    {
+        TDX_ERROR("The MigTD is migratable and cannot have a Service TD bound to it.\n");
+        return TDX_SERVTD_CANNOT_BE_MIGRATABLE;
+    }
+
+    return TDX_SUCCESS;
+}
 
 #endif /* SRC_COMMON_HELPERS_HELPERS_H_ */

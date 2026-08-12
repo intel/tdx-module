@@ -22,8 +22,6 @@
 
 #include "preserving.h"
 #include "helpers/helpers.h"
-#include GLOBAL_CONSTANTS_HEADER
-
 
 void prepare_handoff_data(const uint16_t curr_hv)
 {
@@ -38,21 +36,18 @@ void prepare_handoff_data(const uint16_t curr_hv)
     td_preserving_hod_ptr->header.hv = curr_hv;
     td_preserving_hod_ptr->header.size = sizeof(td_preserving_hod_t) - sizeof(handoff_data_header_t);
 
-    // The implementation doesn't support downgrading
-    tdx_sanity_check(NO_DOWNGRADE == 1, FATAL_ERROR_ID_304, curr_hv);
-
     // Populate HV0 fields
     tdx_memcpy(
-        td_preserving_hod_ptr->kot_entries, HANDOFF_KOT_ENTRIES_SIZE,
-        tdx_global_data_ptr->kot.entries, HANDOFF_KOT_ENTRIES_SIZE);
+        td_preserving_hod_ptr->kot_entries, sizeof(td_preserving_hod_ptr->kot_entries),
+        tdx_global_data_ptr->kot.entries, sizeof(tdx_global_data_ptr->kot.entries));
 
     tdx_memcpy(
-        td_preserving_hod_ptr->wbt_entries, HANDOFF_WBT_ENTRIES_SIZE,
-        tdx_global_data_ptr->wbt_entries, HANDOFF_WBT_ENTRIES_SIZE);
+        td_preserving_hod_ptr->wbt_entries, sizeof(td_preserving_hod_ptr->wbt_entries),
+        tdx_global_data_ptr->wbt_entries, sizeof(tdx_global_data_ptr->wbt_entries));
 
     tdx_memcpy(
-        td_preserving_hod_ptr->tdmr_table, HANDOFF_TDMR_TABLE_SIZE,
-        tdx_global_data_ptr->tdmr_table, HANDOFF_TDMR_TABLE_SIZE);
+        td_preserving_hod_ptr->tdmr_table, sizeof(td_preserving_hod_ptr->tdmr_table),
+        tdx_global_data_ptr->tdmr_table, sizeof(tdx_global_data_ptr->tdmr_table));
 
     td_preserving_hod_ptr->num_of_tdmr_entries = tdx_global_data_ptr->num_of_tdmr_entries;
     td_preserving_hod_ptr->hkid = tdx_global_data_ptr->hkid;
@@ -64,37 +59,35 @@ void prepare_handoff_data(const uint16_t curr_hv)
     td_preserving_hod_ptr->mig_interrupted_count = tdx_global_data_ptr->mig_interrupted_count;
 
     // Populate HV2 fields
+    td_preserving_hod_ptr->non_blocking_export = tdx_global_data_ptr->non_blocking_export_configured;
+    td_preserving_hod_ptr->write_blocking_export_used = tdx_global_data_ptr->write_blocking_export_used;
 
-    // Populate HV3 fields
+    basic_memset_to_zero(td_preserving_hod_ptr->round_up_to_4k_1, sizeof(td_preserving_hod_ptr->round_up_to_4k_1));
 }
 
-_STATIC_INLINE_ void retrieve_handoff_data_default(
-    const td_preserving_hod_t *const td_preserving_hod_ptr,
-    tdx_module_global_t *const tdx_global_data_ptr)
+_STATIC_INLINE_ void retrieve_handoff_data_default(const td_preserving_hod_t *const td_preserving_hod_ptr, tdx_module_global_t *const tdx_global_data_ptr)
 {
     // Populate HV0 fields
     tdx_memcpy(
-        tdx_global_data_ptr->kot.entries, HANDOFF_KOT_ENTRIES_SIZE,
-        td_preserving_hod_ptr->kot_entries, HANDOFF_KOT_ENTRIES_SIZE);
+        tdx_global_data_ptr->kot.entries, sizeof(tdx_global_data_ptr->kot.entries),
+        td_preserving_hod_ptr->kot_entries, sizeof(td_preserving_hod_ptr->kot_entries));
 
     tdx_memcpy(
-        tdx_global_data_ptr->wbt_entries, HANDOFF_WBT_ENTRIES_SIZE,
-        td_preserving_hod_ptr->wbt_entries, HANDOFF_WBT_ENTRIES_SIZE);
+        tdx_global_data_ptr->wbt_entries, sizeof(tdx_global_data_ptr->wbt_entries),
+        td_preserving_hod_ptr->wbt_entries, sizeof(td_preserving_hod_ptr->wbt_entries));
 
     tdx_memcpy(
-        tdx_global_data_ptr->tdmr_table, HANDOFF_TDMR_TABLE_SIZE,
-        td_preserving_hod_ptr->tdmr_table, HANDOFF_TDMR_TABLE_SIZE);
+        tdx_global_data_ptr->tdmr_table, sizeof(tdx_global_data_ptr->tdmr_table),
+        td_preserving_hod_ptr->tdmr_table, sizeof(td_preserving_hod_ptr->tdmr_table));
 
     tdx_global_data_ptr->num_of_tdmr_entries = td_preserving_hod_ptr->num_of_tdmr_entries;
     tdx_global_data_ptr->hkid = td_preserving_hod_ptr->hkid;
     tdx_global_data_ptr->pkg_config_bitmap = td_preserving_hod_ptr->package_config_bitmap;
 }
 
-
-_STATIC_INLINE_ void retrieve_handoff_data_generic(
-    const td_preserving_hod_t *const td_preserving_hod_ptr,
-    tdx_module_global_t *const tdx_global_data_ptr,
-    const uint64_t hv)
+_STATIC_INLINE_ void retrieve_handoff_data_generic(const td_preserving_hod_t *const td_preserving_hod_ptr,
+                                                   tdx_module_global_t *const tdx_global_data_ptr,
+                                                   const uint64_t hv)
 {
     UNUSED(hv);
     // Populate HV0 fields
@@ -105,6 +98,16 @@ _STATIC_INLINE_ void retrieve_handoff_data_generic(
     tdx_global_data_ptr->mig_interrupted_count = td_preserving_hod_ptr->mig_interrupted_count;
 
     // Populate HV2 fields
+    if (hv < 2)
+    {
+        tdx_global_data_ptr->non_blocking_export_configured = false;
+        tdx_global_data_ptr->write_blocking_export_used = WRITE_BLOCKING_EXPORT_POSSIBLY_USED;
+    }
+    else
+    {
+        tdx_global_data_ptr->non_blocking_export_configured = td_preserving_hod_ptr->non_blocking_export;
+        tdx_global_data_ptr->write_blocking_export_used = td_preserving_hod_ptr->write_blocking_export_used;
+    }
 }
 
 void retrieve_handoff_data(const uint16_t prev_hv)
@@ -117,8 +120,10 @@ void retrieve_handoff_data(const uint16_t prev_hv)
      */
     retrieve_handoff_data_default(td_preserving_hod_ptr, tdx_global_data_ptr);
 
-    /**
-     * @brief the 'generic' helper is used for all handoff data with HV >=3.
-     */
-    retrieve_handoff_data_generic(td_preserving_hod_ptr, tdx_global_data_ptr, prev_hv);
+    {
+        /**
+         * @brief the 'generic' helper is used for all handoff data with HV >=3.
+         */
+        retrieve_handoff_data_generic(td_preserving_hod_ptr, tdx_global_data_ptr, prev_hv);
+    }
 }

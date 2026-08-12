@@ -33,6 +33,7 @@
 #include "memory_handlers/pamt_manager.h"
 #include "memory_handlers/sept_manager.h"
 #include "helpers/helpers.h"
+#include "helpers/mem_scan.h"
 #include "accessors/ia32_accessors.h"
 
 
@@ -95,6 +96,19 @@ api_error_type tdh_mem_page_remove(page_info_api_input_t target_page_info, uint6
         goto EXIT;
     }
 
+    if (is_non_blocking_export_configured() && OP_STATE_PAUSED_EXPORT == tdcs_ptr->management_fields.op_state)
+    {
+        TDX_ERROR("TDH.MEM.PAGE.REMOVE is not allowed when the export is paused\n");
+        return_val = api_error_with_operand_id(TDX_OP_STATE_INCORRECT,(uint64_t)tdcs_ptr->management_fields.op_state);
+        goto EXIT;
+    }
+
+    return_val = check_td_for_export_mode(tdr_ptr, tdcs_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
 
     if (!verify_page_info_input(gpa_mappings, LVL_PT, LVL_PDPT))
     {
@@ -121,7 +135,7 @@ api_error_type tdh_mem_page_remove(page_info_api_input_t target_page_info, uint6
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
         {
             // Update output register operands
-            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         }
 
         TDX_ERROR("Failed on GPA check, SEPT lock or walk - error = %llx\n", return_val);
@@ -133,7 +147,7 @@ api_error_type tdh_mem_page_remove(page_info_api_input_t target_page_info, uint6
     if (TDX_SUCCESS != return_val)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Failed on SEPT host-side lock attempt\n");
         goto EXIT;
     }
@@ -147,7 +161,7 @@ api_error_type tdh_mem_page_remove(page_info_api_input_t target_page_info, uint6
         !sept_state_is_seamcall_leaf_allowed(TDH_MEM_PAGE_REMOVE_LEAF, page_sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, gpa_mappings.level, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, gpa_mappings.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Is leaf entry, or not allowed in current SEPT entry - 0x%llx!\n", page_sept_entry_copy.raw);
         goto EXIT;
     }
@@ -180,7 +194,7 @@ api_error_type tdh_mem_page_remove(page_info_api_input_t target_page_info, uint6
         if (!sept_state_is_any_blocked(page_sept_entry_copy))
         {
             return_val = api_error_with_operand_id(TDX_GPA_RANGE_NOT_BLOCKED, OPERAND_ID_RCX);
-            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, gpa_mappings.level, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, gpa_mappings.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
             TDX_ERROR("Promoted SEPT entry is not blocked - 0x%llx\n", page_sept_entry_copy.raw);
             goto EXIT;
         }
@@ -214,20 +228,44 @@ api_error_type tdh_mem_page_remove(page_info_api_input_t target_page_info, uint6
             extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, vm_id, page_level_entry, page_gpa.raw, *l2_sept_entry_ptr);
             fatal_error(FATAL_ERROR_ID_10, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
         }
-        
+
         atomic_mem_write_64b(&l2_sept_entry_ptr->raw, SEPTE_L2_INIT_VALUE);
 
         free_la(l2_sept_entry_ptr);
     }
 
+    ia32e_sept_t tmp_page_sept_entry_copy = page_sept_entry_copy;
+    if (is_non_blocking_export_configured() && sept_state_is_any_exported(page_sept_entry_copy))
+    {
+        septe_set_exported_removed_and_release_locks(&page_sept_entry_copy);
+    }
+    else
     {
         // Atomically set the removed page Secure-EPT entry to SEPT_FREE or REMOVED (if import is in progress)
         septe_set_free_or_removed_and_release_locks(&page_sept_entry_copy, tdcs_ptr);
     }
 
+    if (sept_state_is_any_blocked(tmp_page_sept_entry_copy))
+    {
+        if (!sept_state_is_any_pending(tmp_page_sept_entry_copy))
+        {
+            (void)_lock_xadd_64b(&tdcs_ptr->executions_ctl2_fields.blocked_count, (uint64_t)-(BIT(9 * page_level_entry)));
+        }
+        else
+        {
+            (void)_lock_xadd_64b(&tdcs_ptr->executions_ctl2_fields.pending_blocked_count, (uint64_t)-(BIT(9 * page_level_entry)));
+        }
+    }
+
+    if (!is_sept_exported_removed(&page_sept_entry_copy)
+        )
+    {
+        // Atomically decrement TDCS.MEM_COUNT by 1, 512 or 5122 depending on the removed TD private page size (4KB, 2MB or 1GB, respectively).
+        (void)_lock_xadd_64b(&(tdcs_ptr->executions_ctl2_fields.mem_count), -(BIT(9 * page_level_entry)));
+    }
+
     atomically_update_sept_state_keep_tdhp(page_sept_entry_ptr, page_sept_entry_copy.raw);
     septe_locked_flag = false;
-
 
     // Atomically decrement TDR child count by the amount of removed 4KB pages
     (void)_lock_xadd_64b(&tdr_ptr->management_fields.chldcnt, -(1 << (9 * page_level_entry)));

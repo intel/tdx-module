@@ -232,6 +232,8 @@ void tdx_ept_violation_exit_to_vmm(pa_t gpa, vm_vmexit_exit_reason_t vm_exit_rea
     exit_qualification.ept_violation.writable_lin_addr = 0;
     exit_qualification.ept_violation.execute_dis_lin_addr = 0;
     exit_qualification.ept_violation.nmi_unblocking_due_to_iret = 0;
+    exit_qualification.ept_violation.ss = 0;
+    exit_qualification.ept_violation.reserved = 0;
 
     // When exit is due to EPT violation or EPT misconfiguration, format is similar to the
     // VMCS guest-physical address, except that bits 11:0 are cleared to 0.

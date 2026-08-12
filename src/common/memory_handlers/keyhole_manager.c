@@ -265,6 +265,9 @@ void init_keyhole_state(void)
 
 void* map_pa_with_memtype(void* pa, mapping_type_t mapping_type, bool_t is_wb_memtype)
 {
+    tdx_debug_assert(get_local_data()->keyhole_state_initialized);
+    tdx_debug_assert(get_local_data()->lp_info.x2apic_id == get_current_thread_num(get_sysinfo_table(), get_local_data()));
+
     keyhole_state_t* keyhole_state = &get_local_data()->keyhole_state;
     bool_t is_writable = (mapping_type == TDX_RANGE_RW) ? true : false;
 
@@ -387,6 +390,9 @@ void free_la(void* la)
 void* map_continuous_pages(uint64_t* pa_array, uint16_t array_size, mapping_type_t mapping_type,
                            uint16_t starting_static_keyhole)
 {
+    tdx_debug_assert(get_local_data()->keyhole_state_initialized);
+    tdx_debug_assert(get_local_data()->lp_info.x2apic_id == get_current_thread_num(get_sysinfo_table(), get_local_data()));
+
     keyhole_state_t* keyhole_state = &get_local_data()->keyhole_state;
     bool_t is_writable = (mapping_type == TDX_RANGE_RW) ? true : false;
 

@@ -46,6 +46,6 @@ api_error_code_e md_sys_write_element(md_field_id_t field_id, const md_lookup_t*
         uint64_t* old_value);
 
 api_error_code_e md_sys_write_field(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-        md_access_qualifier_t access_qual, uint64_t value[MAX_ELEMENTS_IN_FIELD], uint64_t wr_mask);
+        md_access_qualifier_t access_qual, uint64_t value[MAX_ELEMENTS_IN_FIELD]);
 
 #endif /* SRC_COMMON_METADATA_HANDLERS_METADATA_SYS_H_ */

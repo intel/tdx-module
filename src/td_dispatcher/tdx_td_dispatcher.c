@@ -400,6 +400,13 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
                                     tdx_local_data_ptr->td_regs.rdx, interrupt_occurred);
             break;
         }
+        case TDG_MR_KEY_GET_LEAF:
+        {
+            retval = tdg_mr_key_get(tdx_local_data_ptr->td_regs.rcx,
+                                    tdx_local_data_ptr->td_regs.rdx,
+                                    tdx_local_data_ptr->td_regs.r8);
+            break;
+        }
         default:
         {
             TDX_ERROR("Invalid leaf number for TDCALL\n");
@@ -528,35 +535,9 @@ static void handle_vm_entry_failures(tdx_module_local_t* tdx_local_data_ptr,
     }
 }
 
-static void handle_idt_vectoring(tdx_module_local_t* tdx_local_data_ptr, vm_vmexit_exit_reason_t vm_exit_reason,
-        vmx_exit_qualification_t vm_exit_qualification, vmx_idt_vectoring_info_t idt_vectoring_info)
+static void handle_idt_vectoring(vmx_idt_vectoring_info_t idt_vectoring_info)
 {
     vmx_entry_inter_info_t vm_entry_inter_info;
-
-    // Sanity check: only cases in TDX are task switch, EPT violation and
-    //   EPT misconfiguration
-    if ((vm_exit_reason.basic_reason != VMEXIT_REASON_TASK_SWITCH) &&
-        (vm_exit_reason.basic_reason != VMEXIT_REASON_EPT_VIOLATION) &&
-        (vm_exit_reason.basic_reason != VMEXIT_REASON_EPT_MISCONFIGURATION))
-    {
-        if (tdx_local_data_ptr->vp_ctx.tdcs->executions_ctl_fields.attributes.debug)
-        {
-            // if the TD is debuggable, other exit reasons can happen during IDT vectoring
-            async_tdexit_to_vmm(TDX_SUCCESS, vm_exit_reason,
-                           vm_exit_qualification.raw, 0, 0, 0);
-        }
-        else
-        {
-            // otherwise, only the above exit reasons are expected to happen during IDT vectoring
-            TDX_ERROR("Fatal error, IDT vectoring corrupted\n");
-            extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_unexpected_vm_exit(tdx_local_data_ptr->vp_ctx.tdr_pa.raw,
-                                                                                                       tdx_local_data_ptr->current_td_vm_id,
-                                                                                                       (uint32_t)vm_exit_reason.basic_reason,
-                                                                                                       (uint32_t)idt_vectoring_info.raw);
-            fatal_error(FATAL_ERROR_ID_20, FATAL_INFO_FORMAT_UNEXPECTED_VM_EXIT_INFO,&extended_fatal_info);
-        }
-
-    }
 
     // if a virtual NMI was re-injected, clear virtual NMI blocking
     if (idt_vectoring_info.interruption_type == VMEXIT_INTER_INFO_TYPE_NMI)
@@ -706,7 +687,7 @@ stepping_filter_e tdx_td_l1_l2_dispatcher_common_prologue(tdx_module_local_t* lo
     {
         fatal_error(FATAL_ERROR_ID_178, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
     }
-    
+
     // if stepping cannot be done safely, kill the TD and exit
     if (vmexit_stepping_result == FILTER_FAIL_TDEXIT_WRONG_APIC_MODE)
     {
@@ -732,8 +713,7 @@ stepping_filter_e tdx_td_l1_l2_dispatcher_common_prologue(tdx_module_local_t* lo
 
         if (idt_vectoring_info.valid == 1)
         {
-            handle_idt_vectoring(local_data, *vm_exit_reason, *vm_exit_qualification,
-                                idt_vectoring_info);
+            handle_idt_vectoring(idt_vectoring_info);
         }
     }
 

@@ -34,6 +34,7 @@
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
 #include "metadata_handlers/metadata_generic.h"
+#include "helpers/mem_scan.h"
 
 
 static api_error_type handle_command_by_type(migs_index_and_cmd_t migs_i_and_cmd, tdcs_t* tdcs_p, migsc_t* migsc_p,
@@ -589,6 +590,7 @@ api_error_type tdh_import_state_immutable(uint64_t target_tdr_pa, uint64_t hpa_a
         goto EXIT;
     }
 
+    init_non_blocking_export_variables_in_tdcs(tdcs_p);
 
 
     // Update the migration stream counters and mark as non-interrupted

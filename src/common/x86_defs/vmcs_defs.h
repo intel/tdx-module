@@ -30,6 +30,7 @@
 
 #include "tdx_basic_types.h"
 #include "tdx_basic_defs.h"
+#include "tdx_api_defs.h"
 
 
 #define TD_VMCS_SIZE _4KB
@@ -402,17 +403,37 @@ typedef union seam_ops_capabilities_s
 {
     struct
     {
-        uint64_t capabilities  : 1; // 0
-        uint64_t seamreport    : 1; // 1
-        uint64_t seamdb_clear  : 1; // 2
-        uint64_t seamdb_insert : 1; // 3
-        uint64_t seamdb_getref : 1; // 4
-        uint64_t seamdb_report : 1; // 5
-        uint64_t reserved      : 58; // 6-63
+        uint64_t capabilities     :  1; // Bit      0
+        uint64_t seamreport       :  1; // Bit      1
+        uint64_t seamdb_clear     :  1; // Bit      2
+        uint64_t seamdb_insert    :  1; // Bit      3
+        uint64_t seamdb_getref    :  1; // Bit      4
+        uint64_t seamdb_report    :  1; // Bit      5
+        uint64_t seamverifyreport :  1; // Bit      6
+        uint64_t reserved_0       :  4; // Bits  7-10
+        uint64_t seamgetkey       :  1; // Bit     11
+        uint64_t seamdb_nonce     :  1; // Bit     12
+        uint64_t seamdb_load      :  1; // Bit     13
+        uint64_t seamdb_store     :  1; // Bit     14
+        uint64_t seamfeatures     :  1; // Bit     15
+        uint64_t reserved_1       : 48; // Bits 16-63
     };
     uint64_t  raw;
 } seam_ops_capabilities_t;
 tdx_static_assert(sizeof(seam_ops_capabilities_t) == 8, seam_ops_capabilities_t);
+
+typedef struct ALIGN(128) PACKED seam_key_request_s
+{
+    uint128_t cpusvn;
+    tee_tcb_svn_t tee_tcb_svn;
+    uint64_t seamdb_nonce[4];
+    uint64_t seamdb_index;
+    uint16_t key_name_space;
+    uint8_t key_size;
+    uint8_t reserved[5];
+    uint384_t key_info;
+} seam_key_request_t;
+tdx_static_assert(sizeof(seam_key_request_t) == 128, seam_key_request_t);
 
 typedef union vmx_entry_inter_info_s
 {
@@ -468,7 +489,7 @@ typedef union
         uint32_t external_int_exiting            : 1;
         uint32_t reserved_0                      : 2;
         uint32_t nmi_exiting                     : 1;
-        uint32_t resrved_1                       : 1;
+        uint32_t reserved_1                       : 1;
         uint32_t virtual_nmis                    : 1;
         uint32_t activate_vmx_preemption_timer   : 1;
         uint32_t process_posted_interrupts       : 1;
@@ -506,7 +527,7 @@ typedef union
         uint32_t use_tpr_shadow                  : 1;  // bit 21
         uint32_t nmi_window_exiting              : 1;  // bit 22
         uint32_t mov_dr_exiting                  : 1;  // bit 23
-        uint32_t uncondditional_io_exiting       : 1;  // bit 24
+        uint32_t unconditional_io_exiting       : 1;  // bit 24
         uint32_t use_io_bitmaps                  : 1;  // bit 25
         uint32_t reserved_9                      : 1;  // bit 26
         uint32_t monitor_trap_flag               : 1;  // bit 27
@@ -541,7 +562,7 @@ typedef union
         uint32_t en_encls                        : 1;  // Bit 15
         uint32_t rdseed                          : 1;  // Bit 16
         uint32_t en_pml                          : 1;  // Bit 17
-        uint32_t ept_vaiolation_ve               : 1;  // Bit 18
+        uint32_t ept_violation_ve               : 1;  // Bit 18
         uint32_t conceal_vmx                     : 1;  // Bit 19
         uint32_t en_xsaves_xstors                : 1;  // Bit 20
         uint32_t pasid_translation               : 1;  // Bit 21
@@ -659,9 +680,9 @@ typedef union vmx_instruction_info_u
 #define HIGH_MSR_MASK                    ((uint32_t)~(HIGH_MSR_START)) // ~0xC0000000 (0x3FFFFFFFF)
 
 
-#define POSTED_INTERRUPT_NOTFICATION_VECTOR_INIT    0xFFFF  // Initial (illegal) value
-#define POSTED_INTERRUPT_NOTFICATION_VECTOR_MIN     0
-#define POSTED_INTERRUPT_NOTFICATION_VECTOR_MAX     255
+#define POSTED_INTERRUPT_NOTIFICATION_VECTOR_INIT    0xFFFF  // Initial (illegal) value
+#define POSTED_INTERRUPT_NOTIFICATION_VECTOR_MIN     0
+#define POSTED_INTERRUPT_NOTIFICATION_VECTOR_MAX     255
 
 #define PID_BIT_SIZE                    512
 #define PID_PIR_BITS                    256

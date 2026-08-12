@@ -732,6 +732,13 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
     }
     op_state_locked_flag = true;
 
+    return_val = check_td_for_export_mode(tdr_ptr, tdcs_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT_FAILURE;
+    }
+
     // Get the TD's ephemeral HKID
     td_hkid = tdr_ptr->key_management_fields.hkid;
 
@@ -1015,6 +1022,10 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
     // Before VM entry, update the current VM's VMCS' Guest IA32_PERF_GLOBAL_CTRL
     conditionally_write_vmcs_ia32_perf_global_ctrl_msr(tdcs_ptr);
 
+    if (is_non_blocking_export_configured())
+    {
+        update_eptp_enable_ad_bits(tdcs_ptr);
+    }
 
     local_data_ptr->single_step_def_state.last_entry_tsc = ia32_rdtsc();
 

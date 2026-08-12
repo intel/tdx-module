@@ -188,7 +188,7 @@ _STATIC_INLINE_ void ia32_vmptrld(vmcs_ptr_t *vmcs_p) {
  */
 _STATIC_INLINE_ uint64_t ia32_vmptrst(void) {
     uint64_t ptr;
-    _ASM_VOLATILE_ ("vmptrst %0"::"m"(ptr):"memory" , "cc");
+    _ASM_VOLATILE_ ("vmptrst %0": "=m"(ptr) ::"memory" , "cc");
 
     return ptr;
 }
@@ -257,20 +257,22 @@ _STATIC_INLINE_ uint64_t ia32_seamops_capabilities(void)
     return capabilities;
 }
 
-#define SEAMOPS_SUCCESS                    0
-#define SEAMOPS_INPUT_ERROR                1
-#define SEAMOPS_ENTROPY_ERROR              2
-#define SEAMOPS_DATABASE_ERROR             3
-#define SEAMOPS_INVALID_CPUSVN             4
-#define SEAMOPS_INVALID_REPORTMACSTRUCT    5
+#define SEAMOPS_SUCCESS                     0
+#define SEAMOPS_INPUT_ERROR                 1
+#define SEAMOPS_ENTROPY_ERROR               2
+#define SEAMOPS_DATABASE_ERROR              3
+#define SEAMOPS_INVALID_CPUSVN              4
+#define SEAMOPS_INVALID_REPORTMACSTRUCT     5
 
-#define SEAMOPS_CAPABILITIES_LEAF          0
-#define SEAMOPS_SEAMREPORT_LEAF            1
-#define SEAMOPS_SEAMDB_CLEAR_LEAF          2
-#define SEAMOPS_SEAMDB_INSERT_LEAF         3
-#define SEAMOPS_SEAMDB_GETREF_LEAF         4
-#define SEAMOPS_SEAMDB_REPORT_LEAF         5
-#define SEAMOPS_SEAMVERIFYREPORT_LEAF      6
+#define SEAMOPS_CAPABILITIES_LEAF           0
+#define SEAMOPS_SEAMREPORT_LEAF             1
+#define SEAMOPS_SEAMDB_CLEAR_LEAF           2
+#define SEAMOPS_SEAMDB_INSERT_LEAF          3
+#define SEAMOPS_SEAMDB_GETREF_LEAF          4
+#define SEAMOPS_SEAMDB_REPORT_LEAF          5
+#define SEAMOPS_SEAMVERIFYREPORT_LEAF       6
+
+#define SEAMOPS_GET_KEY_LEAF               11
 
 #define TD_PRESERVING_CAPABILITIES     BITS(SEAMOPS_SEAMDB_REPORT_LEAF, SEAMOPS_SEAMDB_GETREF_LEAF)
 
@@ -332,6 +334,22 @@ _STATIC_INLINE_ uint64_t ia32_seamops_seamverify_report(const report_mac_struct_
             :"=a"(result)
             :"a"(leaf), "b"(report_mac)
             :"memory", "cc");
+    return result;
+}
+
+_STATIC_INLINE_ uint64_t ia32_seamops_seam_get_key(seam_key_request_t* seam_key_request, uint256_t* key)
+{
+    uint64_t leaf = SEAMOPS_GET_KEY_LEAF;
+    uint64_t result;
+
+
+    _ASM_VOLATILE_(
+        ".byte 0x66; .byte 0x0F; .byte 0x01; .byte 0xCE;"
+        :"=a"(result)
+        : "a"(leaf), "c"(seam_key_request), "d"(key)
+        : "memory", "cc");
+
+
     return result;
 }
 

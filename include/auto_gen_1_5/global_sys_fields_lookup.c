@@ -629,7 +629,37 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // MAX_SERV_TDS // 60
+   // NUM_MEM_SCAN_CONTROL_PAGES // 60
+   .field_id =  { .raw  = 0xA000000000000030 },
+   .num_of_fields = 1, .num_of_elem = 1,
+   .vmm_rd_mask = (-1ULL & 0xFFULL), .vmm_wr_mask = (0ULL & 0xFFULL),
+   .guest_rd_mask = (0ULL & 0xFFULL), .guest_wr_mask = (0ULL & 0xFFULL),
+   .export_mask = (0ULL & 0xFFULL), .import_mask = (0ULL & 0xFFULL),
+   .special_rd_handling = false, .special_wr_handling = false,
+   .mig_export = MIG_NONE, .mig_import = MIG_NONE 
+ },
+ {
+   // MAX_MEM_SCAN_RANGES // 61
+   .field_id =  { .raw  = 0xA000000100000031 },
+   .num_of_fields = 1, .num_of_elem = 1,
+   .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
+   .guest_rd_mask = (0ULL & 0xFFFFULL), .guest_wr_mask = (0ULL & 0xFFFFULL),
+   .export_mask = (0ULL & 0xFFFFULL), .import_mask = (0ULL & 0xFFFFULL),
+   .special_rd_handling = false, .special_wr_handling = false,
+   .mig_export = MIG_NONE, .mig_import = MIG_NONE 
+ },
+ {
+   // NUM_MEM_SCAN_CONTEXTS // 62
+   .field_id =  { .raw  = 0xA000000100000032 },
+   .num_of_fields = 1, .num_of_elem = 1,
+   .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
+   .guest_rd_mask = (0ULL & 0xFFFFULL), .guest_wr_mask = (0ULL & 0xFFFFULL),
+   .export_mask = (0ULL & 0xFFFFULL), .import_mask = (0ULL & 0xFFFFULL),
+   .special_rd_handling = false, .special_wr_handling = false,
+   .mig_export = MIG_NONE, .mig_import = MIG_NONE 
+ },
+ {
+   // MAX_SERV_TDS // 63
    .field_id =  { .raw  = 0xA100000100000000 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
@@ -639,7 +669,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // SERVTD_ATTR_FIXED0 // 61
+   // SERVTD_ATTR_FIXED0 // 64
    .field_id =  { .raw  = 0xA100000300000001 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -649,7 +679,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // SERVTD_ATTR_FIXED1 // 62
+   // SERVTD_ATTR_FIXED1 // 65
    .field_id =  { .raw  = 0xA100000300000002 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -659,7 +689,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // GUEST_L2_GPA_ATTR_MASK // 63
+   // GUEST_L2_GPA_ATTR_MASK // 66
    .field_id =  { .raw  = 0xA200000100000000 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFULL),
@@ -669,7 +699,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VM_CTLS_FIXED0 // 64
+   // VM_CTLS_FIXED0 // 67
    .field_id =  { .raw  = 0xA200000300000001 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -679,7 +709,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VM_CTLS_FIXED1 // 65
+   // VM_CTLS_FIXED1 // 68
    .field_id =  { .raw  = 0xA200000300000002 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -689,7 +719,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VPCU_L2_CTLS_FIXED0 // 66
+   // VPCU_L2_CTLS_FIXED0 // 69
    .field_id =  { .raw  = 0xA200000300000003 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -699,7 +729,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VCPU_L2_CTLS_FIXED1 // 67
+   // VCPU_L2_CTLS_FIXED1 // 70
    .field_id =  { .raw  = 0xA200000300000004 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -709,7 +739,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VPCU_L2_DEBUG_CTLS_FIXED0 // 68
+   // VPCU_L2_DEBUG_CTLS_FIXED0 // 71
    .field_id =  { .raw  = 0xA200000300000005 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),
@@ -719,7 +749,7 @@ const md_lookup_t global_sys_lookup[MAX_NUM_GLOBAL_SYS_LOOKUP] = {
    .mig_export = MIG_NONE, .mig_import = MIG_NONE 
  },
  {
-   // VCPU_L2_DEBUG_CTLS_FIXED1 // 69
+   // VCPU_L2_DEBUG_CTLS_FIXED1 // 72
    .field_id =  { .raw  = 0xA200000300000006 },
    .num_of_fields = 1, .num_of_elem = 1,
    .vmm_rd_mask = (-1ULL & 0xFFFFFFFFFFFFFFFFULL), .vmm_wr_mask = (0ULL & 0xFFFFFFFFFFFFFFFFULL),

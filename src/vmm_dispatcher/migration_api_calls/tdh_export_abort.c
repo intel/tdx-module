@@ -32,6 +32,7 @@
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
 #include "helpers/migration.h"
+#include "helpers/mem_scan.h"
 
 api_error_type tdh_export_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa, uint64_t mig_stream_indx)
 {
@@ -230,6 +231,15 @@ api_error_type tdh_export_abort(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
         }
     }
 
+    if (is_non_blocking_export_configured())
+    {
+        return_val = mem_scan_reset(tdcs_p, false);
+        if (TDX_SUCCESS != return_val)
+        {
+            TDX_ERROR("Failed to reset mem scan\n");
+            goto EXIT;
+        }
+    }
 
     /*---------------------------------------------------------------
         ALL_CHECKS_PASSED:  The function is guaranteed to succeed

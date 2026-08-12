@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -33,6 +33,7 @@
 #include "memory_handlers/pamt_manager.h"
 #include "memory_handlers/sept_manager.h"
 #include "helpers/helpers.h"
+#include "helpers/mem_scan.h"
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
 
@@ -96,6 +97,19 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
         goto EXIT;
     }
 
+    if (is_non_blocking_export_configured() && OP_STATE_PAUSED_EXPORT == tdcs_ptr->management_fields.op_state)
+    {
+        TDX_ERROR("TDH.MEM.RANGE.UNBLOCK is not allowed when the export is paused\n");
+        return_val = api_error_with_operand_id(TDX_OP_STATE_INCORRECT,(uint64_t)tdcs_ptr->management_fields.op_state);
+        goto EXIT;
+    }
+
+    return_val = check_td_for_export_mode(tdr_ptr, tdcs_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
 
     if (!verify_page_info_input(gpa_mappings, LVL_PT, tdcs_ptr->executions_ctl_fields.eptp.fields.ept_pwl))
     {
@@ -122,7 +136,7 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
         {
             // Update output register operands
-            set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         }
 
         TDX_ERROR("Failed on GPA check, SEPT lock or walk - error = %llx\n", return_val);
@@ -134,7 +148,7 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
     if (TDX_SUCCESS != return_val)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Failed on SEPT host-side lock attempt\n");
         goto EXIT;
     }
@@ -148,7 +162,7 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
     if (!sept_state_is_seamcall_leaf_allowed(TDH_MEM_RANGE_UNBLOCK_LEAF, sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(sept_entry_copy, gpa_mappings.level, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(sept_entry_copy, gpa_mappings.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("TDH_MEM_RANGE_UNBLOCK_LEAF is not allowed in current SEPT entry state - 0x%llx\n", sept_entry_copy.raw);
         goto EXIT;
     }
@@ -233,10 +247,23 @@ api_error_type tdh_mem_range_unblock(page_info_api_input_t gpa_page_info, uint64
     sept_lock_release_local(&epte_val);
 
     // Write the whole 64-bit EPT entry in a single operation
+    if (is_non_blocking_export_configured())
+    {
+        atomically_update_sept_state_keep_ad_tdhp(sept_entry_ptr, epte_val.raw);
+    }
+    else
     {
         atomically_update_sept_state_keep_tdhp(sept_entry_ptr, epte_val.raw);
     }
 
+    if (!sept_state_is_any_pending(sept_entry_copy))
+    {
+        (void)_lock_xadd_64b(&tdcs_ptr->executions_ctl2_fields.blocked_count, (uint64_t)-(BIT(9 * sept_level_entry)));
+    }
+    else
+    {
+        (void)_lock_xadd_64b(&tdcs_ptr->executions_ctl2_fields.pending_blocked_count, (uint64_t)-(BIT(9 * sept_level_entry)));
+    }
 
     septe_locked_flag = false;
 

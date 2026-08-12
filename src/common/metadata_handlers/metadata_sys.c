@@ -36,6 +36,7 @@
 #include "helpers/cpuid_fms.h"
 #include "helpers/helpers.h"
 #include "data_structures/preserving_defs.h"
+#include "helpers/mem_scan.h"
 
 static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* entry,
                                   uint64_t* element_array, uint64_t* array_size)
@@ -355,6 +356,18 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
             {
                 *element_array = MIN_VP_STATE_EXPORT_PAGES;
             }
+            else if (entry->field_id.field_code == MD_SYS_NUM_MEM_SCAN_CONTROL_PAGES_FIELD_CODE)
+            {
+                *element_array = MEM_SCAN_CONFIG_PAGES;
+            }
+            else if (entry->field_id.field_code == MD_SYS_MAX_MEM_SCAN_RANGES_FIELD_CODE)
+            {
+                *element_array = MAX_MEM_SCAN_RANGES;
+            }
+            else if (entry->field_id.field_code == MD_SYS_NUM_MEM_SCAN_CONTEXTS_FIELD_CODE)
+            {
+                *element_array = NUM_MEM_SCAN_CONTEXTS;
+            }
             else
             {
                 return false;
@@ -572,14 +585,13 @@ api_error_code_e md_sys_write_element(md_field_id_t field_id, const md_lookup_t*
 }
 
 api_error_code_e md_sys_write_field(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-        md_access_qualifier_t access_qual, uint64_t value[MAX_ELEMENTS_IN_FIELD], uint64_t wr_mask)
+        md_access_qualifier_t access_qual, uint64_t value[MAX_ELEMENTS_IN_FIELD])
 {
     UNUSED(field_id);
     UNUSED(entry);
     UNUSED(access_type);
     UNUSED(access_qual);
     UNUSED(value);
-    UNUSED(wr_mask);
 
     return TDX_METADATA_FIELD_NOT_WRITABLE;
 }

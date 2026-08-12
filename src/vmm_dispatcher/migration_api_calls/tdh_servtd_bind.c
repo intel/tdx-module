@@ -224,6 +224,13 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
     }
     servtd_bindings_locked_flag = true;
 
+    return_val = is_binding_allowed(servtd_tdcs_p);
+    if(TDX_SUCCESS != return_val)
+    {
+        TDX_ERROR("Binding not allowed. Error = 0x%llx.\n", return_val);
+        goto EXIT;
+    }
+
 #if (MAX_SERVTDS > 1)
     if (is_servtd_singleton(servtd_type))
     {

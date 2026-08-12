@@ -69,7 +69,7 @@ _STATIC_INLINE_ lock_return_t acquire_mutex_lock(mutex_lock_t * lock_ptr)
     return (retval == MUTEX_FREE) ? LOCK_RET_SUCCESS : LOCK_RET_FAIL;
 }
 
-#if defined(DEBUGFEATURE_TDX_DBG_TRACE)
+#if defined(DEBUGFEATURE_TDX_DBG_TRACE) || defined(DEBUGFEATURE_BULLSEYE_BUILD)
 _STATIC_INLINE_ lock_return_t acquire_mutex_lock_or_wait(mutex_lock_t * lock_ptr)
 {
     mutex_lock_t retval = MUTEX_LOCK;
@@ -88,7 +88,7 @@ _STATIC_INLINE_ lock_return_t acquire_mutex_lock_or_wait(mutex_lock_t * lock_ptr
 
     return LOCK_RET_SUCCESS;
 }
-#endif // defined(DEBUGFEATURE_TDX_DBG_TRACE)
+#endif // defined(DEBUGFEATURE_TDX_DBG_TRACE) || defined(DEBUGFEATURE_BULLSEYE_BUILD)
 
 _STATIC_INLINE_ void release_mutex_lock(mutex_lock_t * lock_ptr)
 {
@@ -262,21 +262,19 @@ _STATIC_INLINE_ api_error_type sept_lock_acquire_host(ia32e_sept_t* sept_ptr)
 
 _STATIC_INLINE_ api_error_type sept_lock_acquire_guest(ia32e_sept_t* sept_ptr)
 {
+    // Check the HP bit
+    if(sept_ptr->hp)
+    {
+        return TDX_OPERAND_BUSY_HOST_PRIORITY;
+    }
+
     bool_t ret_val = _lock_bts_64b(&sept_ptr->raw, SEPT_ENTRY_TDEL_BIT_POSITION) == 0;
     if (!ret_val)
     {
         return TDX_OPERAND_BUSY;
     }
 
-    // Lock is successfully acquired. Check if the HP bit is set
-    // No need for atomic operations since the SEPT entry is locked
-    if (sept_ptr->hp)
-    {
-        // If the HP bit is set, release the lock and return BUSY_HOAT_PRORITY error code
-        (void)_lock_btr_64b(&sept_ptr->raw, SEPT_ENTRY_TDEL_BIT_POSITION);
-
-        return TDX_OPERAND_BUSY_HOST_PRIORITY;
-    }
+    // Lock is successfully acquired.
 
     return TDX_SUCCESS;
 }

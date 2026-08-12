@@ -104,6 +104,14 @@ typedef union
     uint8_t bytes[32];
 } uint256_t;
 
+typedef union
+{
+    uint128_t thirds[3];
+    uint64_t qwords[6];
+    uint32_t dwords[12];
+    uint8_t bytes[48];
+} uint384_t;
+
 // Only for power of 2 alignment
 #define ROUND_UP(value, align)    ( ((value) + ((align) - 1)) & (~((align) - 1)) )
 

@@ -227,7 +227,7 @@ _STATIC_INLINE_ api_error_type compare_cpuid_configuration(tdx_module_global_t* 
             Special Handling of Selected CPUID Leaves/Sub-Leaves
             ------------------------------------------------------*/
 
-            // Determine current core and packege IDs.
+            // Determine current core and package IDs.
             if ((tmp_cpuid_config.leaf_subleaf.leaf == CPUID_GET_TOPOLOGY_LEAF) &&
                 (tmp_cpuid_config.leaf_subleaf.subleaf == 0))
             {
@@ -549,14 +549,11 @@ api_error_type tdh_sys_lp_init(void)
     // Initialize keyhole
     init_keyhole_state();
 
-    // map the fatal error info memmory if needed - only after we initialize the keyhole
+
+    // ALL CHECKS SUCCEEDED:
+
+    // map the fatal error info memory if needed - only after we initialize the keyhole
     map_fatal_info_pointer();
-
-    /**
-     * Calc LPID from local_data_ptr
-     */
-    tdx_local_data_ptr->lp_info.x2apic_id = (uint32_t)get_current_thread_num(get_sysinfo_table(), tdx_local_data_ptr);
-
 
     tdx_local_init(tdx_local_data_ptr, tdx_global_data_ptr);
 

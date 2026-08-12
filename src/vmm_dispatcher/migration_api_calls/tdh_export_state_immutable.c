@@ -32,6 +32,7 @@
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
 #include "helpers/migration.h"
+#include "helpers/mem_scan.h"
 #include "metadata_handlers/metadata_generic.h"
 
 static api_error_type handle_command_by_type(migs_index_and_cmd_t migs_i_and_cmd, page_list_info_t page_list_info,
@@ -257,6 +258,15 @@ static api_error_type handle_continues_export(api_error_type* return_val, bool_t
         // Start the in-order export phase
         tdcs_p->management_fields.op_state = OP_STATE_LIVE_EXPORT;
 
+        if (is_non_blocking_export_configured())
+        {
+            // Record the TD epoch at the start of the export session
+            tdcs_p->migration_fields.bw_epoch.raw = tdcs_p->epoch_tracking.epoch_and_refcount.td_epoch;
+        }
+        else
+        {
+            get_global_data()->write_blocking_export_used = WRITE_BLOCKING_EXPORT_USED;
+        }
 
         *continue_loop = false;
     }
@@ -422,6 +432,13 @@ api_error_type tdh_export_state_immutable(uint64_t target_tdr_pa, uint64_t hpa_a
     if (tdcs_p->migration_fields.num_migs < MIN_MIGS)
     {
         return_val = TDX_MIN_MIGS_NOT_CREATED;
+        goto EXIT;
+    }
+
+    return_val = check_td_for_export_mode(tdr_p, tdcs_p);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
         goto EXIT;
     }
 

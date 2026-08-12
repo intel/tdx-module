@@ -43,7 +43,8 @@ typedef union subtype_and_requestor_u
     struct
     {
         uint64_t sub_type : 8;
-        uint64_t reserved : 56;
+        uint64_t requestor_id : 2;
+        uint64_t reserved : 54;
     };
 
     uint64_t raw;
@@ -135,22 +136,38 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
     tdg_mr_report_type.type = (uint8_t)TDX_REPORT_TYPE;
     tdg_mr_report_type.subtype = subtype_and_req.sub_type;
 
-    if (tdcs_p->service_td_fields.servtd_num > 0)
+    if (tdcs_p->executions_ctl_fields.attributes.servtdext)
     {
-        tdg_mr_report_type.version = (uint8_t)TDX_REPORT_VERSION_WITH_SERVTDS;
+        tdg_mr_report_type.version = (uint8_t)TDX_REPORT_VERSION_WITH_UUID_VMID;
     }
     else
     {
-        tdg_mr_report_type.version = (uint8_t)TDX_REPORT_VERSION_NO_SERVTDS;
+        if (tdcs_p->service_td_fields.servtd_num > 0)
+        {
+            tdg_mr_report_type.version = (uint8_t)TDX_REPORT_VERSION_WITH_SERVTDS;
+        }
+        else
+        {
+            tdg_mr_report_type.version = (uint8_t)TDX_REPORT_VERSION_NO_SERVTDS;
+        }
     }
 
+    uint8_t requestor_id = 0;
+
+    requestor_id = (uint8_t)subtype_and_req.requestor_id;
+
+    if (get_global_data()->tdid_vmid_reporting_enabled)
+    {
+        tdg_mr_report_type.version = TDX_REPORT_VERSION_WITH_UUID_VMID;
+    }
 
     bool_t is_cached_teeinfohash_used = tdcs_p->measurement_fields.last_teeinfo_hash_valid;
 
     // Create TDREPORT in a temporary buffer and compute TEE_INFO_HASH
     ignore_tdinfo_bitmap_t ignore = { .raw = 0 };
-    if ((return_val = get_tdinfo_and_teeinfohash(tdcs_p, ignore, &temp_tdg_mr_report.td_info, &tee_info_hash, true,
-                                                 tdr_p, tdg_mr_report_type.requestor, false)) != TDX_SUCCESS)
+    if ((return_val = get_tdinfo_and_teeinfohash(tdcs_p, ignore, &temp_tdg_mr_report.td_info,
+                                                 &tee_info_hash, true, tdr_p, requestor_id,
+                                                 false, tdg_mr_report_type.version)) != TDX_SUCCESS)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RTMR);
         goto EXIT;
@@ -158,7 +175,9 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
 
 
     // Interruption Point: only if TEEINFOHASH was not cached (so its calculation took a long time)
-    if (!is_cached_teeinfohash_used && is_interrupt_pending_guest_side())
+    if (!is_cached_teeinfohash_used && is_interrupt_pending_guest_side()
+        && !get_global_data()->tdid_vmid_reporting_enabled
+       )
     {
         // An interrupt is pending. Resume the guest without updating CPU state
         // TDG.MR.REPORT will be called again after the interrupt is serviced.
@@ -178,7 +197,7 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
     // go to non-recoverable asynchronous TDEXIT
     if (result != SEAMOPS_SUCCESS)
     {
-        TDX_ERROR("SEADB_REPORT failure due to TDR corruption\n");
+        TDX_ERROR("SEAMDB_REPORT failure due to TDR corruption\n");
         async_exit_needed = true;
         goto EXIT;
     }

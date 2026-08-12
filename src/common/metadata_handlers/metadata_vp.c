@@ -791,7 +791,7 @@ static api_error_code_e md_vp_element_vmcs_wr_handle(md_field_id_t field_id, md_
     }
     case VMX_GUEST_IA32_EFER_FULL_ENCODE:
     {
-        // IA32_EFER.LMA is igonred on write.  Instead, it is set based on IA32_EFER.LME and CR0.PG
+        // IA32_EFER.LMA is ignored on write.  Instead, it is set based on IA32_EFER.LME and CR0.PG
         ia32_cr0_t cr0 = { .raw = 0 };
         ia32_vmread(VMX_GUEST_CR0_ENCODE, (uint64_t*)&cr0);
         ia32_efer_t ia32_efer = { .raw = *wr_value };
@@ -870,7 +870,7 @@ static api_error_code_e md_vp_element_vmcs_wr_handle(md_field_id_t field_id, md_
 
             ia32_vmread(VMX_POSTED_INTERRUPT_NOTIFICATION_VECTOR_ENCODE, &vec);
 
-            if ((uint16_t)vec == POSTED_INTERRUPT_NOTFICATION_VECTOR_INIT)
+            if ((uint16_t)vec == POSTED_INTERRUPT_NOTIFICATION_VECTOR_INIT)
             {
                 return api_error_with_operand_id(TDX_TD_VMCS_FIELD_NOT_INITIALIZED,
                                                  VMX_POSTED_INTERRUPT_NOTIFICATION_VECTOR_ENCODE);
@@ -900,7 +900,7 @@ static api_error_code_e md_vp_element_vmcs_wr_handle(md_field_id_t field_id, md_
     {
 
         // although 'wr_value' is of type 'uint_64' and could never be negative, the first condition is here for code-completeness
-        if (*wr_value < POSTED_INTERRUPT_NOTFICATION_VECTOR_MIN || *wr_value > POSTED_INTERRUPT_NOTFICATION_VECTOR_MAX)
+        if (*wr_value < POSTED_INTERRUPT_NOTIFICATION_VECTOR_MIN || *wr_value > POSTED_INTERRUPT_NOTIFICATION_VECTOR_MAX)
         {
             return TDX_METADATA_FIELD_VALUE_NOT_VALID;
         }
@@ -955,7 +955,7 @@ static api_error_code_e md_vp_element_l2_vmcs_wr_handle(md_field_id_t field_id, 
         md_ctx.tdvps_ptr->management.shadow_cr0_guest_host_mask[vm_id] = *wr_value;
 
         // On import, the value  will be processed at the end of VPCU state import.
-        // This is done to prevent dependecy on the order of import.
+        // This is done to prevent dependency on the order of import.
         // Otherwise, process it immediately.
         if (MD_IMPORT_MUTABLE != access_type)
         {
@@ -971,7 +971,7 @@ static api_error_code_e md_vp_element_l2_vmcs_wr_handle(md_field_id_t field_id, 
         md_ctx.tdvps_ptr->management.shadow_cr0_read_shadow[vm_id] = *wr_value;
 
         // On import, the value  will be processed at the end of VPCU state import.
-        // This is done to prevent dependecy on the order of import.
+        // This is done to prevent dependency on the order of import.
         // Otherwise, process it immediately.
         if (MD_IMPORT_MUTABLE != access_type)
         {
@@ -987,7 +987,7 @@ static api_error_code_e md_vp_element_l2_vmcs_wr_handle(md_field_id_t field_id, 
         md_ctx.tdvps_ptr->management.shadow_cr4_guest_host_mask[vm_id] = *wr_value;
 
         // On import, the value  will be processed at the end of VPCU state import.
-        // This is done to prevent dependecy on the order of import.
+        // This is done to prevent dependency on the order of import.
         // Otherwise, process it immediately.
         if (MD_IMPORT_MUTABLE != access_type)
         {
@@ -1003,7 +1003,7 @@ static api_error_code_e md_vp_element_l2_vmcs_wr_handle(md_field_id_t field_id, 
         md_ctx.tdvps_ptr->management.shadow_cr4_read_shadow[vm_id] = *wr_value;
 
         // On import, the value  will be processed at the end of VPCU state import.
-        // This is done to prevent dependecy on the order of import.
+        // This is done to prevent dependency on the order of import.
         // Otherwise, process it immediately.
         if (MD_IMPORT_MUTABLE != access_type)
         {
@@ -1059,7 +1059,7 @@ static api_error_code_e md_vp_element_l2_vmcs_wr_handle(md_field_id_t field_id, 
     }
     case VMX_GUEST_IA32_EFER_FULL_ENCODE:
     {
-        // IA32_EFER.LMA is igonred on write.  Instead, it is set based on IA32_EFER.LME and CR0.PG
+        // IA32_EFER.LMA is ignored on write.  Instead, it is set based on IA32_EFER.LME and CR0.PG
         ia32_cr0_t cr0 = { .raw = 0 };
         ia32_vmread(VMX_GUEST_CR0_ENCODE, (uint64_t*)&cr0);
         ia32_efer_t ia32_efer = { .raw = *wr_value };
@@ -1441,7 +1441,7 @@ static api_error_code_e md_vp_element_tdvps_wr_handle(md_field_id_t field_id, md
                                                                md_ctx.tdcs_ptr->executions_ctl_fields.tsc_multiplier,
                                                                md_ctx.tdcs_ptr->executions_ctl_fields.tsc_offset);
 
-                        /* Check if the TSC deadline is in the past.  Remmeber that the TD's virtual TSC starts from 0 and
+                        /* Check if the TSC deadline is in the past.  Remember that the TD's virtual TSC starts from 0 and
                            can't practically wrap around, so we can do a simple comparison. */
                         uint64_t native_tsc_deadline = 0;
                         if (*wr_value <= virt_tsc)
@@ -1571,13 +1571,14 @@ static uint64_t md_vp_adjust_value_per_field_attr_on_wr(const md_lookup_t* entry
 
 static api_error_code_e md_vp_handle_field_attribute_on_wr(md_field_id_t field_id, const md_lookup_t* entry,
                                                            md_context_ptrs_t md_ctx, md_access_t access_type, uint64_t* wr_value)
-{
+{    
     if (entry->attributes.hpa && entry->attributes.shared)
     {
+        // We do not expect import access types here
+        tdx_debug_assert(!((MD_IMPORT_IMMUTABLE == access_type || MD_IMPORT_MUTABLE == access_type) && *wr_value == NULL_PA));
+        
         uint64_t size = md_vp_get_checked_size_of_shared_hpa_range(field_id);
-
-        if (!((MD_IMPORT_IMMUTABLE == access_type || MD_IMPORT_MUTABLE == access_type) && *wr_value == NULL_PA) &&
-            shared_hpa_check((pa_t)*wr_value, size) != TDX_SUCCESS)
+        if (shared_hpa_check((pa_t)*wr_value, size) != TDX_SUCCESS)
         {
             return TDX_METADATA_FIELD_VALUE_NOT_VALID;
         }
@@ -1708,7 +1709,7 @@ api_error_code_e md_vp_write_element(md_field_id_t field_id, const md_lookup_t* 
 
 api_error_code_e md_vp_write_field(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
                                    md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx,
-                                   uint64_t value[MAX_ELEMENTS_IN_FIELD], uint64_t wr_mask, bool_t wr_mask_valid)
+                                   uint64_t value[MAX_ELEMENTS_IN_FIELD])
 {
     // No special handling on read field
 
@@ -1720,6 +1721,6 @@ api_error_code_e md_vp_write_field(md_field_id_t field_id, const md_lookup_t* en
 
     uint64_t old_value;
 
-    return md_vp_write_element(field_id, entry, access_type, access_qual, md_ctx, value[0], wr_mask, &old_value, false, wr_mask_valid);
+    return md_vp_write_element(field_id, entry, access_type, access_qual, md_ctx, value[0], (uint64_t)-1, &old_value, false, false);
 }
 

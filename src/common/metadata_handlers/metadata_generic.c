@@ -76,12 +76,11 @@ api_error_code_e md_check_as_single_element_id(md_field_id_t field_id)
     // - RESERVED_* fields must be 0.
     // - LAST_ELEMENTS_IN_FIELD must be 0.
     // - LAST_FIELD_IN_SEQUENCE must by 0.
-    // - WRITE_MASK_VALID is ignored.
     // - FIELD_SIZE is ignored.
     // - INC_SIZE is ignored.
     // - CONTEXT_CODE is ignored.
     IF_RARE (field_id.reserved_0 != 0 || field_id.reserved_1 != 0 ||
-             field_id.reserved_2 != 0 || field_id.reserved_3 != 0 ||
+             field_id.reserved_3 != 0 || field_id.reserved_4 != 0 ||
              field_id.last_element_in_field != 0 || field_id.last_field_in_sequence != 0)
     {
         return TDX_METADATA_FIELD_ID_INCORRECT;
@@ -90,15 +89,12 @@ api_error_code_e md_check_as_single_element_id(md_field_id_t field_id)
     return TDX_SUCCESS;
 }
 
-api_error_code_e md_check_as_sequence_header(md_context_code_e ctx_code, md_field_id_t field_id,
-        md_access_t access_type)
+api_error_code_e md_check_as_sequence_header(md_context_code_e ctx_code, md_field_id_t field_id)
 {
     // - RESERVED_* fields must be 0.
-    // - WRITE_MASK_VALID must be 0 if this is a read operation.
     IF_RARE (field_id.context_code != ctx_code ||
              field_id.reserved_0 != 0 || field_id.reserved_1 != 0 ||
-             field_id.reserved_2 != 0 || field_id.reserved_3 != 0 ||
-        ((access_type & MD_WRITE_ACCESS) == 0 && field_id.write_mask_valid != 0))
+             field_id.reserved_2 != 0 || field_id.reserved_3 != 0 || field_id.reserved_4 != 0)
     {
         return TDX_METADATA_FIELD_ID_INCORRECT;
     }
@@ -242,7 +238,7 @@ void md_cpuid_field_id_get_leaf_subleaf(md_field_id_t field_id, uint32_t* leaf, 
     *subleaf = field_id.cpuid_field_code.subleaf_na ? CPUID_SUBLEAF_NA : field_id.cpuid_field_code.subleaf;
 }
 
-static md_field_id_t md_get_next_cpuid_value_entry(md_field_id_t field_id, bool_t element)
+static md_field_id_t md_get_next_cpuid_value_entry(md_field_id_t field_id, bool_t element, bool_t use_ordered_cpuid)
 {
     // Inc size of CPUID field codes should be 0
     tdx_debug_assert(field_id.inc_size == 0);
@@ -259,24 +255,38 @@ static md_field_id_t md_get_next_cpuid_value_entry(md_field_id_t field_id, bool_
     // First find on what index we are already located
     uint32_t leaf, subleaf;
     md_cpuid_field_id_get_leaf_subleaf(field_id, &leaf, &subleaf);
-    uint32_t index = get_cpuid_lookup_entry(leaf, subleaf);
-
-    tdx_sanity_check(index != CPUID_LOOKUP_IDX_NA, FATAL_ERROR_ID_230, 0);
-
-    do
+    uint32_t index = 0;
+    if (use_ordered_cpuid)
     {
-        index = index + 1;
-    } while ((index < MAX_NUM_CPUID_LOOKUP) && (!cpuid_lookup[index].valid_entry));
-
-    IF_RARE (index >= MAX_NUM_CPUID_LOOKUP)
-    {
-        // we finished the cpuid lookup array, return -1 to indicate that
-        return (md_field_id_t)MD_FIELD_ID_NA;
+        index = get_ordered_cpuid_lookup_entry(leaf, subleaf) + 1;
+        IF_RARE (index >= MAX_NUM_ORDERED_CPUID_LOOKUP)
+        {
+            // last CPUID reached, proceed to next non-cpuid field
+            return (md_field_id_t)MD_FIELD_ID_NA;
+        }
+        // Get the leaf and subleaf of next entry in cpuid ordered lookup
+        leaf = ordered_cpuid_lookup[index].leaf_subleaf.leaf;
+        subleaf = ordered_cpuid_lookup[index].leaf_subleaf.subleaf;
     }
+    else
+    {
+        index = get_cpuid_lookup_entry(leaf, subleaf);
+        tdx_sanity_check(index != CPUID_LOOKUP_IDX_NA, FATAL_ERROR_ID_230, 0);
+        do
+        {
+            index = index + 1;
+        } while ((index < MAX_NUM_CPUID_LOOKUP) && (!cpuid_lookup[index].valid_entry));
 
-    // Get the leaf and subleaf of next entry in cpuid lookup
-    leaf = cpuid_lookup[index].leaf_subleaf.leaf;
-    subleaf = cpuid_lookup[index].leaf_subleaf.subleaf;
+        IF_RARE (index >= MAX_NUM_CPUID_LOOKUP)
+        {
+            // we finished the cpuid lookup array, return -1 to indicate that
+            return (md_field_id_t)MD_FIELD_ID_NA;
+        }
+
+        // Get the leaf and subleaf of next entry in cpuid lookup
+        leaf = cpuid_lookup[index].leaf_subleaf.leaf;
+        subleaf = cpuid_lookup[index].leaf_subleaf.subleaf;
+    }
 
     // Set it into the field code value
     md_cpuid_field_id_set_leaf_subleaf(&field_id, leaf, subleaf);
@@ -345,7 +355,7 @@ static void ____md_fetch_next_of_last_table_entry(lookup_iterator_t* lookup_cont
 // the next index in the table to which the field_id belongs, and also returns a different
 // lookup table ptr in case when we switched to different lookup table under the same context
 // (currently happens only with TD-VMCS table in TDVPS context)
-static void md_get_next_item_with_iterator(lookup_iterator_t* lookup_context, md_context_ptrs_t md_ctx, bool_t is_element)
+static void md_get_next_item_with_iterator(lookup_iterator_t* lookup_context, md_context_ptrs_t md_ctx, bool_t is_element, bool_t use_ordered_cpuid)
 {
     md_field_id_t tmp_field_id;
     uint32_t class_code = lookup_context->field_id.class_code;
@@ -366,7 +376,7 @@ static void md_get_next_item_with_iterator(lookup_iterator_t* lookup_context, md
     IF_RARE (is_special_cpuid_field_id(lookup_context->field_id))
     {
         // Very special case of "CPUID_VALUES" field in TDCS, should be handled differently
-        tmp_field_id = md_get_next_cpuid_value_entry(lookup_context->field_id, is_element);
+        tmp_field_id = md_get_next_cpuid_value_entry(lookup_context->field_id, is_element, use_ordered_cpuid);
 
         // If there's no more CPUID_VALUES entries, fetch the next field
         if (is_null_field_id(tmp_field_id))
@@ -440,8 +450,18 @@ EXIT:
     IF_RARE (is_special_cpuid_field_id(lookup_context->field_id))
     {
         // Insert the leaf/subleaf of the first CPUID entry to the field id
-        md_cpuid_field_id_set_leaf_subleaf(&lookup_context->field_id, cpuid_lookup[0].leaf_subleaf.leaf,
-                                           cpuid_lookup[0].leaf_subleaf.subleaf);
+        if (use_ordered_cpuid)
+        {
+            // Insert the leaf/subleaf of the first CPUID entry to the field id
+            md_cpuid_field_id_set_leaf_subleaf(&lookup_context->field_id, ordered_cpuid_lookup[0].leaf_subleaf.leaf,
+                ordered_cpuid_lookup[0].leaf_subleaf.subleaf);
+        }
+        else
+        {
+            // Insert the leaf/subleaf of the first CPUID entry to the field id
+            md_cpuid_field_id_set_leaf_subleaf(&lookup_context->field_id, cpuid_lookup[0].leaf_subleaf.leaf,
+                                               cpuid_lookup[0].leaf_subleaf.subleaf);
+        }
     }
 
     // In case when we fetched a L2 VMCS 1/2/3 "parent" field in TDVPS table
@@ -472,7 +492,7 @@ EXIT:
 }
 
 static void md_get_next_accessible_item(lookup_iterator_t* lookup_context, bool_t is_element,
-                            md_context_ptrs_t md_ctx, md_access_t access_type, md_access_qualifier_t access_qual)
+                            md_context_ptrs_t md_ctx, md_access_t access_type, md_access_qualifier_t access_qual, bool_t use_ordered_cpuid)
 {
     uint64_t rd_mask = 0;
     uint64_t wr_mask = 0;
@@ -480,7 +500,7 @@ static void md_get_next_accessible_item(lookup_iterator_t* lookup_context, bool_
 
     do
     {
-        md_get_next_item_with_iterator(lookup_context, md_ctx, is_element);
+        md_get_next_item_with_iterator(lookup_context, md_ctx, is_element, use_ordered_cpuid);
 
         if (is_null_field_id(lookup_context->field_id))
         {
@@ -501,7 +521,8 @@ static void md_get_next_accessible_item(lookup_iterator_t* lookup_context, bool_
 
 static md_field_id_t md_get_next_item_in_context(md_context_code_e ctx_code, md_field_id_t field_id,
                                                  md_context_ptrs_t md_ctx, bool_t element,
-                                                 md_access_t access_type, md_access_qualifier_t access_qual)
+                                                 md_access_t access_type, md_access_qualifier_t access_qual,
+                                                 bool_t use_ordered_cpuid)
 {
     lookup_iterator_t lookup_context;
 
@@ -523,7 +544,7 @@ static md_field_id_t md_get_next_item_in_context(md_context_code_e ctx_code, md_
                                                 lookup_context.num_of_entries_in_table, field_id);
     }
 
-    md_get_next_accessible_item(&lookup_context, element, md_ctx, access_type, access_qual);
+    md_get_next_accessible_item(&lookup_context, element, md_ctx, access_type, access_qual, use_ordered_cpuid);
 
     return lookup_context.field_id;
 }
@@ -532,14 +553,14 @@ static md_field_id_t md_get_next_field_in_context(md_context_code_e ctx_code, md
                                                   md_context_ptrs_t md_ctx,
                                                   md_access_t access_type, md_access_qualifier_t access_qual)
 {
-    return md_get_next_item_in_context(ctx_code, field_id, md_ctx, false, access_type, access_qual);
+    return md_get_next_item_in_context(ctx_code, field_id, md_ctx, false, access_type, access_qual, false);
 }
 
 md_field_id_t md_get_next_element_in_context(md_context_code_e ctx_code, md_field_id_t field_id,
                                              md_context_ptrs_t md_ctx,
                                              md_access_t access_type, md_access_qualifier_t access_qual)
 {
-    return md_get_next_item_in_context(ctx_code, field_id, md_ctx, true, access_type, access_qual);
+    return md_get_next_item_in_context(ctx_code, field_id, md_ctx, true, access_type, access_qual, true);
 }
 
 static bool_t md_is_id_start_of_field(md_field_id_t field_id, const md_lookup_t* lookup_entry)
@@ -782,8 +803,8 @@ static api_error_code_e md_read_field_with_entry(md_context_code_e ctx_code, md_
 
 static api_error_code_e md_write_field_with_entry(md_context_code_e ctx_code, md_field_id_t field_id,
                                                   md_access_t access_type, md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx,
-                                                  uint64_t value[MAX_ELEMENTS_IN_FIELD], uint64_t wr_mask, const md_lookup_t* entry,
-                                                  bool_t is_import, bool_t wr_mask_valid)
+                                                  uint64_t value[MAX_ELEMENTS_IN_FIELD], const md_lookup_t* entry,
+                                                  bool_t is_import)
 {
     api_error_code_e retval;
 
@@ -795,13 +816,13 @@ static api_error_code_e md_write_field_with_entry(md_context_code_e ctx_code, md
     switch (ctx_code)
     {
         case MD_CTX_SYS:
-            retval = md_sys_write_field(field_id, entry, access_type, access_qual, value, wr_mask);
+            retval = md_sys_write_field(field_id, entry, access_type, access_qual, value);
             break;
         case MD_CTX_TD:
-            retval = md_td_write_field(field_id, entry, access_type, access_qual, md_ctx, value, wr_mask, is_import, wr_mask_valid);
+            retval = md_td_write_field(field_id, entry, access_type, access_qual, md_ctx, value, is_import);
             break;
         case MD_CTX_VP:
-            retval = md_vp_write_field(field_id, entry, access_type, access_qual, md_ctx, value, wr_mask, wr_mask_valid);
+            retval = md_vp_write_field(field_id, entry, access_type, access_qual, md_ctx, value);
             break;
         default:
             fatal_error(FATAL_ERROR_ID_70, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
@@ -812,7 +833,7 @@ static api_error_code_e md_write_field_with_entry(md_context_code_e ctx_code, md
 }
 
 _STATIC_INLINE_ void md_set_sequence_header(md_sequence_t* sequence_ptr, md_context_code_e ctx_code,
-                                            md_field_id_t field_id, uint16_t num_of_elem, bool_t write_access)
+                                            md_field_id_t field_id, uint16_t num_of_elem)
 {
     sequence_ptr->sequence_header.raw = field_id.raw;
     sequence_ptr->sequence_header.context_code = ctx_code;
@@ -820,7 +841,7 @@ _STATIC_INLINE_ void md_set_sequence_header(md_sequence_t* sequence_ptr, md_cont
     sequence_ptr->sequence_header.reserved_1 = 0;
     sequence_ptr->sequence_header.reserved_2 = 0;
     sequence_ptr->sequence_header.reserved_3 = 0;
-    sequence_ptr->sequence_header.write_mask_valid = write_access;
+    sequence_ptr->sequence_header.reserved_4 = 0;
     sequence_ptr->sequence_header.last_element_in_field = num_of_elem - 1;
 
 #define MINUS_ONE_IN_9_BITS  (0x1FF)
@@ -886,7 +907,7 @@ static dump_seq_status_e md_dump_sequence(md_sequence_t* sequence_ptr, md_contex
             if (!sequence_header_set)
             {
                 // Set sequence header
-                md_set_sequence_header(sequence_ptr, ctx_code, lkp_ctx->field_id, entry->num_of_elem, false);
+                md_set_sequence_header(sequence_ptr, ctx_code, lkp_ctx->field_id, entry->num_of_elem);
                 sequence_header_set = true;
             }
 
@@ -899,13 +920,13 @@ static dump_seq_status_e md_dump_sequence(md_sequence_t* sequence_ptr, md_contex
         {
             TDX_ERROR("Unexpected error during sequence dump - 0x%llx, field_id = 0x%llx\n",
                     retval, lkp_ctx->field_id.raw);
-            
+
             fatal_error(FATAL_ERROR_ID_71, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
         // Fetch next field in context and class
         md_field_id_t last_field_id = lkp_ctx->field_id;
-        md_get_next_accessible_item(lkp_ctx, false, md_ctx, access_type, access_qual);
+        md_get_next_accessible_item(lkp_ctx, false, md_ctx, access_type, access_qual, false);
         // If sequence is done (stopped on non-readable field), or no next field in table (current context),
         // or no next field in class, or two fields are not consequent,
         // or different number of elements between the fields
@@ -1002,7 +1023,7 @@ api_error_code_e md_dump_list(md_context_code_e ctx_code, md_field_id_t field_id
 #endif // DEBUGFEATURE_TDX_DBG_TRACE
         sequence_done = md_dump_sequence(sequence_ptr, ctx_code, md_ctx, buff_size, access_type, access_qual,
                                          &elements_written, &lookup_context);
-        
+
         // Check that it's not an empty sequence
         IF_COMMON (sequence_done != DUMP_SEQUENCE_EMPTY)
         {
@@ -1029,7 +1050,7 @@ api_error_code_e md_dump_list(md_context_code_e ctx_code, md_field_id_t field_id
         // Fetch next field table entry, to see the number of elements in the loop condition
         entry = &lookup_context.lookup_table[lookup_context.table_idx];
     }
-    
+
     // Next field id will either get -1 if we finished the context, or the next field id to be written
     // in case of unfinished sequence, or unfinished context
     next_field_id->raw = lookup_context.field_id.raw;
@@ -1092,7 +1113,6 @@ static api_error_code_e md_write_sequence(md_sequence_t* sequence_ptr, md_contex
     md_context_code_e ctx_code = sequence_ptr->sequence_header.context_code;
     uint32_t sequence_idx = 0;
     const md_lookup_t* entry = NULL;
-    uint64_t wr_mask;
     api_error_code_e retval;
 
     ext_err_info[0] = 0;
@@ -1105,7 +1125,7 @@ static api_error_code_e md_write_sequence(md_sequence_t* sequence_ptr, md_contex
         return api_error_with_l2_details(TDX_METADATA_LIST_OVERFLOW, 0xFFFF, 0);
     }
     // Check the sequence header
-    retval = md_check_as_sequence_header(ctx_code, sequence_ptr->sequence_header, access_type);
+    retval = md_check_as_sequence_header(ctx_code, sequence_ptr->sequence_header);
     IF_RARE (retval != TDX_SUCCESS)
     {
         ext_err_info[0] = sequence_ptr->sequence_header.raw;
@@ -1125,17 +1145,6 @@ static api_error_code_e md_write_sequence(md_sequence_t* sequence_ptr, md_contex
     // Subtract the sequence header size from remaining buffer
     buff_size -= sizeof(md_field_id_t);
 
-    if (sequence_ptr->sequence_header.write_mask_valid)
-    {
-        // First element after the header will be the write mask, if write mask is valid
-        wr_mask = sequence_ptr->element[0];
-        sequence_idx++;
-        buff_size -= sizeof(uint64_t);
-    }
-    else
-    {
-        wr_mask = (uint64_t)-1;
-    }
 
     for (uint32_t i = 0; i < num_fields; i++)
     {
@@ -1152,7 +1161,7 @@ static api_error_code_e md_write_sequence(md_sequence_t* sequence_ptr, md_contex
         {
             retval = md_write_field_with_entry(ctx_code, lkp_iter->field_id,
                                                access_type, access_qual, md_ctx, &sequence_ptr->element[sequence_idx],
-                                               wr_mask, entry, is_import, sequence_ptr->sequence_header.write_mask_valid);
+                                               entry, is_import);
 
             if (retval != TDX_SUCCESS)
             {
@@ -1170,7 +1179,7 @@ static api_error_code_e md_write_sequence(md_sequence_t* sequence_ptr, md_contex
 
         uint32_t prev_class_code = lkp_iter->field_id.class_code;
         // Fetch next field in context and class
-        md_get_next_item_with_iterator(lkp_iter, md_ctx, false);
+        md_get_next_item_with_iterator(lkp_iter, md_ctx, false, false);
         // If no next field in table (current context), or no next field in class, and apparently we still
         // have fields left...
         if ((i < (num_fields - 1)) &&
@@ -1284,7 +1293,7 @@ api_error_code_e md_write_list(md_context_code_e ctx_code, md_field_id_t expecte
                    !is_equal_field_id(sequence_ptr->sequence_header, lkp_iter.field_id) &&
                    !is_required_entry(&lkp_iter.lookup_table[lkp_iter.table_idx], access_type))
             {
-                md_get_next_item_with_iterator(&lkp_iter, md_ctx, false);
+                md_get_next_item_with_iterator(&lkp_iter, md_ctx, false, false);
             }
             // If we didn't find any match, then a required field is missing
             if (!is_equal_field_id(sequence_ptr->sequence_header, lkp_iter.field_id))
@@ -1322,7 +1331,7 @@ api_error_code_e md_write_list(md_context_code_e ctx_code, md_field_id_t expecte
                 {
                     break;
                 }
-                md_get_next_item_with_iterator(&lkp_iter, md_ctx, false);
+                md_get_next_item_with_iterator(&lkp_iter, md_ctx, false, false);
             }
 
             // This was the last metadata list, check that there are no required fields after the list

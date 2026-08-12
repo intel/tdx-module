@@ -876,13 +876,13 @@ static void map_permissions(vmx_exit_qualification_t *exit_qual, access_rights_t
     if (access_rights.raw == 0x3) // RW
     {
 
-        // change ept violation to Permissoin::W
+        // change ept violation to Permission::W
         exit_qual->ept_violation.data_write = 1;
         exit_qual->ept_violation.data_read = 0;
     }
     else
     {
-        // change ept violation to Permissoin::R
+        // change ept violation to Permission::R
         exit_qual->ept_violation.data_read = 1;
         exit_qual->ept_violation.data_write = 0;
     }
@@ -928,6 +928,11 @@ api_error_code_e check_walk_and_map_guest_side_gpa(
     {
         // read the shared EPT from the TD VMCS
         ia32_vmread(VMX_GUEST_SHARED_EPT_POINTER_FULL_ENCODE, &eptp.raw);
+        if (is_non_blocking_export_configured())
+        {
+            eptp.fields.enable_ad_bits = (tdcs_p->management_fields.op_state == OP_STATE_LIVE_EXPORT);
+        }
+        else
         {
             eptp.fields.enable_ad_bits = tdcs_p->executions_ctl_fields.eptp.fields.enable_ad_bits;
         }
@@ -938,6 +943,10 @@ api_error_code_e check_walk_and_map_guest_side_gpa(
     else
     {
         eptp.raw = tdcs_p->executions_ctl_fields.eptp.raw;
+        if (is_non_blocking_export_configured())
+        {
+            eptp.fields.enable_ad_bits = (get_local_data()->vp_ctx.tdcs->management_fields.op_state == OP_STATE_LIVE_EXPORT);
+        }
     }
 
     walk_result = gpa_translate(eptp, gpa, !shared_bit, hkid, access_rights,
@@ -1137,7 +1146,7 @@ void init_tdvps_fields(tdcs_t * tdcs_ptr, tdvps_t * tdvps_ptr)
 
     tdvps_ptr->management.shadow_pid_hpa[0] = NULL_PA;
     tdvps_ptr->management.shadow_pinbased_exec_ctls[0] = tdx_global_data_ptr->td_vmcs_values.pinbased_ctls;
-    tdvps_ptr->management.shadow_posted_int_notification_vector = POSTED_INTERRUPT_NOTFICATION_VECTOR_INIT;
+    tdvps_ptr->management.shadow_posted_int_notification_vector = POSTED_INTERRUPT_NOTIFICATION_VECTOR_INIT;
     tdvps_ptr->management.shadow_procbased_exec_ctls2[0] = tdx_global_data_ptr->td_vmcs_values.procbased_ctls2;
     for(uint32_t indx = 0; indx <= tdcs_ptr->management_fields.num_l2_vms ; indx++)
     {
@@ -1199,6 +1208,20 @@ void init_tdvps_fields(tdcs_t * tdcs_ptr, tdvps_t * tdvps_ptr)
         tdvps_ptr->guest_msr_state.ia32_spec_ctrl = calculate_real_ia32_spec_ctrl(tdcs_ptr, 0);
         init_guest_ia32_misc_enable(tdvps_ptr, tdcs_ptr);
     }
+}
+
+uint32_t get_ordered_cpuid_lookup_entry(uint32_t leaf, uint32_t subleaf)
+{
+    for (uint32_t i = 0; i < MAX_NUM_ORDERED_CPUID_LOOKUP; i++)
+    {
+        if (ordered_cpuid_lookup[i].leaf_subleaf.leaf == leaf &&
+            (ordered_cpuid_lookup[i].leaf_subleaf.subleaf == CPUID_SUBLEAF_NA ||
+            ordered_cpuid_lookup[i].leaf_subleaf.subleaf == subleaf))
+        {
+            return i;
+        }
+    }
+    return CPUID_LOOKUP_IDX_NA;
 }
 
 uint32_t get_cpuid_lookup_entry(uint32_t leaf, uint32_t subleaf)
@@ -1323,7 +1346,7 @@ uint64_t calculate_virt_tsc(uint64_t native_tsc, uint64_t tsc_multiplier, uint64
         "mulq %3\n"
         : "=a"(tmp_128b.qwords[0]), "=d"(tmp_128b.qwords[1])
         : "a"(native_tsc), "b"(tsc_multiplier)
-        :);
+        : "cc");
 
     // tmp_virt_tsc_64b = tmp_128b_virt_tsc / (1ULL < 48);
     uint64_t tmp_64b;
@@ -1526,12 +1549,7 @@ bool_t verify_td_attributes(td_param_attributes_t attributes, bool_t is_import)
         {
             return false;
         }
-        // A migratable TD can't be a debug TD if if TDX_FEATURES0.DEBUG_RO_TD_MIGRATION is 0
-        tdx_features_enum0_t tdx_enabled_features = get_tdx_features_enum0();
-        if (attributes.debug && !tdx_enabled_features.debug_ro_td_migration)
-        {
-            return false;
-        }
+
     }
     else if (is_import)
     {
@@ -1656,7 +1674,7 @@ void calculate_tsc_virt_params(uint64_t tsc, uint64_t native_tsc_freq, uint16_t 
         "divq %3\n"
         : "=a"(tmp_tsc_multiplier)
         : "a"((uint64_t)virt_tsc_frequency * VIRT_TSC_FREQUENCY_UNIT), "r"(1ULL << 48), "b"(native_tsc_freq)
-        : "%rdx" );
+        : "%rdx" , "cc" );
 
     // 2. TSC Offset Calculation
     // tmp_128b = current_tsc * tsc_multiplier;
@@ -1669,7 +1687,7 @@ void calculate_tsc_virt_params(uint64_t tsc, uint64_t native_tsc_freq, uint16_t 
         "mulq %3\n"
         : "=a"(tmp_128b.qwords[0]), "=d"(tmp_128b.qwords[1])
         : "a"(tsc), "b"(tmp_tsc_multiplier)
-        :);
+        : "cc");
 
     tmp_tsc_offset = (tmp_128b.qwords[1] << 16) | (tmp_128b.qwords[0] >> 48);
 
@@ -1968,7 +1986,7 @@ void set_xbuff_offsets_and_size(tdcs_t* tdcs_ptr, uint64_t xfam)
 
 void init_imported_td_state_mutable (tdcs_t* tdcs_ptr)
 {
-    // Immutable CPUID flags were upated before, during immutable state import. Now update the mutable CPUID flags.
+    // Immutable CPUID flags were updated before, during immutable state import. Now update the mutable CPUID flags.
     update_mutable_cpuid_flags(tdcs_ptr);
 
     /* OTHER DETAILS ARE NOT PROVIDED, REFER TO THE TDR/TDCS SPREADSHEET */
@@ -2162,11 +2180,13 @@ void prepare_td_vmcs(tdvps_t *tdvps_p, uint16_t vm_id)
 }
 
 api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap_t ignore_tdinfo, td_info_t* td_info,
-                                            measurement_t* tee_info_hash, bool_t is_guest, tdr_t* tdr_p, uint8_t vmid, bool_t calc_servtd)
+                                            measurement_t* tee_info_hash, bool_t is_guest, tdr_t* tdr_p, uint8_t vmid,
+                                            bool_t calc_servtd, uint8_t report_type)
 {
     td_info_t             td_info_local;
     ALIGN(32) uint256_t   ymms[16];                  // AVX/SSE state backup for crypto
     crypto_api_error      sha_error_code;
+    uint32_t              valid_bitmap = 0;
     api_error_code_e      retval = UNINITIALIZE_ERROR;
 
     if (td_info == NULL)
@@ -2234,13 +2254,27 @@ api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap
         }
     }
 
-	UNUSED(tdr_p);
-    UNUSED(vmid);
-    UNUSED(calc_servtd);
+if (!calc_servtd && report_type == TDX_REPORT_VERSION_WITH_UUID_VMID)
+    {
+        if(get_global_data()->tdid_vmid_reporting_enabled)
+        {
+            td_info->vmid = vmid;
+            td_info->tdid256 = tdr_p->management_fields.td_uuid;
+            valid_bitmap = (uint32_t)BITS(VMID_VALID_BIT, TD_UUID_VALID_BIT); // set the UUID and VMID bits in the bitmaps
+        }
+
+        if (!tdx_memcmp_to_zero((void*)&td_info->servtd_hash, sizeof(measurement_t)))
+        {
+            valid_bitmap |= BIT(SERVTD_HASH_VALID_BIT);
+        }
+
+        td_info->valid = valid_bitmap;
+    }
 
     /* SHA calculation is a relatively long operation.  Optimize by reusing the previously-calculated value,
-       if available.  This is designed for use by TDG.MR.REPORT, which is interruptible. */
+       if available.  This is designed for use by TDG.MR.REPORT, which is interruptable. */
     if ((tdcs_p->measurement_fields.last_teeinfo_hash_valid) && (ignore_tdinfo.raw == 0)
+        && !get_global_data()->tdid_vmid_reporting_enabled
         )
     {
         // Optimize for the common case of TDG.MR.REPORT
@@ -2305,7 +2339,7 @@ api_error_code_e get_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap_t ignore_t
 {
     td_info_t td_info;
 
-    return get_tdinfo_and_teeinfohash(tdcs_p, ignore_tdinfo, &td_info, tee_info_hash, false, NULL, 0, true);
+    return get_tdinfo_and_teeinfohash(tdcs_p, ignore_tdinfo, &td_info, tee_info_hash, false, NULL, 0, true, 0);
 }
 
 api_error_type abort_import_session(
@@ -2333,15 +2367,15 @@ bool_t generate_256bit_random(uint256_t* rand)
 
 bool_t generate_custom_random(uint64_t* rand_array, uint64_t num_of_qwords)
 {
-    uint64_t successfull_randomizations = 0;
+    uint64_t successful_randomizations = 0;
 
     for (uint8_t i = 0; i < (get_global_data()->num_rdseed_retries * num_of_qwords); i++)
     {
-        if (ia32_rdseed(&rand_array[successfull_randomizations]))
+        if (ia32_rdseed(&rand_array[successful_randomizations]))
         {
-            successfull_randomizations++;
+            successful_randomizations++;
 
-            if (num_of_qwords == successfull_randomizations)
+            if (num_of_qwords == successful_randomizations)
             {
                 break;
             }
@@ -2353,7 +2387,7 @@ bool_t generate_custom_random(uint64_t* rand_array, uint64_t num_of_qwords)
         }
     }
 
-    if (successfull_randomizations < num_of_qwords)
+    if (successful_randomizations < num_of_qwords)
     {
         basic_memset_to_zero(rand_array, sizeof(uint64_t) * num_of_qwords);
         return false;
@@ -2559,6 +2593,10 @@ bool_t translate_l2_enter_guest_state_gpa(
             goto EXIT;
         }
 
+        if (is_non_blocking_export_configured())
+        {
+            eptp.fields.enable_ad_bits = (tdcs_ptr->management_fields.op_state == OP_STATE_LIVE_EXPORT);
+        }
 
         ept_walk_result_t status = gpa_translate(eptp, (pa_t)gpa, true, hkid, access_rights, (pa_t*)&hpa, (ia32e_ept_t*)&sept_entry_copy, &accumulated_rwx);
         if (EPT_WALK_SUCCESS != status)
@@ -2599,6 +2637,10 @@ bool_t translate_gpas(
 
     ia32e_eptp_t eptp = {.raw = tdcs_ptr->executions_ctl_fields.eptp.raw};
 
+    if (is_non_blocking_export_configured())
+    {
+        eptp.fields.enable_ad_bits = (tdcs_ptr->management_fields.op_state == OP_STATE_LIVE_EXPORT);
+    }
 
     uint16_t hkid = tdr_ptr->key_management_fields.hkid;
     access_rights_t access_rights = { .raw = 0x7 };
@@ -3073,18 +3115,14 @@ api_error_type check_cpuid_1f_and_compute_cpuid_0b(tdcs_t* tdcs_p, bool_t allow_
     return TDX_SUCCESS;
 }
 
-api_error_type check_host_interrupt_and_hp_bit(sharex_hp_lock_t* lock, bool_t is_resumeable)
+api_error_type check_host_interrupt_and_hp_bit(sharex_hp_lock_t* lock, bool_t is_resumable)
 {
+    // On release build, the debug assert is discarded, and is_resumable becomes unused.
+    UNUSED(is_resumable);
     if (is_interrupt_pending_host_side())
     {
-        if (is_resumeable)
-        {
-            return TDX_INTERRUPTED_RESUMABLE;
-        }
-        else
-        {
-            return TDX_INTERRUPTED_RESTARTABLE;
-        }
+        tdx_debug_assert(is_resumable);
+        return TDX_INTERRUPTED_RESUMABLE;
     }
     else if (is_lock_hp_set(lock))
     {
@@ -3191,7 +3229,7 @@ void update_vcpu_state_details_for_l2(tdvps_t* tdvps_p)
 tdx_features_enum0_t get_tdx_features_enum0(void)
 {
     tdx_features_enum0_t tdx_features_0;
-
+    tdx_module_global_t* global_data = get_global_data();
     tdx_features_0.raw = 0;
     tdx_features_0.td_migration = 1;
     tdx_features_0.service_td = 1;
@@ -3201,7 +3239,7 @@ tdx_features_enum0_t get_tdx_features_enum0(void)
     tdx_features_0.tdg_vp_rdwr = 1;
     tdx_features_0.relaxed_mem_mng_concurrency = 1;
     tdx_features_0.cpuid_virt_guest_ctrl = 1;
-    tdx_features_0.local_attestation = get_global_data()->seamverifyreport_available;
+    tdx_features_0.local_attestation = global_data->seamverifyreport_available;
     tdx_features_0.td_partitioning = 1;
     tdx_features_0.td_entry_enhancements = 1;
     tdx_features_0.host_priority_locks = 1;
@@ -3221,6 +3259,8 @@ tdx_features_enum0_t get_tdx_features_enum0(void)
     tdx_features_0.maxpa_virt = 1;
     tdx_features_0.maxgpa_virt = 1;
     tdx_features_0.fatal_diagnostics = 1;
+    tdx_features_0.non_blocking_export = 0;
+    tdx_features_0.scan_export_restore = 1;
     tdx_features_0.cpuid2_virt = 1;
     tdx_features_0.enhanced_event_filtering = 0;
     tdx_features_0.tdx_io = 0;
@@ -3231,7 +3271,22 @@ tdx_features_enum0_t get_tdx_features_enum0(void)
     tdx_features_0.ve_info_intr_state = 1;
     tdx_features_0.update_compatibility = 1;
     tdx_features_0.enhanced_demote_interruptibility = 1;
+    tdx_features_0.tdid_vmid_reporting = 1;
+    tdx_features_0.hw_sealing = global_data->sealing_supported;
+    tdx_features_0.sealkey_128 = (bool_t)((global_data->sealing_supported_sizes_bitmap & BIT(SEALKEY_SIZE_128_BIT)) >> SEALKEY_SIZE_128_BIT);
+    tdx_features_0.list_error_count = 1;
 
     return tdx_features_0;
 }
 
+void update_eptp_enable_ad_bits(tdcs_t* tdcs_p)
+{
+    if (is_non_blocking_export_configured())
+    {
+        eptp_controls_t eptp_index;
+
+        ia32_vmread(VMX_GUEST_EPT_POINTER_FULL_ENCODE, &eptp_index.raw);
+        eptp_index.enable_ad_bits = (OP_STATE_LIVE_EXPORT == tdcs_p->management_fields.op_state);
+        ia32_vmwrite(VMX_GUEST_EPT_POINTER_FULL_ENCODE, eptp_index.raw);
+    }
+}

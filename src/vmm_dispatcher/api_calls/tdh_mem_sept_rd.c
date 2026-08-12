@@ -97,6 +97,13 @@ api_error_type tdh_mem_sept_rd(page_info_api_input_t gpa_page_info, uint64_t tar
         goto EXIT;
     }
 
+    return_val = check_td_for_export_mode(tdr_ptr, tdcs_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
+
     // Read of L2 attributes is only allowed in debug mode
     if (read_l2_attributes && !tdcs_ptr->executions_ctl_fields.attributes.debug)
     {
@@ -130,7 +137,7 @@ api_error_type tdh_mem_sept_rd(page_info_api_input_t gpa_page_info, uint64_t tar
     {
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
         {
-            set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         }
         TDX_ERROR("Failed on GPA check, SEPT lock or walk - error = %llx\n", return_val);
         goto EXIT;
@@ -141,7 +148,7 @@ api_error_type tdh_mem_sept_rd(page_info_api_input_t gpa_page_info, uint64_t tar
     if (TDX_SUCCESS != return_val)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Failed on SEPT host-side lock attempt\n");
         goto EXIT;
     }
@@ -183,7 +190,7 @@ api_error_type tdh_mem_sept_rd(page_info_api_input_t gpa_page_info, uint64_t tar
     }
 
     // Update Secure EPT arch entry values in RCX and RDX
-    set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr);
+    set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
 
 EXIT:
 

@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -99,6 +99,13 @@ static api_error_type tdh_mem_rd_wr(uint64_t gpa, uint64_t target_tdr_pa,
         goto EXIT;
     }
 
+    return_val = check_td_for_export_mode(tdr_ptr, tdcs_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
+
     if (!tdcs_ptr->executions_ctl_fields.attributes.debug)
     {
         return_val = TDX_TD_NON_DEBUG;
@@ -143,7 +150,7 @@ static api_error_type tdh_mem_rd_wr(uint64_t gpa, uint64_t target_tdr_pa,
         {
             // Update output register operands
             return_val = api_error_with_operand_id(TDX_EPT_ENTRY_NOT_PRESENT, OPERAND_ID_RCX);
-            set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         }
 
         TDX_ERROR("Failed on GPA check, SEPT lock or walk - error = %llx\n", return_val);
@@ -155,7 +162,7 @@ static api_error_type tdh_mem_rd_wr(uint64_t gpa, uint64_t target_tdr_pa,
     if (TDX_SUCCESS!= return_val)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Failed on SEPT host-side lock attempt\n");
         goto EXIT;
     }
@@ -167,7 +174,7 @@ static api_error_type tdh_mem_rd_wr(uint64_t gpa, uint64_t target_tdr_pa,
     if (!sept_state_is_seamcall_leaf_allowed(write ? TDH_MEM_WR_LEAF : TDH_MEM_RD_LEAF, sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(sept_entry_copy, sept_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("TDH_MEM_RW/WR is not allowed in current SEPT entry state - 0x%llx\n", sept_entry_copy.raw);
         goto EXIT;
     }

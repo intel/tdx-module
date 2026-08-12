@@ -133,7 +133,7 @@ typedef union md_field_attributes_u
     {
         uint8_t hpa       : 1;
         uint8_t gpa       : 1;
-        uint8_t prvate    : 1;
+        uint8_t prvate   : 1;
         uint8_t shared    : 1;
         uint8_t vm_app_l1 : 1;
         uint8_t vm_app_l2 : 1;
@@ -283,8 +283,7 @@ api_error_code_e md_check_as_single_element_id(md_field_id_t field_id);
 /**
  * @brief Check a field id that is used as a sequence header
  */
-api_error_code_e md_check_as_sequence_header(md_context_code_e ctx_code, md_field_id_t field_id,
-        md_access_t access_type);
+api_error_code_e md_check_as_sequence_header(md_context_code_e ctx_code, md_field_id_t field_id);
 
 /**
  * @brief Get the next FIELD_ID in the current context, given the required access.

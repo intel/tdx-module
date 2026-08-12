@@ -438,7 +438,11 @@ _STATIC_INLINE_ void zero_cacheline(void* dst)
     fill_area_cacheline(dst, MOVDIR64_CHUNK_SIZE, 0);
 }
 
-_STATIC_INLINE_ void tdx_memcpy(void * dst, uint64_t dst_bytes, void * src, uint64_t nbytes)
+_STATIC_INLINE_ void tdx_memcpy(
+    const void * dst,
+    const uint64_t dst_bytes,
+    const void * const src,
+    const uint64_t nbytes)
 {
     volatile uint64_t junk_a, junk_b, junk_c;
 
@@ -1733,8 +1737,7 @@ _STATIC_INLINE_ bool_t op_state_is_seamcall_allowed(seamcall_leaf_opcode_t curre
 
     IF_RARE (other_td)
     {
-        tdx_debug_assert(current_leaf == TDH_SERVTD_BIND_LEAF);
-        is_allowed = servtd_bind_othertd_state_lookup[op_state];
+        is_allowed = othertd_state_lookup[current_leaf][op_state];
     }
     else
     {
@@ -1875,10 +1878,13 @@ void prepare_td_vmcs(tdvps_t *tdvps_p, uint16_t vm_id);
  * @param td_info - pointer to the returned TD INFO. Can be NULL, so the function will return only the hash.
  * @param tee_info_hash - pointer to the return TEEINFOHASH
  * @param is_guest - if called from guest-side API
+ * @param tdr_p - pointer to the current TDR
+ * @param vmid - VMID to be used in TDINFO_STRUCT
+ * @param calc_servtd - if true, calculate SERVTD fields in TDINFO_STRUCT
  * @return
  */
-api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap_t ignore_tdinfo,
-                                            td_info_t* td_info, measurement_t* tee_info_hash, bool_t is_guest);
+api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap_t ignore_tdinfo, td_info_t* td_info,
+                                            measurement_t* tee_info_hash, bool_t is_guest, tdr_t* tdr_p, uint8_t vmid, bool_t calc_servtd);
 
 /**
  * @brief Calculate TDINFO_STRUCT SHA384 hash
@@ -2051,6 +2057,7 @@ tdx_static_assert(sizeof(servtd_hash_buff_t) == 58, servtd_hash_buff_t);
    4. Return the actual number of entries. */
 uint32_t prepare_servtd_hash_buff(tdcs_t* tdcs_ptr, servtd_hash_buff_t* servtd_has_buf);
 void calculate_servtd_hash(tdcs_t* tdcs_ptr);
+
 
 // Update TDCS.CPUID_FLAGS based on TD_CTLS.REDUCE_VE and FEATURE_PARAVIRT_CTLS
 // This helper is used on write by the guest TD and at the end of mutable TD state import

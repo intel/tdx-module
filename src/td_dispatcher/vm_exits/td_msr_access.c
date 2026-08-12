@@ -400,7 +400,7 @@ _STATIC_INLINE_ void rdmsr_set_value_in_tdvps(tdvps_t* tdvps_p, uint64_t value)
 */
 _STATIC_INLINE_ td_msr_access_status_t wrmsr_ia32_perfevtsel(tdcs_t *tdcs_p, tdvps_t *tdvps_p, uint32_t pmc_index, uint32_t msr_addr)
 {
-    tdx_sanity_check(8 == NUM_PMC, FATAL_ERROR_ID_274, 0);
+    tdx_sanity_check(8 == MAX_GP_CTRS, FATAL_ERROR_ID_274, 0);
 
     if (!tdcs_p->executions_ctl_fields.attributes.perfmon)
     {
@@ -458,7 +458,7 @@ _STATIC_INLINE_ td_msr_access_status_t wrmsr_ia32_perfevtsel(tdcs_t *tdcs_p, tdv
 */
 _STATIC_INLINE_ td_msr_access_status_t rdmsr_ia32_perfevtsel(tdcs_t *tdcs_p, tdvps_t *tdvps_p, uint32_t pmc_index, uint32_t msr_addr)
 {
-    tdx_sanity_check(8 == NUM_PMC, FATAL_ERROR_ID_277, 0);
+    tdx_sanity_check(8 == MAX_GP_CTRS, FATAL_ERROR_ID_277, 0);
 
     if (!tdcs_p->executions_ctl_fields.attributes.perfmon)
     {
@@ -596,7 +596,7 @@ static uint32_t get_pmc_index_given_ia32_perfevtsel_index(const uint32_t msr_add
     uint32_t invalid_idx = (uint32_t)INVALID_PERFMON_MSR_INDEX;
 
     // Legacy range
-    if ((msr_addr >= IA32_PERFEVTSEL0_MSR_ADDR) && (msr_addr < IA32_PERFEVTSEL0_MSR_ADDR + NUM_PMC))
+    if ((msr_addr >= IA32_PERFEVTSEL0_MSR_ADDR) && (msr_addr < IA32_PERFEVTSEL0_MSR_ADDR + MAX_GP_CTRS))
     {
         return msr_addr - IA32_PERFEVTSEL0_MSR_ADDR;
     }
@@ -615,7 +615,7 @@ static uint32_t get_pmc_index_given_ia32_perfevtsel_index(const uint32_t msr_add
         // Get the perfmon counter index
         msr_idx /= PERFMON_MSR_INDEX_DELTA;
 
-        if (msr_idx >= NUM_PMC)
+        if (msr_idx >= MAX_GP_CTRS)
         {
             return invalid_idx;
         }
@@ -650,6 +650,7 @@ uint16_t td_wrmsr_exit(void)
 
     // IA32_PERFEVTSEL MSRs have special handling since they can be accessed via two aliases
     uint32_t pmc_index = get_pmc_index_given_ia32_perfevtsel_index(msr_addr);
+    lfence();
     if (pmc_index != (uint32_t)INVALID_PERFMON_MSR_INDEX)
     {
         // msr_index is a valid IA32_PEREVTSEL MSR
@@ -801,6 +802,7 @@ uint16_t td_rdmsr_exit(void)
 
     // IA32_PERFEVTSEL MSRs have special handling since they can be accessed via two aliases
     uint32_t pmc_index = get_pmc_index_given_ia32_perfevtsel_index(msr_addr);
+    lfence();
     if (pmc_index != (uint32_t)INVALID_PERFMON_MSR_INDEX)
     {
         // msr_index is a valid IA32_PEREVTSEL MSR

@@ -744,8 +744,10 @@ static api_error_type check_and_set_tdmrs(tdmr_info_entry_t tdmr_info_copy[MAX_T
 
 api_error_type tdh_sys_config(uint64_t tdmr_info_array_pa,
                               uint64_t num_of_tdmr_entries,
-                              sys_config_options_t sysconfig_options
-                              )
+                              sys_config_options_t sysconfig_options,
+                              uint8_t version,
+                              uint64_t enabling_flags,
+                              uint64_t reserved_r10)
 {
     // Temporary Variables
 
@@ -814,9 +816,36 @@ api_error_type tdh_sys_config(uint64_t tdmr_info_array_pa,
         goto EXIT;
     }
 
+    if (version)
+    {
+        if (version > 1)
+        {
+            // Versions 0 and 1 are the only supported versions
+            TDX_ERROR("Max supported version of TDH.SYS.CONFIG is 1\n");
+            retval = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
+            goto EXIT;
+        }
 
-    tdx_global_data_ptr->kot.entries[hkid].state = KOT_STATE_HKID_RESERVED;
-    tdx_global_data_ptr->hkid = hkid;
+        tdx_features_enum0_t enabled_features = (tdx_features_enum0_t)enabling_flags;
+        tdx_features_enum0_t tdx_enabled_features = get_tdx_features_enum0();
+
+        // A bit may be set to 1 if the corresponding TDX_FEATURES0 bit is 1
+        if ((enabled_features.raw | tdx_enabled_features.raw) != tdx_enabled_features.raw)
+        {
+            TDX_ERROR("An enabling bit may be set to 1 only if the corresponding TDX_FEATURES0 bit is 1 (readable by TDH.SYS.RD)\n");
+            retval = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R9);
+            goto EXIT;
+        }
+
+        if (reserved_r10)
+        {
+            TDX_ERROR("R10 is reserved and must be zero\n");
+            retval = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R10);
+            goto EXIT;
+        }
+
+
+    }
 
     tdx_global_data_ptr->dynamic_pamt_enabled = sysconfig_options.dynamic_pamt;
 
@@ -870,6 +899,9 @@ api_error_type tdh_sys_config(uint64_t tdmr_info_array_pa,
     tdx_global_data_ptr->num_of_tdmr_entries = (uint32_t)num_of_tdmr_entries;
 
     // ALL_CHECKS_PASSED:  The function is guaranteed to succeed
+
+    tdx_global_data_ptr->kot.entries[hkid].state = KOT_STATE_HKID_RESERVED;
+    tdx_global_data_ptr->hkid = hkid;
 
     // Complete CPUID handling
     complete_cpuid_handling(tdx_global_data_ptr);

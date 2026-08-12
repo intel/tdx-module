@@ -36,10 +36,10 @@
 #include "helpers/error_reporting.h"
 
 api_error_code_e md_sys_read_element(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-        md_access_qualifier_t access_qual, uint64_t* out_rd_value);
+        md_access_qualifier_t access_qual, uint64_t* out_rd_value, md_context_ptrs_t md_ctx);
 
 api_error_code_e md_sys_read_field(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-        md_access_qualifier_t access_qual, uint64_t value[MAX_ELEMENTS_IN_FIELD]);
+        md_access_qualifier_t access_qual, uint64_t value[MAX_ELEMENTS_IN_FIELD], md_context_ptrs_t md_ctx);
 
 api_error_code_e md_sys_write_element(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
         md_access_qualifier_t access_qual, uint64_t wr_value, uint64_t wr_request_mask,

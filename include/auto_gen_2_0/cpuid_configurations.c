@@ -496,8 +496,8 @@ const cpuid_lookup_t cpuid_lookup[MAX_NUM_CPUID_LOOKUP] = {
   },
  [78] = { .leaf_subleaf = {.leaf = 0x80000002, .subleaf = 0xffffffff},
   .valid_entry = true,
-  .fixed1 = { .eax = 0x65746e49, .ebx = 0x58204454, .ecx = 0x6c202020 },
-  .fixed0_or_dynamic = { .eax = 0x9a8b91b6, .ebx = 0xa7dfbbab, .ecx = 0x93dfdfdf, .edx = 0xffffffff },
+  .fixed1 = { .eax = 0x65746e49, .ebx = 0x4454206c, .ecx = 0x20202058, .edx = 0x0 },
+  .fixed0_or_dynamic = { .eax = 0x9a8b91b6, .ebx = 0xbbabdf93, .ecx = 0xdfdfdfa7, .edx = 0xffffffff },
   .config_index = CPUID_CONFIG_NULL_IDX
   },
  [56] = { .leaf_subleaf = {.leaf = 0x80000006, .subleaf = 0xffffffff},
@@ -670,13 +670,13 @@ const cpuid_configurable_t cpuid_configurable[MAX_NUM_CPUID_CONFIG] = {
   }
 };
 
-const cpuid_config_return_values_t xfam_mask_0x1_0xffffffff[XCR0_MAX_VALID_BIT + 1] = {
+const cpuid_config_return_values_t xfam_mask_0x1_0xffffffff[XCR0_MAX_BIT + 1] = {
 
     [2]={ .ecx = 0x30001000  } ,
 
 };
 
-const cpuid_config_return_values_t xfam_mask_0x7_0x0[XCR0_MAX_VALID_BIT + 1] = {
+const cpuid_config_return_values_t xfam_mask_0x7_0x0[XCR0_MAX_BIT + 1] = {
 
     [2]={ .ebx = 0x20 , .ecx = 0x600  } ,
     [5]={ .ebx = 0xdc230000 , .ecx = 0x5842 , .edx = 0x80010c  } ,
@@ -693,7 +693,7 @@ const cpuid_config_return_values_t xfam_mask_0x7_0x0[XCR0_MAX_VALID_BIT + 1] = {
 
 };
 
-const cpuid_config_return_values_t xfam_mask_0x7_0x1[XCR0_MAX_VALID_BIT + 1] = {
+const cpuid_config_return_values_t xfam_mask_0x7_0x1[XCR0_MAX_BIT + 1] = {
 
     [2]={ .eax = 0x800010 , .edx = 0x430  } ,
     [5]={ .eax = 0x20  } ,
@@ -704,7 +704,7 @@ const cpuid_config_return_values_t xfam_mask_0x7_0x1[XCR0_MAX_VALID_BIT + 1] = {
 
 };
 
-const cpuid_config_return_values_t xfam_mask_0xd_0x0[XCR0_MAX_VALID_BIT + 1] = {
+const cpuid_config_return_values_t xfam_mask_0xd_0x0[XCR0_MAX_BIT + 1] = {
 
     [2]={ .eax = 0x4  } ,
     [5]={ .eax = 0xe0  } ,
@@ -716,7 +716,7 @@ const cpuid_config_return_values_t xfam_mask_0xd_0x0[XCR0_MAX_VALID_BIT + 1] = {
 
 };
 
-const cpuid_config_return_values_t xfam_mask_0xd_0x1[XCR0_MAX_VALID_BIT + 1] = {
+const cpuid_config_return_values_t xfam_mask_0xd_0x1[XCR0_MAX_BIT + 1] = {
 
     [8]={ .ecx = 0x100  } ,
     [11]={ .ecx = 0x1800  } ,

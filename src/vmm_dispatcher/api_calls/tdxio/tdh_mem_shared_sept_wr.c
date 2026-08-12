@@ -19,7 +19,6 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.
 //
 // SPDX-License-Identifier: MIT
-
 /**
  * @file tdh_mem_shared_sept_wr.c
  * @brief TDHMEMSHAREDSEPTWR API handler

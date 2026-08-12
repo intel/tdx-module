@@ -570,7 +570,7 @@ typedef enum
     FATAL_ERROR_ID_370,
     FATAL_ERROR_ID_371,
     FATAL_ERROR_ID_372,
-    FATAL_ERROR_ID_373
+    FATAL_ERROR_ID_373,
 }fatal_error_id_e;
 
 #endif /* SRC_COMMON_HELPERS_FATAL_ERROR_H_ */

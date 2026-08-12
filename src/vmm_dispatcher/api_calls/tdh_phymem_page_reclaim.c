@@ -53,7 +53,7 @@ api_error_type tdh_phymem_page_reclaim(uint64_t page_pa)
     // TDR related variables
     pa_t                  page_owner_pa = {.raw = 0};           // Owner of this page (points to TDR if not TDR itself)
     tdr_t               * tdr_ptr = NULL;                       // Pointer to the TDR page (linear address)
-    pamt_entry_t        * tdr_pamt_entry_ptr;                   // Pointer to the TDR PAMT entry
+    pamt_entry_t        * tdr_pamt_entry_ptr = NULL;                   // Pointer to the TDR PAMT entry
     bool_t                tdr_locked_flag = false;              // Indicate TDR is locked
 
     api_error_type        return_val = UNINITIALIZE_ERROR;

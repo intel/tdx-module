@@ -472,8 +472,10 @@ api_error_type tdh_mem_sept_remove(page_info_api_input_t sept_page_info, uint64_
  */
 api_error_type tdh_sys_config(uint64_t tdmr_info_array_pa,
                               uint64_t num_of_tdmr_entries,
-                              sys_config_options_t sysconfig_options
-                              );
+                              sys_config_options_t sysconfig_options,
+                              uint8_t version,
+                              uint64_t enabling_flags,
+                              uint64_t reserved_r10);
 
 
 /**
@@ -654,6 +656,7 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
  */
 api_error_type tdh_servtd_prebind(uint64_t target_tdr_pa, uint64_t servtd_info_hash, uint64_t servtd_slot,
         uint64_t servtd_type, servtd_attributes_t servtd_attr);
+
 
 /**
  * @brief

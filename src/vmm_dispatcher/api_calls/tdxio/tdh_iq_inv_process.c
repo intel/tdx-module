@@ -19,7 +19,6 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.
 //
 // SPDX-License-Identifier: MIT
-
 /**
  * @file tdh_iq_inv_process.c
  * @brief TDHIQINVPROCESS API handler

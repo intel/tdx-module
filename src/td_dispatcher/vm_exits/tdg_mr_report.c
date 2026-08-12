@@ -38,8 +38,19 @@
 #include "helpers/service_td.h"
 #include "td_transitions/td_exit.h"
 
+typedef union subtype_and_requestor_u
+{
+    struct
+    {
+        uint64_t sub_type : 8;
+        uint64_t reserved : 56;
+    };
 
-api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_data_gpa, uint64_t sub_type,
+    uint64_t raw;
+} subtype_and_requestor_t;
+tdx_static_assert(sizeof(subtype_and_requestor_t) == 8, subtype_and_requestor_t);
+
+api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_data_gpa, uint64_t subtype_and_requestor,
                              bool_t* interrupt_occurred)
 {
     // Local data and TD's structures
@@ -59,7 +70,7 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
      */
     pa_t                  tdg_mr_report_gpa = {.raw = report_struct_gpa};
     pa_t                  report_data_gpa = {.raw = additional_data_gpa};
-    uint8_t               report_subtype = (uint8_t)sub_type;  // Subtype of the report (input)
+    subtype_and_requestor_t subtype_and_req = { .raw = subtype_and_requestor };
     td_report_t         * tdg_mr_report_ptr = NULL;                // Pointer to the TDREPORT_STRUCT
     td_report_data_t    * tdg_mr_report_data_ptr = NULL;           // Pointer to the REPORTDATA_STRUCT
     td_report_type_t      tdg_mr_report_type = {.raw = 0};         // REPORTTYPE STRUCT
@@ -106,16 +117,23 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
     }
 
     // Verify subtype is legal
-    if (sub_type != TDX_REPORT_SUBTYPE)
+    if (subtype_and_req.sub_type != TDX_REPORT_SUBTYPE)
     {
-        TDX_ERROR("Report subtype is illegal (=%d)\n", report_subtype);
+        TDX_ERROR("Report subtype is illegal (=%d)\n", subtype_and_req.sub_type);
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
+        goto EXIT;
+    }
+
+    if (subtype_and_req.reserved != 0)
+    {
+        TDX_ERROR("Report reserved bits are not zero (=%llx)\n", subtype_and_req.raw);
         return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_R8);
         goto EXIT;
     }
 
     // Assemble REPORTTYPE
     tdg_mr_report_type.type = (uint8_t)TDX_REPORT_TYPE;
-    tdg_mr_report_type.subtype = report_subtype;
+    tdg_mr_report_type.subtype = subtype_and_req.sub_type;
 
     if (tdcs_p->service_td_fields.servtd_num > 0)
     {
@@ -126,12 +144,13 @@ api_error_type tdg_mr_report(uint64_t report_struct_gpa, uint64_t additional_dat
         tdg_mr_report_type.version = (uint8_t)TDX_REPORT_VERSION_NO_SERVTDS;
     }
 
+
     bool_t is_cached_teeinfohash_used = tdcs_p->measurement_fields.last_teeinfo_hash_valid;
 
     // Create TDREPORT in a temporary buffer and compute TEE_INFO_HASH
     ignore_tdinfo_bitmap_t ignore = { .raw = 0 };
-    if ((return_val = get_tdinfo_and_teeinfohash(tdcs_p, ignore,
-                          &temp_tdg_mr_report.td_info, &tee_info_hash, true)) != TDX_SUCCESS)
+    if ((return_val = get_tdinfo_and_teeinfohash(tdcs_p, ignore, &temp_tdg_mr_report.td_info, &tee_info_hash, true,
+                                                 tdr_p, tdg_mr_report_type.requestor, false)) != TDX_SUCCESS)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RTMR);
         goto EXIT;

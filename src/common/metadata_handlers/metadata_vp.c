@@ -574,7 +574,7 @@ static api_error_code_e md_vp_get_element(md_field_id_t field_id, const md_looku
     uint64_t read_value;
     uint16_t vm_id = 0;
 
-    md_get_rd_wr_mask(entry, access_type, access_qual, &rd_mask, &wr_mask);
+    md_get_rd_wr_mask(entry, access_type, access_qual, &rd_mask, &wr_mask, md_ctx);
 
     switch (field_id.class_code)
     {
@@ -1580,7 +1580,7 @@ static api_error_code_e md_vp_handle_field_attribute_on_wr(md_field_id_t field_i
     {
         uint64_t size = md_vp_get_checked_size_of_shared_hpa_range(field_id);
 
-        if (MD_IMPORT_IMMUTABLE != access_type && MD_IMPORT_MUTABLE != access_type && *wr_value != NULL_PA &&
+        if (!((MD_IMPORT_IMMUTABLE == access_type || MD_IMPORT_MUTABLE == access_type) && *wr_value == NULL_PA) &&
             shared_hpa_check((pa_t)*wr_value, size) != TDX_SUCCESS)
         {
             return TDX_METADATA_FIELD_VALUE_NOT_VALID;
@@ -1588,7 +1588,7 @@ static api_error_code_e md_vp_handle_field_attribute_on_wr(md_field_id_t field_i
     }
     else if (entry->attributes.gpa && entry->attributes.prvate)
     {
-        if (MD_IMPORT_IMMUTABLE != access_type && MD_IMPORT_MUTABLE != access_type && *wr_value != NULL_PA && 
+        if (!((MD_IMPORT_IMMUTABLE == access_type || MD_IMPORT_MUTABLE == access_type) && *wr_value == NULL_PA) && 
             !check_gpa_validity((pa_t)*wr_value, md_ctx.tdcs_ptr->executions_ctl_fields.gpaw, PRIVATE_ONLY, md_ctx.tdcs_ptr->executions_ctl_fields.virt_maxpa))
         {
             return TDX_METADATA_FIELD_VALUE_NOT_VALID;

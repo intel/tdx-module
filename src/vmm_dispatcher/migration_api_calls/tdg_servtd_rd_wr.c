@@ -88,13 +88,15 @@ static api_error_type tdg_servtd_rd_wr(servtd_binding_handle_t binding_handle, m
     break_servtd_binding_handle(binding_handle, lp->vp_ctx.tdr->management_fields.td_uuid,
                                 &target_tdr_pa, &target_slot);
 
-    if (target_slot >= MAX_SERV_TDS)
+    if (target_slot >= MAX_SERVTDS)
     {
         return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RCX);
         TDX_ERROR("Target slot %d is greater or equal than MAX_SERVTDS\n", target_slot);
         goto EXIT;
     }
 
+    lfence();
+    
     // Process the target TD's control structures and check state
     return_val = othertd_check_lock_and_map_explicit_tdr(target_tdr_pa,
                                                  OPERAND_ID_TDR,
@@ -175,7 +177,8 @@ static api_error_type tdg_servtd_rd_wr(servtd_binding_handle_t binding_handle, m
      }
      target_bindings_locked_flag = true;
 
-     if (target_tdcs_ptr->service_td_fields.servtd_bindings_table[target_slot].state != SERVTD_BOUND)
+     if (target_tdcs_ptr->service_td_fields.servtd_bindings_table[target_slot].state != SERVTD_BOUND
+        )
      {
          cross_td_trap_status = api_error_with_operand_id(TDX_SERVTD_NOT_BOUND, target_slot);
          goto EXIT;
@@ -189,9 +192,8 @@ static api_error_type tdg_servtd_rd_wr(servtd_binding_handle_t binding_handle, m
      }
 
      // Calculate the service TD's TDINFO_HASH
-     if ((return_val = get_tdinfo_and_teeinfohash(lp->vp_ctx.tdcs,
-             target_tdcs_ptr->service_td_fields.servtd_bindings_table[target_slot].attributes.ignore_tdinfo,
-             NULL, &tdinfo_hash, true)) != TDX_SUCCESS)
+     if ((return_val = get_tdinfo_and_teeinfohash(lp->vp_ctx.tdcs, target_tdcs_ptr->service_td_fields.servtd_bindings_table[target_slot].attributes.ignore_tdinfo,
+                                                  NULL, &tdinfo_hash, true, lp->vp_ctx.tdr, 0, true)) != TDX_SUCCESS)
      {
          return_val = api_error_with_operand_id(return_val, OPERAND_ID_RTMR);
          goto EXIT;

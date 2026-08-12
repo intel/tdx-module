@@ -36,7 +36,7 @@ Please note that the TDX module isn't part of the docker image and the user must
 
 ## Docker Container Build Instructions:
 
-1. Clone/download the desired TDX module version ([Releases](https://github.com/intel/confidential-computing.tdx.tdx-module/releases)).  
+1. Clone/download the desired TDX module version ([Releases](https://github.com/intel/confidential-computing.tdx.tdx-module.sources-all/releases)).  
 2. Build the Docker image from the [Dockerfile](Dockerfile) (located inside the relevant repo) at the root:  
 ```docker build . -t tdx-module-docker```
 
@@ -48,42 +48,29 @@ NOTE: In order to run on Windows, replace the mount line with: -v "%CD%":$HOME/t
 # How to Build
 ## Environment dependencies
 
--	Binary padding script
+- Binary padding script
 
--   Compiled on Linux* OS
+- Compiled on Linux* OS
 
--	[ICP 1.0.1](https://github.com/intel/cryptography-primitives/releases/tag/v1.0.1):
+- [ICP 1.0.1](https://github.com/intel/cryptography-primitives/releases/tag/v1.0.1):
 
-1) IPP can be automatically built by project's makefile.
+ICP will be automatically built by project's makefile.
 
-    - IPP sources need to be placed under ./libs/ipp/cryptography-primitives-1.0.1 folder.
+- ICP sources need to be placed under ./libs/ipp/cryptography-primitives-1.0.1 folder.
 
-    - Tools that are required to build ICP crypto lib described in the following [link](https://github.com/intel/cryptography-primitives/blob/v1.0.1/BUILD.md)
-
-2) It could also be built separately with the following flags:
-
-```bash
-	cd <PROJ_DIR>/libs/ipp/cryptography-primitives-1.0.1/
-
-	CC=clang CXX=clang++ cmake CMakeLists.txt -B_build -DARCH=intel64 -DMERGED_BLD:BOOL=off -DNO_CRYPTO_MB:BOOL=TRUE -DPLATFORM_LIST="l9" -DIPPCP_CUSTOM_BUILD="IPPCP_AES_ON;IPPCP_CLMUL_ON;IPPCP_VAES_ON;IPPCP_VCLMUL_ON";
-	
-	cd _build
-	
-	make -j8 ippcp_s_l9
-```
-
+- Tools that are required to build ICP crypto lib described in the following [link](https://github.com/intel/cryptography-primitives/blob/v1.0.1/BUILD.md)
 
 ## Make targets
 Binary's generation includes the date it was compiled at, build number, module's update version and a TPA hash signature.
 
 Build date, build number and update version could be extracted from the production binary, please use TDH.SYS.RD SEAMCALL (leaf #34) with MD_SYS_TDX_MODULE_VERSION_CLASS_CODE(8) as a class_code and MD_SYS_BUILD_DATE_FIELD_CODE(1)/MD_SYS_BUILD_NUM_FIELD_CODE(2)/MD_SYS_UPDATE_VERSION_FIELD_CODE(5) as field codes. The date format should be YYYYMMDD.  
 
-Current TDX version was built with: TDX_MODULE_BUILD_DATE=20250325 TDX_MODULE_BUILD_NUM=882 TDX_MODULE_UPDATE_VER=08 TPA_HASH=35adf5241b7142a519a45c8dee80e785a5d7be875c8e5b25e84274619ab0db6b0e42930658973e7d52bb0010c2c97879
+Current TDX version was built with: TDX_MODULE_BUILD_DATE=20251204 TDX_MODULE_BUILD_NUM=994 TDX_MODULE_UPDATE_VER=16 TPA_HASH=c950d14dec5b4e3db6b162a4f8ba5428a07b7db1f39c1da4a2c9aab496719a359369e3de11b89ce5a380261b1a75ffe3
 
 1) In order to reproduce the exact binary, it is required to specify the original date, build number, update version and TPA hash signature:
 
 	```bash
-	make RELEASE=1 TDX_MODULE_BUILD_DATE=20250325 TDX_MODULE_BUILD_NUM=882 TDX_MODULE_UPDATE_VER=08 TPA_HASH=35adf5241b7142a519a45c8dee80e785a5d7be875c8e5b25e84274619ab0db6b0e42930658973e7d52bb0010c2c97879
+	make RELEASE=1 TDX_MODULE_BUILD_DATE=20251204 TDX_MODULE_BUILD_NUM=994 TDX_MODULE_UPDATE_VER=16 TPA_HASH=c950d14dec5b4e3db6b162a4f8ba5428a07b7db1f39c1da4a2c9aab496719a359369e3de11b89ce5a380261b1a75ffe3
 	```
 
 	In case binary reproduction is not required, "make RELEASE=1" will suffice.
@@ -94,7 +81,7 @@ Current TDX version was built with: TDX_MODULE_BUILD_DATE=20250325 TDX_MODULE_BU
 	make clean
 	```
 
-3) Clean everything including the IPP:
+3) Clean everything including the ICP:
 
 	```bash
 	make cleanall
@@ -102,4 +89,4 @@ Current TDX version was built with: TDX_MODULE_BUILD_DATE=20250325 TDX_MODULE_BU
 
 
 ## Expected module hash (MRSEAM)
-0x476A2997C62BCCC78370913D0A80B956E3721B24272BC66C4D6307CED4BE2865C40E26AFAC75F12DF3425B03EB59EA7C
+0xF40772D82608DA5443887DD7247BE3E0092927E62409A9BB8DA98EAED9017704BE075466A13D3CA30501000D69407495

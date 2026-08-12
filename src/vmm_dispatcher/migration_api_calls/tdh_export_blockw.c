@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 /**
  * @file tdh_export_blockw
@@ -130,7 +130,7 @@ api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_
         {
             if (is_gpa_list_entry_op_cancel_or_nop(gpa_list_entry))
             {
-                if (!gpa_list_entry_is_valid(gpa_list_entry))
+                if (!gpa_list_entry_is_valid(gpa_list_entry, false))
                 {
                     gpa_list_entry.operation = GPA_ENTRY_OP_NOP;
                     gpa_list_entry.status = GPA_ENTRY_STATUS_GPA_LIST_ENTRY_INVALID;
@@ -143,7 +143,7 @@ api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_
                 err_status = GPA_ENTRY_STATUS_SKIPPED; break;
             }
 
-            if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &gpa, tdcs_p->executions_ctl_fields.virt_maxpa))
+            if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &gpa, tdcs_p->executions_ctl_fields.virt_maxpa, false))
             {
                 gpa_list_entry.operation = GPA_ENTRY_OP_NOP;
                 gpa_list_entry.status = GPA_ENTRY_STATUS_GPA_LIST_ENTRY_INVALID;
@@ -276,7 +276,7 @@ api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_
         if (entry_num < gpa_list_info.last_entry)
         {
             // If we are not on the last entry, then check pending interrupts
-            return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock,true);
+            return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock, true);
             if (TDX_SUCCESS != return_val)
             {
                 // increment the entry_num to the index of NEXT entry before

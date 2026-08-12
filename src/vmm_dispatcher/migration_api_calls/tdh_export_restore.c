@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 /**
  * @file tdh_export_restore
@@ -118,6 +118,7 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
         goto EXIT;
     }
 
+
     // Loop over the GPA list
     for (entry_num = gpa_list_info.first_entry; entry_num <= gpa_list_info.last_entry; entry_num++)
     {
@@ -128,7 +129,7 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
         {
             if (is_gpa_list_entry_op_cancel_or_nop(gpa_list_entry))
             {
-                if (!gpa_list_entry_is_valid(gpa_list_entry))
+                if (!gpa_list_entry_is_valid(gpa_list_entry, false))
                 {
                     gpa_list_entry.operation = GPA_ENTRY_OP_NOP;
                     gpa_list_entry.status = GPA_ENTRY_STATUS_GPA_LIST_ENTRY_INVALID;
@@ -141,7 +142,7 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
                 err_status = GPA_ENTRY_STATUS_SKIPPED; break;
             }
 
-            if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &gpa, tdcs_p->executions_ctl_fields.virt_maxpa))
+            if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &gpa, tdcs_p->executions_ctl_fields.virt_maxpa, false))
             {
                 gpa_list_entry.operation = GPA_ENTRY_OP_NOP;
                 gpa_list_entry.status = GPA_ENTRY_STATUS_GPA_LIST_ENTRY_INVALID;
@@ -190,39 +191,40 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
             //   - Set SVE to ~P
             //   - Release the entry lock
             ia32e_sept_t new_sept_entry = sept_entry_copy;
-            if (sept_state_is_any_pending(new_sept_entry))
-            {
-                sept_update_state(&new_sept_entry, SEPT_STATE_PEND_MASK, false, true);
-            }
-            else
-            {
-                if (sept_state_is_any_blockedw(sept_entry_copy))
+
+                if (sept_state_is_any_pending(new_sept_entry))
                 {
-                    // Block any L2 aliases for writing
-                    for (uint16_t vm_id = 1; vm_id <= tdcs_p->management_fields.num_l2_vms; vm_id++)
+                    sept_update_state(&new_sept_entry, SEPT_STATE_PEND_MASK, false, true);
+                }
+                else
+                {
+                    if (sept_state_is_any_blockedw(sept_entry_copy))
                     {
-                        if (sept_state_is_aliased(sept_entry_copy, vm_id))
+                        // Block any L2 aliases for writing
+                        for (uint16_t vm_id = 1; vm_id <= tdcs_p->management_fields.num_l2_vms; vm_id++)
                         {
-                            ia32e_sept_t* l2_septe_ptr = NULL;
-                            // Walk the L2 SEPT to locate the entry
-                            return_val = l2_sept_walk(tdr_p, tdcs_p, vm_id, gpa, &sept_entry_level,
-                                                      &l2_septe_ptr);
-
-                            if (return_val != TDX_SUCCESS)
+                            if (sept_state_is_aliased(sept_entry_copy, vm_id))
                             {
-                                // Should never happen
-                                extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, vm_id, sept_entry_level, gpa.raw, *l2_septe_ptr);
-                                fatal_error(FATAL_ERROR_ID_27, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
-                            }
+                                ia32e_sept_t* l2_septe_ptr = NULL;
+                                // Walk the L2 SEPT to locate the entry
+                                return_val = l2_sept_walk(tdr_p, tdcs_p, vm_id, gpa, &sept_entry_level,
+                                                        &l2_septe_ptr);
 
-                            sept_l2_unblockw(l2_septe_ptr);
-                            free_la(l2_septe_ptr);
+                                if (return_val != TDX_SUCCESS)
+                                {
+                                    // Should never happen
+                                    extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(target_tdr_pa, vm_id, sept_entry_level, gpa.raw, *l2_septe_ptr);
+                                    fatal_error(FATAL_ERROR_ID_27, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
+                                }
+
+                                sept_l2_unblockw(l2_septe_ptr);
+                                free_la(l2_septe_ptr);
+                            }
                         }
                     }
+                    sept_update_state(&new_sept_entry, SEPT_STATE_MAPPED_MASK, false, true);
+                    new_sept_entry.w = 1;
                 }
-                sept_update_state(&new_sept_entry, SEPT_STATE_MAPPED_MASK, false, true);
-                new_sept_entry.w = 1;
-            }
 
             // Write the new SEPT entry value to memory in a single 64b write.
             //  The new SEPT entry value is written as unlocked.
@@ -262,7 +264,7 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
         if (entry_num < gpa_list_info.last_entry)
         {
             // If we are not on the last entry, then check pending interrupts
-            return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock,true);
+            return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock, true);
             if (TDX_SUCCESS != return_val)
             {
                 // increment the entry_num to the index of NEXT entry before

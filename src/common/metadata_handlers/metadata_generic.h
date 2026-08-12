@@ -217,7 +217,7 @@ const md_lookup_t* md_get_lookup_table(md_context_code_e ctx_code, md_field_id_t
 uint32_t md_find_entry_idx(const md_lookup_t* lookup_table, uint32_t num_of_entries, md_field_id_t field_id);
 
 void md_get_rd_wr_mask(const md_lookup_t* entry, md_access_t access_type, md_access_qualifier_t access_qual,
-        uint64_t* out_rd_mask, uint64_t* out_wr_mask);
+        uint64_t* out_rd_mask, uint64_t* out_wr_mask, md_context_ptrs_t md_ctx);
 
 void md_cpuid_field_id_get_leaf_subleaf(md_field_id_t field_id, uint32_t* leaf, uint32_t* subleaf);
 

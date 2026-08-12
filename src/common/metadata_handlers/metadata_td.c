@@ -88,7 +88,7 @@ static bool_t check_cpuid_xfam_masks(cpuid_config_return_values_t* cpuid_values,
     uint64_t xfam_mask;   // 1-bit mask
 
     xfam_mask = 1ULL;
-    for (uint32_t xfam_bit = 0; xfam_bit <= XCR0_MAX_VALID_BIT; xfam_bit++)
+    for (uint32_t xfam_bit = 0; xfam_bit <= XCR0_MAX_BIT; xfam_bit++)
     {
         if ((xfam & xfam_mask) == 0)
         {
@@ -272,7 +272,9 @@ static bool_t check_cpuid_compatibility_and_set_immutable_cpuid_flags(tdcs_t* td
             tdcs_ptr->executions_ctl_fields.cpuid_flags.tsx_supported = cpuid_07_00_ebx.hle;
             cpuid_07_00_ecx.raw = cpuid_values.ecx;
 
-            if (cpuid_07_00_ecx.pks != attributes.pks || cpuid_07_00_ecx.kl_supported != 0)
+            if (cpuid_07_00_ecx.pks != attributes.pks ||
+                 cpuid_07_00_ecx.kl_supported != 0
+                )
             {
                 return false;
             }
@@ -356,7 +358,7 @@ static bool_t check_cpuid_compatibility_and_set_immutable_cpuid_flags(tdcs_t* td
 
             tdcs_ptr->executions_ctl_fields.cpuid_flags.xfd_supported = cpuid_0d_01_eax.xfd_support;
         }
-        else if (subleaf <= XCR0_MAX_VALID_BIT)
+        else if (subleaf <= XCR0_MAX_BIT)
         {
             // Each sub-leaf n, where 2 <= n <= 18, is configured by XFAM[n]
             if (((xfam.raw & BIT(subleaf)) == 0) && (cpuid_values.low != 0 || cpuid_values.high != 0))
@@ -536,7 +538,7 @@ static api_error_code_e md_td_get_element(md_field_id_t field_id, const md_looku
     uint8_t* page_ptr = NULL;
     uint32_t cpuid_lookup_index = 0;
 
-    md_get_rd_wr_mask(entry, access_type, access_qual, &rd_mask, &wr_mask);
+    md_get_rd_wr_mask(entry, access_type, access_qual, &rd_mask, &wr_mask, md_ctx);
 
     uint32_t leaf = 0, subleaf = 0;
 
@@ -892,8 +894,8 @@ api_error_code_e md_td_write_element(md_field_id_t field_id, const md_lookup_t* 
                 break;
 
             case MD_TDCS_MIG_VERSION_FIELD_ID:
-                if ((wr_value < MIN_MIGRATION_EXPORT_VERSION) || (wr_value > MAX_MIGRATION_EXPORT_VERSION) ||
-                    (wr_value < MIN_MIGRATION_IMPORT_VERSION) || (wr_value > MAX_MIGRATION_IMPORT_VERSION))
+                if ((wr_value < MIN_EXPORT_VERSION) || (wr_value > MAX_EXPORT_VERSION) ||
+                    (wr_value < MIN_IMPORT_VERSION) || (wr_value > MAX_IMPORT_VERSION))
                 {
                     return TDX_METADATA_FIELD_VALUE_NOT_VALID;
                 }

@@ -202,15 +202,12 @@ tdx_static_assert(sizeof(tdr_t) == TDX_PAGE_SIZE_IN_BYTES, tdr_t);
 
 #define RND_HPA_OFFSET_MASK 0x0000FFFFFFFFFFFF
 
-#define MAX_VCPUS_PER_TD        1376
-
 typedef enum
 {
     FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT = 4
 
 }field_support_at_init_e;
 
-#define FIELD_SUPPORT_AT_INIT_INITIALIZATION_VALUE (BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT))
 
 #define MEM_SCAN_CONFIG_PAGES             2
 
@@ -262,12 +259,15 @@ tdx_static_assert(sizeof(tdcs_management_fields_t) == 128, tdcs_management_field
 
 #define TDX_ATTRIBUTES_TPA_SUPPORT   BIT(62)
 
+#define TDX_ATTRIBUTES_SERVTDEXT_SUPPORT   0
+
 //  Supported ATTRIBUTES bits depend on the supported features - bits 0 (DEBUG), 29 (migratable), 30 (PKS),
 //  62 (TPA), 63 (PERFMON), 28 (SEPT VE DISABLE), and 27 (TDX_ATTRIBUTES_LASS_SUPPORT)
 #define TDX_ATTRIBUTES_FIXED0  (TDX_ATTRIBUTES_DEBUG_SUPPORT | TDX_ATTRIBUTES_MIGRATABLE_SUPPORT | \
                                 TDX_ATTRIBUTES_PKS_SUPPORT | TDX_ATTRIBUTES_PERFMON_SUPPORT | \
                                 TDX_ATTRIBUTES_SEPT_VE_DIS_SUPPORT | TDX_ATTRIBUTES_TPA_SUPPORT | \
-                                TDX_ATTRIBUTES_LASS_SUPPORT | TDX_ATTRIBUTES_ICSSD_SUPPORT | TDX_ATTRIBUTES_PMT_PROF)
+                                TDX_ATTRIBUTES_LASS_SUPPORT | TDX_ATTRIBUTES_ICSSD_SUPPORT | TDX_ATTRIBUTES_PMT_PROF | \
+                                TDX_ATTRIBUTES_SERVTDEXT_SUPPORT)
 #define TDX_ATTRIBUTES_FIXED1 0x0
 
 // gpaw, flexible_pending_ve, no_rbp_mode, maxpa_virt, maxgpa_virt
@@ -359,7 +359,7 @@ tdx_static_assert(sizeof(tdcs_epoch_tracking_fields_t) == 64, tdcs_epoch_trackin
 #define TDX_XFAM_FIXED0 0x0006DBE7ULL
 #define TDX_XFAM_FIXED1 0x00000003ULL
 
-#define XBUFF_OFFSETS_NUM   (XCR0_MAX_VALID_BIT+1)
+#define XBUFF_OFFSETS_NUM   (XCR0_MAX_BIT+1)
 
 /**
  * @struct cpuid_flags_t
@@ -443,9 +443,6 @@ typedef union
     uint64_t raw;
 } td_ctls_t;
 tdx_static_assert(sizeof(td_ctls_t) == 8, td_ctls_t);
-
-// Permon Events Filtering
-#define MAX_EVENT_FILTERS 512
 typedef union event_filter_internal_s
 {
     struct
@@ -637,7 +634,7 @@ typedef struct tdcs_migration_fields_s
     uint32_t          num_migrated_vcpus;
     uint256_t         pre_import_uuid;
     sharex_lock_t     mig_lock;
-    sharex_lock_t     mem_scan_lock;
+    sharex_hp_lock_t  mem_scan_lock;
     uint8_t           num_mem_scan_ranges;
     uint8_t           num_mem_scan_ranges_completed;
     uint8_t           mem_scan_operation;
@@ -709,14 +706,24 @@ typedef struct tdcs_service_td_fields_s
     uint16_t                   servtd_num;
     ALIGN(2) sharex_hp_lock_t  servtd_bindings_lock;   // Not in the TDR TDCS spreadsheet
 
-    uint8_t                    reserved_0[80];
+    uint8_t                    reserved_1[80];
+
     /* Service TD Binding Table
        The table is built as a set of arrays to ease metadata definition and access based
        on the TDR_TDCS spreadsheet.
     */
-    ALIGN(16) servtd_binding_t servtd_bindings_table[MAX_SERV_TDS];
+    ALIGN(16) servtd_binding_t servtd_bindings_table[MAX_SERVTDS];
 
-    uint8_t                    reserved_1[240];
+    uint64_t                   servtd_init_attr;
+    measurement_t              servtd_init_info_hash;
+
+    measurement_t              servtd_accept_servtd_ext_hash;
+    uint256_t                  servtd_rebind_token;
+    uint256_t                  servtd_rebind_accept_token;
+    uint64_t                   servtd_rebind_attr;
+    measurement_t              servtd_ext_hash;
+
+    uint8_t                    reserved_2[16];
 } tdcs_service_td_fields_t;
 tdx_static_assert(sizeof(tdcs_service_td_fields_t) == 512, tdcs_service_td_fields_t);
 
@@ -752,7 +759,12 @@ typedef struct tdcs_execution_control2_field_s
     uint8_t                      shr_nv[MAX_VMS];
     bool_t                       main_nv_shared[MAX_VMS];
     uint8_t                      pid_mode[MAX_VMS];
-    uint8_t                      reserved1[148];
+
+    ALIGN(8) uint8_t             init_cpusvn[CPUSVN_SIZE];
+    uint8_t                      init_tee_tcb_svn[SIZE_OF_TEE_TCB_SVN_IN_BYTES];
+    tee_model_struct_t           init_tee_model;
+
+    uint8_t                      reserved1[100];
 } tdcs_execution_control2_field_t;
 tdx_static_assert(sizeof(tdcs_execution_control2_field_t) == 512, tdcs_execution_control2_field_t);
 

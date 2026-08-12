@@ -40,9 +40,14 @@ api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa)
 {
     api_error_type return_val = TDX_OPERAND_INVALID;
 
-
     // Local data for return values
     tdx_module_local_t  * local_data_ptr = get_local_data();
+
+    // By default, no extended error code is returned
+    local_data_ptr->vmm_regs.rcx = 0ULL;
+    local_data_ptr->vmm_regs.rdx = 0ULL;
+
+
 
     // TDR and TDCS
     tdr_t                  *tdr_p = NULL;         // Pointer to the owner TDR page
@@ -65,10 +70,6 @@ api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa)
     // Input register operands
     tdr_pa.raw = target_tdr_pa;
     gpa_and_level.raw = page_pa;
-
-    // By default, no extended error code is returned
-    local_data_ptr->vmm_regs.rcx = 0ULL;
-    local_data_ptr->vmm_regs.rdx = 0ULL;
 
     // Check, lock and map the owner TDR page
     return_val = check_lock_and_map_explicit_tdr(tdr_pa,

@@ -46,12 +46,6 @@
 #define AES_XTS_256                BIT(2)
 #define AES_XTS_256_WITH_INTEGRITY BIT(3)
 
-#define TDX_MODULE_HV 1
-#define TDX_MIN_UPDATE_HV 0
-#define TDX_NO_DOWNGRADE 1
-#define CRYPTO_LIB_COMPAT_VERSION 1 // ICP 1.0.1
-#define MIN_UPDATE_COMPATIBILITY_HV 1
-
 typedef enum
 {
     SYSINIT_PENDING = 0,
@@ -129,7 +123,7 @@ typedef struct kot_s
     /**
      * A table of MAX_HKIDS entries, indexed by HKID
      */
-    kot_entry_t entries[MAX_HKIDS];
+    kot_entry_t entries[NUM_KOT_ENTRIES];
 } kot_t;
 
 /**
@@ -220,6 +214,7 @@ typedef struct
     ia32_tme_keyid_partitioning_t   ia32_tme_keyid_partitioning;
 
     ia32_misc_package_ctls_t        ia32_misc_package_ctls;
+    ia32_platform_id_t              ia32_platform_id;
 
     smrr_range_t smrr[2];
 } platform_common_config_t;
@@ -268,8 +263,6 @@ typedef struct xsave_component_info_s
     uint32_t size;
     bool_t   align;
 } xsave_component_info_t;
-
-#define TD_GUEST_SYSTEM_INFO_SIZE       256
 
 /**
  * @struct tdx_module_local_t
@@ -347,7 +340,7 @@ typedef struct tdx_module_global_s
     uint32_t ia32_xss_supported_mask;
     uint32_t xfd_faulting_mask;
 
-    xsave_component_info_t xsave_comp[XCR0_MAX_VALID_BIT+1];
+    xsave_component_info_t xsave_comp[XCR0_MAX_BIT+1];
 
     // Values of CPUID, sampled @ TDHSYSINIT and verified @ TDHSYSINITLP
     cpuid_config_t cpuid_values[MAX_NUM_CPUID_LOOKUP];
@@ -408,12 +401,13 @@ typedef struct tdx_module_global_s
     bool_t          dynamic_pamt_enabled;
 
 
-    uint64_t td_guest_cached_system_info[TD_GUEST_SYSTEM_INFO_SIZE / 8];
+
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE
     debug_control_t debug_control;
     debug_message_t trace_buffer[TRACE_BUFFER_SIZE];
 #endif // DEBUGFEATURE_TDX_DBG_TRACE
+
 
     //TDX-IO Support
     ALIGN(16) iommu_config_t iommu_configs[TOT_NUM_IOMMUS];
@@ -424,6 +418,9 @@ typedef struct tdx_module_global_s
     bool_t is_a0_wa_invoked;
     bool_t is_gnr_a0_cpuid;
     bool_t is_gnr_d_cpuid;
+
+    uint16_t num_dynamic_blobs;
+
 } tdx_module_global_t;
 tdx_static_assert(offsetof(tdx_module_global_t, global_lock) % 2 == 0, global_lock);
 

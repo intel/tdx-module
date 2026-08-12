@@ -278,7 +278,7 @@ api_error_type tdg_mem_page_attr_wr(
     // Read the SEPT entry
     page_sept_entry_copy.raw = page_sept_entry_ptr->raw;
 
-    if (!is_secure_ept_leaf_entry(&page_sept_entry_copy, false) && !is_sept_free(&page_sept_entry_copy))
+    if (!is_secure_ept_leaf_entry(&page_sept_entry_copy, false) && !sept_state_is_free_or_removed(page_sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_PAGE_SIZE_MISMATCH, page_level_entry);
         goto EXIT;

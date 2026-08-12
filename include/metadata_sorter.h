@@ -39,5 +39,7 @@
 #define TDR_TDCS_FIELDS_LOOKUP_HEADER "auto_gen_2_0/tdr_tdcs_fields_lookup.h"
 #define TDVPS_FIELDS_LOOKUP_HEADER "auto_gen_2_0/tdvps_fields_lookup.h"
 #define TDX_ERROR_CODES_DEFS_HEADER "auto_gen_2_0/tdx_error_codes_defs.h"
+#define GLOBAL_CONSTANTS_HEADER "auto_gen_2_0/global_constants.h"
+#define HANDOFF_CONSTANTS_HEADER "auto_gen_2_0/handoff_constants.h"
 
 #endif // METADATA_SORTER_H_

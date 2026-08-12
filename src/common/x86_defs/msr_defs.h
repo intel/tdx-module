@@ -43,6 +43,7 @@
 #define IA32_TME_EXCLUDE_BASE                            0x984
 #define IA32_MKTME_KEYID_PARTITIONING_MSR_ADDR           0x87
 #define IA32_XSS_MSR_ADDR                                0xDA0
+#define IA32_PLATFORM_ID_MSR_ADDR                        0x17
 #define IA32_EFER_MSR_ADDR                               0xC0000080
 #define IA32_STAR_MSR_ADDR                               0xC0000081
 #define IA32_LSTAR_MSR_ADDR                              0xC0000082
@@ -180,9 +181,6 @@ static const uint64_t pmc_fxx_cfg_c_msrs_lut[PMC_FX_CFG_C_MSRS_COUNT] =
 #define MISC_EN_LIMIT_CPUID_MAXVAL_BIT           BIT(22)
 #define IA32_FMASK_MSR_RESET_STATE               0x20200ULL
 #define IA32_LBR_DEPTH_MSR_RESET_STATE           0x20ULL
-
-#define NUM_PMC                      8
-#define MAX_FIXED_CTR                7ULL // Max supported by TDX module
 
 #define IA32_A_PMC_BASE              0x1900
 #define IA32_FIXED_CTR_BASE          0x1980
@@ -626,5 +624,16 @@ typedef union ia32_perfevtsel_s
     uint64_t raw;
 } ia32_perfevtsel_t;
 tdx_static_assert(sizeof(ia32_perfevtsel_t) == 8, ia32_perfevtsel_t);
+
+typedef union ia32_platform_id_s
+{
+    struct
+    {
+        uint64_t reserved_0    : 50;
+        uint64_t platform_id   : 3;
+        uint64_t reserved_1    : 11;
+    };
+    uint64_t raw;
+} ia32_platform_id_t;
 
 #endif /* SRC_COMMON_X86_DEFS_MSR_DEFS_H_ */

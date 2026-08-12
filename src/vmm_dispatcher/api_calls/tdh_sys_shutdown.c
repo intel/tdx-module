@@ -46,7 +46,7 @@ api_error_type tdh_sys_shutdown(uint64_t handoff)
     bool_t global_locked_flag = false;
     api_error_type ret_val = TDX_OPERAND_INVALID;
 
-    handoff_t handoff_input = { .raw = handoff };
+    handoff_input_param_t handoff_input = { .raw = handoff };
 
     // Verify that request HV is supported and reserved field is 0
     if ((handoff_input.handoff_version < global_data->min_update_hv) ||
@@ -117,19 +117,7 @@ api_error_type tdh_sys_shutdown(uint64_t handoff)
         goto EXIT;
     }
 
-    uint32_t buff_size = (global_data->num_handoff_pages + 1) * TDX_PAGE_SIZE_IN_BYTES
-                         - sizeof(handoff_data_header_t);
-
-    handoff_data_header_t* handoff_data_hdr = (handoff_data_header_t*)sysinfo_table->data_rgn_base;
-    uint8_t* handoff_data_bytes = (uint8_t*)(sysinfo_table->data_rgn_base + sizeof(handoff_data_header_t));
-
-    uint32_t size = prepare_handoff_data(buff_size, handoff_data_bytes);
-
-    tdx_sanity_check((size > 0) && (size <= buff_size), FATAL_ERROR_ID_303, 1);
-
-    handoff_data_hdr->valid = true;
-    handoff_data_hdr->hv    = handoff_input.handoff_version;
-    handoff_data_hdr->size  = size;
+    prepare_handoff_data(handoff_input.handoff_version);
 
     ret_val = TDX_SUCCESS;
 

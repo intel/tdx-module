@@ -82,7 +82,5 @@ INCLUDE_PATH := -I$(PROJ_DIR)/include -I$(CRYPTO_LIB_BUILD_PATH)/include -I$(PRO
 TOOLS_DIR := $(PROJ_DIR)/tools
 PAD_BINARY_PY := $(TOOLS_DIR)/pad_binary/pad_binary.py
 
-#Python scripts
-AUTO_GEN_PATH := $(PROJ_DIR)/include/auto_gen_2_0
 TPA_HASH_PARSER := $(TOOLS_DIR)/tpa_hash_parser.py
 

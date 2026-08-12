@@ -650,9 +650,6 @@ api_error_type tdh_sys_lp_init(void)
     // Initialize keyhole
     init_keyhole_state();
 
-    // map the fatal error info memmory if needed - only after we initialize the keyhole
-    map_fatal_info_pointer();
-
     /**
      * Calc LPID from local_data_ptr
      */
@@ -666,6 +663,11 @@ api_error_type tdh_sys_lp_init(void)
         retval = TDX_SMRR_OVERLAPS_IORANGE;
         goto EXIT;
     }
+
+    // ALL CHECKS SUCCEEDED:
+
+    // map the fatal error info memory if needed - only after we initialize the keyhole
+    map_fatal_info_pointer();
 
     tdx_local_init(tdx_local_data_ptr, tdx_global_data_ptr);
 

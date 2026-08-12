@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 /**
  * @file tdh_export_state_vp.c
@@ -74,7 +74,6 @@ api_error_type tdh_export_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
     md_field_id_t         next_field_id;
 
     api_error_type        return_val = TDX_OPERAND_INVALID;
-    api_error_type        tmp_return_val = TDX_OPERAND_INVALID;
 
     md_list_t             md_list;
 
@@ -195,15 +194,22 @@ api_error_type tdh_export_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
             goto EXIT;
         }
 
-        // Initialize the MIGSC if needed
-        if (!tdcs_p->f_migsc_links[migs_i].initialized)
+        if (tdcs_p->f_migsc_links[migs_i].initialized)
         {
+            // If the MIGSC is initialized and MIGSC[n].INTERRUPTED.VALID is TRUE, terminate with a TDX_INVALID_RESUMPTION error
+            // @note - this will not catch a case where the host VMM tries to export the same VCPU on a different Migration Stream than before
+            if (migsc_p->interrupted_state.valid)
+            {
+                return_val = TDX_INVALID_RESUMPTION;
+                goto EXIT;
+            }
+        }
+        else
+        {
+            // Initialize the MIGSC if needed
             migsc_init(migsc_p, &tdcs_p->migration_fields.mig_enc_working_key);
             tdcs_p->f_migsc_links[migs_i].initialized = true;
         }
-
-        // Mark this flow as non-interrupted
-        migsc_p->interrupted_state.valid = false;
 
         // Increment the IV counter so we don't reuse a previous IV even if aborted
         migsc_p->iv_counter = migsc_p->iv_counter + 1;
@@ -414,9 +420,11 @@ api_error_type tdh_export_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
             }
 
             // Check for a pending interrupt
-            tmp_return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock,true);
-            if (TDX_SUCCESS != tmp_return_val)
+            if (is_interrupt_pending_host_side())
             {
+                TDX_ERROR("Pending interrupt identified\n");
+                return_val = TDX_INTERRUPTED_RESUMABLE;
+
                 // There is a pending interrupt.  Save the state for the next invocation.
                 migsc_p->interrupted_state.valid = true;
                 migsc_p->interrupted_state.func.raw = local_data_ptr->vmm_regs.rax;
@@ -434,8 +442,6 @@ api_error_type tdh_export_state_vp(uint64_t target_tdvpr_pa, uint64_t hpa_and_si
                     (void)_lock_xadd_16b(&get_global_data()->mig_interrupted_count, 1);
                     (void)_lock_xadd_16b(&tdcs_p->migration_fields.mig_interrupted_count, 1);
                 }
-
-                return_val = tmp_return_val;
             }
             else
             {

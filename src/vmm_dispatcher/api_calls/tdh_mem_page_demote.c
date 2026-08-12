@@ -333,12 +333,14 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
         {
             // Check for a pending interrupt
             // Interruption is not restartable, no need to save state. We haven't committed anything yet.
-            return_val = check_host_interrupt_and_hp_bit(&tdcs_ptr->executions_ctl_fields.secure_ept_lock,false);
-            if (return_val != TDX_SUCCESS)
+            if (is_interrupt_pending_host_side())
             {
+                TDX_ERROR("Pending interrupt identified\n");
+
                 // Restore the original RCX and RDX values and terminate the flow
                 local_data_ptr->vmm_regs.rcx = original_rcx;
                 local_data_ptr->vmm_regs.rdx = original_rdx;
+                return_val = TDX_INTERRUPTED_RESTARTABLE;
                 goto EXIT;
             }
             return_val = l2_sept_walk(tdr_ptr, tdcs_ptr, vm_id, page_gpa, &split_page_level_entry, &l2_sept_entry_ptr[vm_id]);
@@ -385,16 +387,18 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
     // Step #4:
     // Split the PAMT of the demoted page
 
-    // Check for a pending interrupt
+	// Check for a pending interrupt (required only if L2 VMs exist)
     // Interruption is not restartable, no need to save state. We haven't committed anything yet.
-    return_val = check_host_interrupt_and_hp_bit(&tdcs_ptr->executions_ctl_fields.secure_ept_lock,false);
-    if (return_val != TDX_SUCCESS)
+    if (tdcs_ptr->management_fields.num_l2_vms && is_interrupt_pending_host_side())
     {
+        TDX_ERROR("Pending interrupt identified\n");
         // Restore the original RCX and RDX values and terminate the flow
         local_data_ptr->vmm_regs.rcx = original_rcx;
         local_data_ptr->vmm_regs.rdx = original_rdx;
+        return_val = TDX_INTERRUPTED_RESTARTABLE;
         goto EXIT;
     }
+
     // Split PAMT of the demoted page
     if ((return_val = pamt_demote(split_page_pa, (page_size_t)split_page_level_entry,
         pamt_hpa0, pamt_hpa1)) != TDX_SUCCESS)

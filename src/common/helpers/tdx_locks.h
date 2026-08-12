@@ -69,6 +69,7 @@ _STATIC_INLINE_ lock_return_t acquire_mutex_lock(mutex_lock_t * lock_ptr)
     return (retval == MUTEX_FREE) ? LOCK_RET_SUCCESS : LOCK_RET_FAIL;
 }
 
+#if defined(DEBUGFEATURE_TDX_DBG_TRACE)
 _STATIC_INLINE_ lock_return_t acquire_mutex_lock_or_wait(mutex_lock_t * lock_ptr)
 {
     mutex_lock_t retval = MUTEX_LOCK;
@@ -87,6 +88,7 @@ _STATIC_INLINE_ lock_return_t acquire_mutex_lock_or_wait(mutex_lock_t * lock_ptr
 
     return LOCK_RET_SUCCESS;
 }
+#endif // defined(DEBUGFEATURE_TDX_DBG_TRACE)
 
 _STATIC_INLINE_ void release_mutex_lock(mutex_lock_t * lock_ptr)
 {
@@ -317,25 +319,26 @@ _STATIC_INLINE_ bool_t is_lock_hp_set(sharex_hp_lock_t* lock)
 }
 
 #define SHAREX_HP_FULL_COUNTER           0x3FFF
+#define HOST_PRIORITY_MASK               0x0002
 
 _STATIC_INLINE_ api_error_code_e acquire_sharex_lock_hp_sh(sharex_hp_lock_t * lock_ptr, bool_t is_guest)
 {
-    sharex_hp_lock_t retval;
+    sharex_hp_lock_t retval = { .raw = 0 };
 
     tdx_debug_assert(lock_ptr != NULL);
 
     if (is_guest)
     {
+        // Check th HP bit
+        if((lock_ptr->raw & HOST_PRIORITY_MASK) != 0)
+        {
+            return TDX_OPERAND_BUSY_HOST_PRIORITY;
+        }
+
         // Increment SHARE_COUNTER
         retval.raw = _lock_xadd_16b(&lock_ptr->raw, SHAREX_HP_SINGLE_READER);
 
-        if (retval.host_prio)
-        {
-            // Decrement SHARE_COUNTER
-            retval.raw = _lock_xadd_16b(&lock_ptr->raw, (uint16_t)-SHAREX_HP_SINGLE_READER);
-            return TDX_OPERAND_BUSY_HOST_PRIORITY;
-        }
-        else if (retval.exclusive)
+        if (retval.exclusive)
         {
             return TDX_OPERAND_BUSY; // Counter is n/a
         }
@@ -344,8 +347,6 @@ _STATIC_INLINE_ api_error_code_e acquire_sharex_lock_hp_sh(sharex_hp_lock_t * lo
         // Only when exclusive bit is not set the shared-counters has "real" "readers"
         // And that number should not overflow
         tdx_sanity_check((retval.counter != SHAREX_HP_FULL_COUNTER), FATAL_ERROR_ID_197, 10);
-
-        return TDX_SUCCESS;
     }
     else
     {
@@ -367,9 +368,9 @@ _STATIC_INLINE_ api_error_code_e acquire_sharex_lock_hp_sh(sharex_hp_lock_t * lo
         // Only when exclusive bit is not set the shared-counters has "real" "readers"
         // And that number should not overflow
         tdx_sanity_check((retval.counter != SHAREX_HP_FULL_COUNTER), FATAL_ERROR_ID_198, 11);
-
-        return TDX_SUCCESS;
     }
+
+    return TDX_SUCCESS;
 }
 
 _STATIC_INLINE_ api_error_code_e acquire_sharex_lock_hp_ex(sharex_hp_lock_t * lock_ptr, bool_t is_guest)

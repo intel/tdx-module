@@ -19,7 +19,6 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.
 //
 // SPDX-License-Identifier: MIT
-
 /**
  * @file tdh_ide_stream_idekmreq.c
  * @brief TDHIDESTREAMIDEKMREQ API handler

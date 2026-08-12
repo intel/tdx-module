@@ -380,10 +380,9 @@ void td_call(tdx_module_local_t* tdx_local_data_ptr, bool_t* interrupt_occurred)
                     tdx_local_data_ptr->td_regs.r15);
             break;
         }
-        case TDG_MMIO_ACCEPT_LEAF:
+        case TDG_TDI_MMIO_ACCEPT_LEAF:
         {
-            retval = tdg_mmio_accept((page_info_api_input_t)tdx_local_data_ptr->td_regs.rcx,
-                tdx_local_data_ptr->td_regs.rdx);
+            retval = tdg_tdi_mmio_accept((page_info_api_input_t)tdx_local_data_ptr->td_regs.rcx, tdx_local_data_ptr->td_regs.rdx);
             break;
         }
         case TDG_IQ_INV_REQUEST_LEAF:
@@ -1110,6 +1109,7 @@ void tdx_td_dispatcher(void)
 EXIT:
 
     check_pending_voe_on_debug_td_return();
+
 
     //Return to TD
     tdx_return_to_td(true, false, &tdx_local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state);

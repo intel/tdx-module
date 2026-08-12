@@ -19,7 +19,6 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.
 //
 // SPDX-License-Identifier: MIT
-
 /**
  * @file tdh_spdm_create.c
  * @brief TDHSPDMCREATE API handler

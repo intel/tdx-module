@@ -42,6 +42,7 @@
 #include "td_dispatcher/vm_exits/td_vmexit.h"
 #include "virt_msr_helpers.h"
 #include "crypto/sha384.h"
+#include HANDOFF_CONSTANTS_HEADER
 
 #include "data_structures/tdxio/iommu_defs.h"
 
@@ -988,7 +989,9 @@ api_error_code_e check_walk_and_map_guest_side_gpa(
     {
         // read the shared EPT from the TD VMCS
         ia32_vmread(VMX_GUEST_SHARED_EPT_POINTER_FULL_ENCODE, &eptp.raw);
-        eptp.fields.enable_ad_bits = tdcs_p->executions_ctl_fields.eptp.fields.enable_ad_bits;
+        {
+            eptp.fields.enable_ad_bits = tdcs_p->executions_ctl_fields.eptp.fields.enable_ad_bits;
+        }
         eptp.fields.enable_sss_control = tdcs_p->executions_ctl_fields.eptp.fields.enable_sss_control;
         eptp.fields.ept_ps_mt = tdcs_p->executions_ctl_fields.eptp.fields.ept_ps_mt;
         eptp.fields.ept_pwl = tdcs_p->executions_ctl_fields.eptp.fields.ept_pwl;
@@ -1577,8 +1580,14 @@ bool_t verify_td_attributes(td_param_attributes_t attributes, bool_t is_import)
 
     if (attributes.migratable)
     {
-        // A migratable TD can't be a debug TD and doesn't support PERFMON
-        if (attributes.debug || attributes.perfmon)
+        // A migratable TD doesn't support PERFMON
+        if (attributes.perfmon)
+        {
+            return false;
+        }
+        // A migratable TD can't be a debug TD if if TDX_FEATURES0.DEBUG_RO_TD_MIGRATION is 0
+        tdx_features_enum0_t tdx_enabled_features = get_tdx_features_enum0();
+        if (attributes.debug && !tdx_enabled_features.debug_ro_td_migration)
         {
             return false;
         }
@@ -1999,7 +2008,7 @@ void set_xbuff_offsets_and_size(tdcs_t* tdcs_ptr, uint64_t xfam)
     // Calculate the offsets of XSAVE components in XBUFF, which depend on XFAM.  The algorithm
     // is described in the Intel SDM, Vol. 1, - 13.4.3 "Extended Region of an XSAVE Area"
     uint32_t offset = offsetof(xsave_area_t, extended_region);
-    for (uint32_t xfam_i = 2; xfam_i <= XCR0_MAX_VALID_BIT; xfam_i++)
+    for (uint32_t xfam_i = 2; xfam_i <= XCR0_MAX_BIT; xfam_i++)
     {
         if ((xfam & BIT(xfam_i)) != 0)
         {
@@ -2211,8 +2220,8 @@ void prepare_td_vmcs(tdvps_t *tdvps_p, uint16_t vm_id)
     free_la(td_vmcs_p);
 }
 
-api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap_t ignore_tdinfo,
-                                            td_info_t* td_info, measurement_t* tee_info_hash, bool_t is_guest)
+api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap_t ignore_tdinfo, td_info_t* td_info,
+                                            measurement_t* tee_info_hash, bool_t is_guest, tdr_t* tdr_p, uint8_t vmid, bool_t calc_servtd)
 {
     td_info_t             td_info_local;
     ALIGN(32) uint256_t   ymms[16];                  // AVX/SSE state backup for crypto
@@ -2277,14 +2286,21 @@ api_error_code_e get_tdinfo_and_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap
     }
     if (!ignore_tdinfo.servtd_hash)
     {
-        tdx_memcpy(td_info->servtd_hash.bytes, sizeof(measurement_t),
-                   tdcs_p->service_td_fields.servtd_hash.bytes,
-                   sizeof(measurement_t));
+        {
+            tdx_memcpy(td_info->servtd_hash.bytes, sizeof(measurement_t),
+                       tdcs_p->service_td_fields.servtd_hash.bytes,
+                       sizeof(measurement_t));
+        }
     }
+
+	UNUSED(tdr_p);
+    UNUSED(vmid);
+    UNUSED(calc_servtd);
 
     /* SHA calculation is a relatively long operation.  Optimize by reusing the previously-calculated value,
        if available.  This is designed for use by TDG.MR.REPORT, which is interruptible. */
-    if ((tdcs_p->measurement_fields.last_teeinfo_hash_valid) && (ignore_tdinfo.raw == 0))
+    if ((tdcs_p->measurement_fields.last_teeinfo_hash_valid) && (ignore_tdinfo.raw == 0)
+        )
     {
         // Optimize for the common case of TDG.MR.REPORT
         tdx_memcpy(tee_info_hash, sizeof(measurement_t),
@@ -2348,7 +2364,7 @@ api_error_code_e get_teeinfohash(tdcs_t* tdcs_p, ignore_tdinfo_bitmap_t ignore_t
 {
     td_info_t td_info;
 
-    return get_tdinfo_and_teeinfohash(tdcs_p, ignore_tdinfo, &td_info, tee_info_hash, false);
+    return get_tdinfo_and_teeinfohash(tdcs_p, ignore_tdinfo, &td_info, tee_info_hash, false, NULL, 0, true);
 }
 
 api_error_type abort_import_session(
@@ -2404,7 +2420,6 @@ bool_t generate_custom_random(uint64_t* rand_array, uint64_t num_of_qwords)
 
     return true;
 }
-
 
 void complete_cpuid_handling(tdx_module_global_t* tdx_global_data_ptr)
 {
@@ -2603,6 +2618,7 @@ bool_t translate_l2_enter_guest_state_gpa(
             goto EXIT;
         }
 
+
         ept_walk_result_t status = gpa_translate(eptp, (pa_t)gpa, true, hkid, access_rights, (pa_t*)&hpa, (ia32e_ept_t*)&sept_entry_copy, &accumulated_rwx);
         if (EPT_WALK_SUCCESS != status)
         {
@@ -2610,7 +2626,7 @@ bool_t translate_l2_enter_guest_state_gpa(
             goto EXIT;
         }
 
-        if (!sept_state_is_guest_accessible_leaf(sept_entry_copy))
+        if (!sept_state_is_guest_fully_accessible_leaf(sept_entry_copy))
         {
             *failed_gpa = gpa;
             goto EXIT;
@@ -2641,6 +2657,8 @@ bool_t translate_gpas(
     ia32e_sept_t   sept_entry_copy = {.raw = 0};
 
     ia32e_eptp_t eptp = {.raw = tdcs_ptr->executions_ctl_fields.eptp.raw};
+
+
     uint16_t hkid = tdr_ptr->key_management_fields.hkid;
     access_rights_t access_rights = { .raw = 0x7 };
     access_rights_t accumulated_rwx;
@@ -2680,7 +2698,7 @@ bool_t translate_gpas(
             goto EXIT;
         }
 
-        if (!sept_state_is_guest_accessible_leaf(sept_entry_copy))
+        if (!sept_state_is_guest_fully_accessible_leaf(sept_entry_copy))
         {
             *failed_gpa = gpa;
             goto EXIT;
@@ -2888,6 +2906,7 @@ void calculate_servtd_hash(tdcs_t* tdcs_ptr)
         }
     }
 }
+
 
 void update_mutable_cpuid_flags(tdcs_t* tdcs_p)
 {
@@ -3160,7 +3179,7 @@ api_error_type check_host_interrupt_and_hp_bit(sharex_hp_lock_t* lock, bool_t is
     }
     else if (is_lock_hp_set(lock))
     {
-        return TDX_INTERRUPTED_BUSY;
+        return TDX_INTERRUPTED_RESUMABLE;
     }
     return TDX_SUCCESS;
 }
@@ -3267,6 +3286,7 @@ tdx_features_enum0_t get_tdx_features_enum0(void)
     tdx_features_0.raw = 0;
     tdx_features_0.td_migration = 1;
     tdx_features_0.service_td = 1;
+    tdx_features_0.debug_ro_td_migration = 1;
     tdx_features_0.partitioned_td_migration = 1;
     tdx_features_0.td_preserving = 1;
     tdx_features_0.tdg_vp_rdwr = 1;
@@ -3301,6 +3321,7 @@ tdx_features_enum0_t get_tdx_features_enum0(void)
     tdx_features_0.enhanced_intr_state = 1;
     tdx_features_0.ve_info_intr_state = 1;
     tdx_features_0.update_compatibility = 1;
+    tdx_features_0.enhanced_demote_interruptibility = 1;
 
     return tdx_features_0;
 }

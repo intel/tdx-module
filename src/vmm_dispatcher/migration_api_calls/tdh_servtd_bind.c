@@ -31,6 +31,65 @@
 #include "helpers/service_td.h"
 #include "helpers/tdx_locks.h"
 
+// For the BIND operation when the TD binding state is PRE_BOUND or NOT_BOUND,
+// verify that the Service TD's TEE_TCB_SVNs are equals or higher than the
+// target TD's TEE_TCB_SVNs and return with an error TDX_SERVTD_INFO_HASH_MISMATCH if not.
+// Comparing the SVNs is done by iterating over the 16 SVN parts.
+static bool_t is_servtd_tee_tcb_svn_compatible(tdr_t *target_tdr_p, tdr_t *servtd_tdr_p)
+{
+    ALIGN(1024) td_report_t report;
+    ALIGN(64) measurement_t tee_info_hash = { 0 };
+    ALIGN(64) td_report_data_t report_data = { 0 };
+    td_report_type_t report_type = {.raw = 0};
+
+    // Assemble REPORTTYPE
+    report_type.type = (uint8_t)TDX_REPORT_TYPE;
+    report_type.subtype = TDX_REPORT_SUBTYPE;
+    report_type.version = (uint8_t)TDX_REPORT_VERSION_WITH_SERVTDS;
+
+    // Acquire Service TD's TEE_TCB_SVN
+    uint64_t result = ia32_seamops_seamdb_report(&report, &report_data,
+            tee_info_hash.qwords, report_type.raw, servtd_tdr_p->td_preserving_fields.seamdb_index,
+            &servtd_tdr_p->td_preserving_fields.seamdb_nonce);
+
+    if (result != SEAMOPS_SUCCESS)
+    {
+        TDX_ERROR("SEADB_REPORT failure due to Service TD TDR corruption\n");
+        return false;
+    }
+
+    uint8_t servtd_tee_tcb_svn[SIZE_OF_TEE_TCB_SVN_IN_BYTES];
+
+    tdx_memcpy(servtd_tee_tcb_svn, SIZE_OF_TEE_TCB_SVN_IN_BYTES,
+               report.tee_tcb_info.tee_tcb_svn, SIZE_OF_TEE_TCB_SVN_IN_BYTES);
+
+    // Acquire Target TD's TEE_TCB_SVN
+    result = ia32_seamops_seamdb_report(&report, &report_data,
+            tee_info_hash.qwords, report_type.raw, target_tdr_p->td_preserving_fields.seamdb_index,
+            &target_tdr_p->td_preserving_fields.seamdb_nonce);
+
+    if (result != SEAMOPS_SUCCESS)
+    {
+        TDX_ERROR("SEADB_REPORT failure due to Target TD TDR corruption\n");
+        return false;
+    }
+
+    uint8_t target_tee_tcb_svn[SIZE_OF_TEE_TCB_SVN_IN_BYTES];
+
+    tdx_memcpy(target_tee_tcb_svn, SIZE_OF_TEE_TCB_SVN_IN_BYTES,
+               report.tee_tcb_info.tee_tcb_svn, SIZE_OF_TEE_TCB_SVN_IN_BYTES);
+
+    for (uint32_t i = 0; i < SIZE_OF_TEE_TCB_SVN_IN_BYTES; i++)
+    {
+        if (target_tee_tcb_svn[i] > servtd_tee_tcb_svn[i])
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint64_t servtd_slot,
         uint64_t servtd_type_raw, servtd_attributes_t servtd_attr)
 {
@@ -199,6 +258,14 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
             return_val = api_error_with_operand_id(TDX_OP_STATE_INCORRECT,(uint64_t)tdcs_p->management_fields.op_state);
             goto EXIT;
         }
+
+        if (!is_servtd_tee_tcb_svn_compatible(tdr_p, servtd_tdr_p))
+        {
+            TDX_ERROR("Service TD TEE_TCB_SVN is not compatible with target TD TEE_TCB_SVN\n");
+            return_val = TDX_SERVTD_INFO_HASH_MISMATCH;
+            goto EXIT;
+        }
+
         tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].type = servtd_type;
         tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].attributes = servtd_attr;
         tdx_memcpy(tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].info_hash.qwords, sizeof(measurement_t),
@@ -222,6 +289,12 @@ api_error_type tdh_servtd_bind(uint64_t target_tdr_pa, uint64_t servtd_tdr, uint
         if (!tdx_memcmp(tdcs_p->service_td_fields.servtd_bindings_table[servtd_slot].info_hash.qwords,
                         servtd_info_hash.qwords, sizeof(servtd_info_hash)))
         {
+            return_val = TDX_SERVTD_INFO_HASH_MISMATCH;
+            goto EXIT;
+        }
+        if (!is_servtd_tee_tcb_svn_compatible(tdr_p, servtd_tdr_p))
+        {
+            TDX_ERROR("Service TD TEE_TCB_SVN is not compatible with target TD TEE_TCB_SVN\n");
             return_val = TDX_SERVTD_INFO_HASH_MISMATCH;
             goto EXIT;
         }

@@ -98,7 +98,7 @@ _STATIC_INLINE_ void restore_guest_td_extended_state(tdvps_t* tdvps_ptr, tdcs_t 
     uint64_t xstate_bv = tdvps_ptr->guest_extension_state.xbuff.xsave_header.xstate_bv;
     uint64_t xcomp_bv = tdvps_ptr->guest_extension_state.xbuff.xsave_header.xcomp_bv;
 
-    // Check for xbuffF header corruption before trying to use SAFE_XRSTORS
+    // Check for xbuff header corruption before trying to use SAFE_XRSTORS
     // Checks are done according to SDM Volume 1, Chapter 13.12
     // A #GP occurs in the following cases:
     //  - XCOMP_BV[63] = 0.
@@ -300,7 +300,7 @@ static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* td
 
             /* Restore fixed Perfmon counters
             */
-            for (uint8_t i = 0; i < MAX_FIXED_CTR; i++)
+            for (uint8_t i = 0; i < MAX_FIXED_CTRS; i++)
             {
                 /* A fixed counter MSR exists only if its bit in the effective fixed counter bitmap is 1.
                    For hybrid SOCs, PL.FC_BITMAP indicated counters that are available in all core types. */
@@ -311,7 +311,7 @@ static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* td
                 }
             }
 
-            for (uint32_t i = 0; i < NUM_PMC; i++)
+            for (uint32_t i = 0; i < MAX_GP_CTRS; i++)
             {
                 /* A general purpose counter MSR exists in the current core type only if its bit in CPUID(0x23,1).EAX is 1.
                    For hybrid SOCs, PL.PMC_BITMAP indicated counters that are available in all core types. */
@@ -342,7 +342,7 @@ static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* td
             /* Restore fixed function Perfmon counters
              */
 
-            for (uint8_t i = 0; i < MAX_FIXED_CTR; i++)
+            for (uint8_t i = 0; i < MAX_FIXED_CTRS; i++)
             {
                 if ((global_data->fc_bitmap & BIT(i)) != 0)
                 {
@@ -350,7 +350,7 @@ static void restore_guest_td_state_before_td_entry(tdcs_t* tdcs_ptr, tdvps_t* td
                 }
             }
 
-            for (uint32_t i = 0; i < NUM_PMC; i++)
+            for (uint32_t i = 0; i < MAX_GP_CTRS; i++)
             {
                 if ((global_data->pmc_bitmap & BIT(i)) != 0)
                 {
@@ -701,7 +701,7 @@ api_error_type tdh_vp_enter(uint64_t vcpu_handle_and_flags)
     // TDR related variables
     pa_t                  tdr_pa;                      // TDR physical address
     tdr_t               * tdr_ptr = NULL;              // Pointer to the TDR page (linear address)
-    pamt_entry_t        * tdr_pamt_entry_ptr;          // Pointer to the TDR PAMT entry
+    pamt_entry_t        * tdr_pamt_entry_ptr = NULL;          // Pointer to the TDR PAMT entry
     bool_t                tdr_locked_flag = false;     // Indicate TDVPR is locked
 
     tdcs_t              * tdcs_ptr = NULL;             // Pointer to the TDCS page (linear address)

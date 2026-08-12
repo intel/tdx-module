@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 /**
  * @file tdh_export_mem
@@ -37,6 +37,8 @@
 #include "memory_handlers/sept_manager.h"
 #include "memory_handlers/keyhole_manager.h"
 
+#define GPA_ENTRY_IS_NOP(e) ( (e).operation == GPA_ENTRY_OP_NOP )
+
 typedef   uint8_t mac_list_entry_t[MAC256_LEN];
 
 static api_error_type handle_new_command(gpa_list_info_t gpa_list_info, tdcs_t* tdcs_p,
@@ -52,15 +54,20 @@ static api_error_type handle_new_command(gpa_list_info_t gpa_list_info, tdcs_t* 
         return api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RCX);
     }
 
-    // Initialize the MIGSC if needed
-    if (!tdcs_p->f_migsc_links[migs_i].initialized)
+    if (tdcs_p->f_migsc_links[migs_i].initialized)
     {
+        // If the MIGSC is initialized and MIGSC[n].INTERRUPTED.VALID is TRUE, terminate with a TDX_INVALID_RESUMPTION error
+        if (migsc_p->interrupted_state.valid)
+        {
+            return TDX_INVALID_RESUMPTION;
+        }
+    }
+    else
+    {
+        // Initialize the MIGSC if needed
         tdcs_p->f_migsc_links[migs_i].initialized = true;
         migsc_init(migsc_p, &tdcs_p->migration_fields.mig_enc_working_key);
     }
-
-    // Mark this flow as non-interrupted
-    migsc_p->interrupted_state.valid = false;
 
     // Set the initial migration buffers counter:  GPA list and up to 2 Page MAC buffers
     migsc_p->interrupted_state.num_processed = 1;
@@ -206,7 +213,7 @@ static gpa_list_entry_status_t check_tlb_tracking(tdcs_t* tdcs_p, ia32e_sept_t s
     return GPA_ENTRY_STATUS_SUCCESS;
 }
 
-static gpa_list_entry_status_t handle_export_in_order(tdcs_t* tdcs_p, gpa_list_entry_t* gpa_list_entry, ia32e_sept_t sept_entry_copy, ept_level_t sept_entry_level)
+static gpa_list_entry_status_t handle_export_in_order(tdcs_t* tdcs_p, volatile gpa_list_entry_t* gpa_list_entry, ia32e_sept_t sept_entry_copy, ept_level_t sept_entry_level)
 {
 	gpa_list_entry_status_t return_val = GPA_ENTRY_STATUS_SUCCESS;
     gpa_list_entry_operation_t operation;
@@ -254,7 +261,7 @@ static gpa_list_entry_status_t handle_export_in_order(tdcs_t* tdcs_p, gpa_list_e
     return GPA_ENTRY_STATUS_SUCCESS;
 }
 
-static gpa_list_entry_status_t handle_export_out_of_order(gpa_list_entry_t* gpa_list_entry, ia32e_sept_t sept_entry_copy)
+static gpa_list_entry_status_t handle_export_out_of_order(volatile gpa_list_entry_t* gpa_list_entry, ia32e_sept_t sept_entry_copy)
 {
     // Export is in the out-of-order phase
     if (gpa_list_entry->operation == GPA_ENTRY_OP_CANCEL)
@@ -279,7 +286,7 @@ static gpa_list_entry_status_t handle_export_out_of_order(gpa_list_entry_t* gpa_
     return GPA_ENTRY_STATUS_SUCCESS;
 }
 
-static gpa_list_entry_status_t handle_export_by_order(tdcs_t* tdcs_p, gpa_list_entry_t* gpa_list_entry, ia32e_sept_t sept_entry_copy, ept_level_t sept_entry_level)
+static gpa_list_entry_status_t handle_export_by_order(tdcs_t* tdcs_p, volatile gpa_list_entry_t* gpa_list_entry, ia32e_sept_t sept_entry_copy, ept_level_t sept_entry_level)
 {
     if (op_state_is_export_in_order(tdcs_p->management_fields.op_state))
     {
@@ -295,7 +302,7 @@ static gpa_list_entry_status_t handle_operation(gpa_list_entry_t gpa_list_entry,
                                                 ia32e_sept_t* sept_entry_copy, uint64_t* dirty_count_increment,
                                                 volatile page_list_entry_t* mig_buff_list_entry, pa_t* td_page_pa,
                                                 void** td_page_p, void** mig_buff_p, tdr_t* tdr_p
-    
+
                                                 , tdcs_t* tdcs_p, ia32e_sept_t** l2_septe_ptrs,
                                                 pa_t page_gpa, ept_level_t sept_entry_level, uint64_t target_tdr_pa
 )
@@ -341,12 +348,12 @@ static gpa_list_entry_status_t handle_operation(gpa_list_entry_t gpa_list_entry,
                         }
                     }
                 }
-    
+
                 // For non-PENDING cases, we need to restore the access permission bits.
                 // For L1, we can just set W to 1.
                 // For L2s, we restore W from TDWR and PWA from TDPWA.
                 sept_update_state(sept_entry_copy, SEPT_STATE_MAPPED_MASK, keep_ad, true);
-    
+
                 sept_entry_copy->w = 1;
             }
         }
@@ -447,7 +454,7 @@ static api_error_type finish_entry_processing(uint64_t* entry_num, gpa_list_info
     // If we are not on the last entry, then check pending interrupts
     if (*entry_num < gpa_list_info.last_entry)
     {
-        return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock,true);
+        return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock, true);
         if (TDX_SUCCESS != return_val)
         {
             // increment the entry_num to the index of NEXT entry before
@@ -501,7 +508,7 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
 
     // GPA list
     gpa_list_entry_t* gpa_list_p = NULL;
-    gpa_list_entry_t        gpa_list_entry;
+    volatile gpa_list_entry_t        gpa_list_entry;
     uint64_t                entry_num = gpa_list_info.first_entry;
     uint32_t                problem_ops_count = 0;
 
@@ -671,7 +678,7 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
             return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RCX);
             goto EXIT;
         }
-        
+
         l2_attr_list_pa.raw = NULL_PA;
     }
 
@@ -756,11 +763,11 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
 
         do
         {
-            if (gpa_list_entry.operation == GPA_ENTRY_OP_NOP)
+            if (gpa_list_entry.operation == GPA_ENTRY_OP_NOP
+                )
             {
-                if (!gpa_list_entry_is_valid(gpa_list_entry))
+                if (!gpa_list_entry_is_valid(gpa_list_entry, true))
                 {
-                    gpa_list_entry.operation = GPA_ENTRY_OP_NOP;
                     gpa_list_p[entry_num] = gpa_list_entry;
                     err_status = GPA_ENTRY_STATUS_GPA_LIST_ENTRY_INVALID;
                     TDX_ERROR("Invalid GPA entry in the list - 0x%llx\n", gpa_list_entry.raw);
@@ -769,11 +776,11 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                 {
                     err_status = GPA_ENTRY_STATUS_SKIPPED;
                 }
-                
+
                 break;
             }
 
-            if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &page_gpa, tdcs_p->executions_ctl_fields.virt_maxpa))
+            if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &page_gpa, tdcs_p->executions_ctl_fields.virt_maxpa, true))
             {
                 gpa_list_entry.operation = GPA_ENTRY_OP_NOP;
                 gpa_list_entry.status = GPA_ENTRY_STATUS_GPA_LIST_ENTRY_INVALID;
@@ -817,6 +824,7 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
 
             gpa_list_entry.pending = sept_state_is_any_pending(sept_entry_copy);
             gpa_list_entry.l2_map = 0;
+
 
             // Build the L2 attributes list entry
             if (sept_state_is_any_aliased(sept_entry_copy) && (GPA_ENTRY_OP_CANCEL != gpa_list_entry.operation)) // Is any alias
@@ -948,6 +956,7 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
 
         // Write back the updated migration buffer list and GPA list entries to memory
         mig_buff_list_p[entry_num] = mig_buff_list_entry;
+        gpa_list_entry.state = 0;
         gpa_list_p[entry_num] = gpa_list_entry;
 
         // Now that we're done processing the page, unlock the SEPT entry

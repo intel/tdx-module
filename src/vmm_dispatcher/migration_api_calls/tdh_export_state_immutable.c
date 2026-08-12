@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 /**
  * @file tdh_export_state_immutable
@@ -42,6 +42,12 @@ static api_error_type handle_command_by_type(migs_index_and_cmd_t migs_i_and_cmd
 
     if (migs_i_and_cmd.command == MIGS_INDEX_COMMAND_NEW)
     {
+        // if RESUME is 0 and OP_STATE is START_EXPORT, terminate with a TDX_INVALID_RESUMPTION error (we don't have an initialized MIGSC yet)
+        if (tdcs_p->management_fields.op_state == OP_STATE_START_EXPORT)
+        {
+            return TDX_INVALID_RESUMPTION;
+        }
+
         // Check and map the page list
         if ((page_list_info.last_entry < (MIN_TD_IMMUTABLE_STATE_EXPORT_PAGES - 1)) ||
             (page_list_info.reserved_1 != 0) ||
@@ -273,16 +279,17 @@ static api_error_type handle_continues_export(api_error_type* return_val, bool_t
         }
 
         // Check for a pending interrupt
-        api_error_type tmp_return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock,true);
-        if (TDX_SUCCESS != tmp_return_val)
+        if (is_interrupt_pending_host_side())
         {
+            TDX_ERROR("Pending interrupt identified\n");
+
             // There is a pending interrupt.  Save the state for the next invocation.
             migsc_p->interrupted_state.valid = true;
             tdx_module_local_t* local_data_ptr = get_local_data();
             migsc_p->interrupted_state.func.raw = local_data_ptr->vmm_regs.rax;
             migsc_p->interrupted_state.page_list_info.raw = page_list_info.raw;
             migsc_p->interrupted_state.sys_migrated = *sys_exported;
-            
+
             // Set the interrupted field ID depending on the stage we are in
             migsc_p->interrupted_state.field_id.raw = next_field_id->raw;
 
@@ -295,8 +302,10 @@ static api_error_type handle_continues_export(api_error_type* return_val, bool_t
                 (void)_lock_xadd_16b(&tdcs_p->migration_fields.mig_interrupted_count, 1);
             }
 
+            tdcs_p->management_fields.op_state = OP_STATE_START_EXPORT;
+
             *continue_loop = false;
-            return tmp_return_val;
+            return TDX_INTERRUPTED_RESUMABLE;
         }
 
         else
@@ -537,7 +546,7 @@ api_error_type tdh_export_state_immutable(uint64_t target_tdr_pa, uint64_t hpa_a
 
         return_val = handle_continues_export(&return_val, &sys_exported, &next_field_id, &mbmd_hpa_and_size, migsc_p,
                                              &mbmd_p, tdcs_p, &continue_loop, page_list_i, page_list_info, &field_id);
-    if (TDX_SUCCESS                 != return_val && 
+    if (TDX_SUCCESS                 != return_val &&
         TDX_INTERRUPTED_RESUMABLE   != return_val &&
         TDX_INTERRUPTED_BUSY        != return_val)
         {

@@ -23,172 +23,116 @@
 #include "preserving.h"
 #include "helpers/helpers.h"
 
-_STATIC_INLINE_ void copy_global_field_to_handoff(
-    void *const src_ptr,
-    const uint32_t src_size,
-    uint8_t **dst_pointer,
-    uint32_t *const dst_size_ptr,
-    uint32_t *const written_size_ptr)
+void prepare_handoff_data(const uint16_t curr_hv)
 {
-    tdx_memcpy(*dst_pointer, *dst_size_ptr, src_ptr, src_size);
-    *dst_pointer += src_size;
-    *dst_size_ptr -= src_size;
-    *written_size_ptr += src_size;
-}
-
-_STATIC_INLINE_ void copy_global_field_from_handoff(
-    void *dst_ptr,
-    const uint32_t field_size,
-    uint8_t **src_data)
-{
-    tdx_memcpy(dst_ptr, field_size, *src_data, field_size);
-    *src_data += field_size;
-}
-
-uint32_t prepare_handoff_data(uint32_t size, uint8_t *data)
-{
-    /**
-     * @brief The function fills the handoff buffer with data variables that satisfy the following conditions:
-     *          1)  Not initialized by TDH.SYS.INIT or TDH.SYS.LP.INIT
-     *          2)  Persist across multiple SEAMCALLs
-     *          3)  Maintained inside SEAM range
-     *
-     * @note all write size checks are done by tdx_memcpy inside
-     */
-
     tdx_module_global_t *tdx_global_data_ptr = get_global_data();
-    uint32_t written_size = 0;
+    td_preserving_hod_t *td_preserving_hod_ptr = (td_preserving_hod_t *)get_sysinfo_table()->data_rgn_base;
 
-    // Copy KOT entries (no need to copy the lock)
-    copy_global_field_to_handoff(&tdx_global_data_ptr->kot.entries, HANDOFF_KOT_ENTRIES_SIZE,
-                                 &data, &size,
-                                 &written_size);
+    // Verify the preserving buffer is big enough to contain all handoff data
+    const uint32_t handoff_data_buff_size = (tdx_global_data_ptr->num_handoff_pages + 1) * TDX_PAGE_SIZE_IN_BYTES;
+    tdx_sanity_check((handoff_data_buff_size > 0) && (handoff_data_buff_size >= sizeof(td_preserving_hod_t)), FATAL_ERROR_ID_303, 1);
 
-    // Copy WBT entries
-    copy_global_field_to_handoff(&tdx_global_data_ptr->wbt_entries, HANDOFF_WBT_ENTRIES_SIZE,
-                                 &data, &size,
-                                 &written_size);
+    td_preserving_hod_ptr->header.valid = true;
+    td_preserving_hod_ptr->header.hv = curr_hv;
+    td_preserving_hod_ptr->header.size = sizeof(td_preserving_hod_t) - sizeof(handoff_data_header_t);
 
-    // Copy TDMR_TABLE
-    copy_global_field_to_handoff(&tdx_global_data_ptr->tdmr_table, HANDOFF_TDMR_TABLE_SIZE,
-                                 &data, &size,
-                                 &written_size);
+    // Populate HV0 fields
+    tdx_memcpy(
+        td_preserving_hod_ptr->kot_entries, sizeof(td_preserving_hod_ptr->kot_entries),
+        tdx_global_data_ptr->kot.entries, sizeof(tdx_global_data_ptr->kot.entries));
 
-    // Copy TDMR_ENTRIES
-    copy_global_field_to_handoff(&tdx_global_data_ptr->num_of_tdmr_entries, HANDOFF_NUM_OF_TDMR_ENTRIES_SIZE,
-                                 &data, &size,
-                                 &written_size);
+    tdx_memcpy(
+        td_preserving_hod_ptr->wbt_entries, sizeof(td_preserving_hod_ptr->wbt_entries),
+        tdx_global_data_ptr->wbt_entries, sizeof(tdx_global_data_ptr->wbt_entries));
 
-    // Copy TDX_HKID
-    copy_global_field_to_handoff(&tdx_global_data_ptr->hkid, HANDOFF_HKID_SIZE,
-                                 &data, &size,
-                                 &written_size);
+    tdx_memcpy(
+        td_preserving_hod_ptr->tdmr_table, sizeof(td_preserving_hod_ptr->tdmr_table),
+        tdx_global_data_ptr->tdmr_table, sizeof(tdx_global_data_ptr->tdmr_table));
 
-    // Copy PKG_CONFIG_BITMAP
-    copy_global_field_to_handoff(&tdx_global_data_ptr->pkg_config_bitmap, HANDOFF_PKG_CONFIG_BITMAP_SIZE,
-                                 &data, &size,
-                                 &written_size);
+    td_preserving_hod_ptr->num_of_tdmr_entries = tdx_global_data_ptr->num_of_tdmr_entries;
+    td_preserving_hod_ptr->hkid = tdx_global_data_ptr->hkid;
+    td_preserving_hod_ptr->package_config_bitmap = tdx_global_data_ptr->pkg_config_bitmap;
+    td_preserving_hod_ptr->dynamic_pamt_enabled = tdx_global_data_ptr->dynamic_pamt_enabled;
 
-    // Copy dynamic PAMT setting
-    bool_t dynamic_pamt_enabled = tdx_global_data_ptr->dynamic_pamt_enabled;
-    copy_global_field_to_handoff(&dynamic_pamt_enabled, HANDOFF_DYNAMIC_PAMT_ENABLED_SIZE,
-                                 &data, &size,
-                                 &written_size);
+    // Populate HV1 fields
+    td_preserving_hod_ptr->td_build_count = tdx_global_data_ptr->td_build_count;
+    td_preserving_hod_ptr->mig_interrupted_count = tdx_global_data_ptr->mig_interrupted_count;
 
-    // Copy TD_BUILD_COUNT
-    copy_global_field_to_handoff(&tdx_global_data_ptr->td_build_count, HANDOFF_TD_BUILD_COUNT_SIZE,
-                                 &data, &size,
-                                 &written_size);
+    // Populate HV2 fields
 
-    // Copy MIG_INTERRUPTED_COUNT
-    copy_global_field_to_handoff(&tdx_global_data_ptr->mig_interrupted_count, HANDOFF_MIG_INTERRUPTED_COUNT_SIZE,
-                                 &data, &size,
-                                 &written_size);
-
-    // Clear padding (DiD)
-    basic_memset_to_zero(data, TDX_RESERVED_PADDING_SIZE);
-
-    return written_size;
+    td_preserving_hod_ptr->padding = 0;
+    basic_memset_to_zero(td_preserving_hod_ptr->round_up_to_4k_1, sizeof(td_preserving_hod_ptr->round_up_to_4k_1));
 }
 
 _STATIC_INLINE_ void retrieve_handoff_data_default(
-    tdx_module_global_t *const tdx_global_data_ptr,
-    uint8_t **data)
+    const td_preserving_hod_t *const td_preserving_hod_ptr,
+    tdx_module_global_t *const tdx_global_data_ptr)
 {
-    // Copy KOT entries (no need to copy the lock)
-    copy_global_field_from_handoff(&tdx_global_data_ptr->kot.entries, HANDOFF_KOT_ENTRIES_SIZE, data);
+    // Populate HV0 fields
+    tdx_memcpy(
+        tdx_global_data_ptr->kot.entries, sizeof(tdx_global_data_ptr->kot.entries),
+        td_preserving_hod_ptr->kot_entries, sizeof(td_preserving_hod_ptr->kot_entries));
 
-    // Copy WBT entries
-    copy_global_field_from_handoff(&tdx_global_data_ptr->wbt_entries, HANDOFF_WBT_ENTRIES_SIZE, data);
+    tdx_memcpy(
+        tdx_global_data_ptr->wbt_entries, sizeof(tdx_global_data_ptr->wbt_entries),
+        td_preserving_hod_ptr->wbt_entries, sizeof(td_preserving_hod_ptr->wbt_entries));
 
-    // Copy TDMR_TABLE
-    copy_global_field_from_handoff(&tdx_global_data_ptr->tdmr_table, HANDOFF_TDMR_TABLE_SIZE, data);
+    tdx_memcpy(
+        tdx_global_data_ptr->tdmr_table, sizeof(tdx_global_data_ptr->tdmr_table),
+        td_preserving_hod_ptr->tdmr_table, sizeof(td_preserving_hod_ptr->tdmr_table));
 
-    // Copy TDMR_ENTRIES
-    copy_global_field_from_handoff(&tdx_global_data_ptr->num_of_tdmr_entries, HANDOFF_NUM_OF_TDMR_ENTRIES_SIZE, data);
-
-    // Copy TDX_HKID
-    copy_global_field_from_handoff(&tdx_global_data_ptr->hkid, HANDOFF_HKID_SIZE, data);
-
-    // Copy PKG_CONFIG_BITMAP
-    copy_global_field_from_handoff(&tdx_global_data_ptr->pkg_config_bitmap, HANDOFF_PKG_CONFIG_BITMAP_SIZE, data);
+    tdx_global_data_ptr->num_of_tdmr_entries = td_preserving_hod_ptr->num_of_tdmr_entries;
+    tdx_global_data_ptr->hkid = td_preserving_hod_ptr->hkid;
+    tdx_global_data_ptr->pkg_config_bitmap = td_preserving_hod_ptr->package_config_bitmap;
 }
 
-_STATIC_INLINE_ void retrieve_handoff_data_v0(
-    tdx_module_global_t *const tdx_global_data_ptr,
-    uint8_t *data)
+_STATIC_INLINE_ void retrieve_handoff_data_with_skipped_v0(
+    const td_preserving_skipped_hod_t *const td_preserving_hod_ptr,
+    tdx_module_global_t *const tdx_global_data_ptr)
 {
-    // Skip IOMMU_CONFIGS
-    data += HANDOFF_SKIPPED_IOMMU_CONFIGS_SIZE;
-
-    // Skip MMIOMT_ROOT_NODE
-    data += HANDOFF_SKIPPED_MMIOMT_ROOT_SIZE;
-
-    // Skip DEVIFMT_ROOT_NODE
-    data += HANDOFF_SKIPPED_TDIMT_ROOT_SIZE;
-
-    // Copy dynamic PAMT setting
-    copy_global_field_from_handoff(&tdx_global_data_ptr->dynamic_pamt_enabled, HANDOFF_DYNAMIC_PAMT_ENABLED_SIZE, &data);
-
-    // For HV 0 ,set PL.TD_BUILD_COUNT and PL.MIG_INTERRUPTED_COUNT to 0.
-    tdx_global_data_ptr->td_build_count = 0;
-    tdx_global_data_ptr->mig_interrupted_count = 0;
+    /**
+     * @note td_preserving_skipped_hod_t already takes the skipped TDX Connect fields
+     *       into account when setting the dynamic PAMT enable bit
+     */
+    tdx_global_data_ptr->dynamic_pamt_enabled = td_preserving_hod_ptr->dynamic_pamt_enabled;
 }
 
-_STATIC_INLINE_ void retrieve_handoff_data_v1(
+_STATIC_INLINE_ void retrieve_handoff_data_generic(
+    const td_preserving_hod_t *const td_preserving_hod_ptr,
     tdx_module_global_t *const tdx_global_data_ptr,
-    uint8_t *data)
+    const uint64_t hv)
 {
-    // Copy dynamic PAMT setting
-    copy_global_field_from_handoff(&tdx_global_data_ptr->dynamic_pamt_enabled, HANDOFF_DYNAMIC_PAMT_ENABLED_SIZE, &data);
+    UNUSED(hv);
+    // Populate HV0 fields
+    tdx_global_data_ptr->dynamic_pamt_enabled = td_preserving_hod_ptr->dynamic_pamt_enabled;
 
-    // Copy TD_BUILD_COUNT
-    copy_global_field_from_handoff(&tdx_global_data_ptr->td_build_count, HANDOFF_TD_BUILD_COUNT_SIZE, &data);
-
-    // Copy MIG_INTERRUPTED_COUNT
-    copy_global_field_from_handoff(&tdx_global_data_ptr->mig_interrupted_count, HANDOFF_MIG_INTERRUPTED_COUNT_SIZE, &data);
+    // Populate HV1 fields
+    tdx_global_data_ptr->td_build_count = td_preserving_hod_ptr->td_build_count;
+    tdx_global_data_ptr->mig_interrupted_count = td_preserving_hod_ptr->mig_interrupted_count;
 }
 
-void retrieve_handoff_data(uint16_t hv, uint32_t size, uint8_t *data)
+void retrieve_handoff_data(const uint16_t prev_hv)
 {
-    // The function extracts the values of some data variables from the handoff data buffer
-
-    // tdx_sanity_check(TDX_HANDOFF_SIZE <= size, FATAL_ERROR_ID_179, 5);
-    UNUSED(size);
-
     tdx_module_global_t *tdx_global_data_ptr = get_global_data();
+    td_preserving_hod_t *td_preserving_hod_ptr = (td_preserving_hod_t *)get_sysinfo_table()->data_rgn_base;
 
-    retrieve_handoff_data_default(tdx_global_data_ptr, &data);
+    /**
+     * @brief 'default' fields are the common fields between handoff data with HV 0 and above
+     */
+    retrieve_handoff_data_default(td_preserving_hod_ptr, tdx_global_data_ptr);
 
-    switch (hv)
+    if (prev_hv == 0)
     {
-    case 0:
-        retrieve_handoff_data_v0(tdx_global_data_ptr, data);
-        break;
-    case 1:
-        retrieve_handoff_data_v1(tdx_global_data_ptr, data);
-        break;
-    default:
-        fatal_error(FATAL_ERROR_ID_371, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
+        /**
+         * @brief handoff data with HV 0 contains deprecated TDX Connect fields which are therefore skipped when deserialized
+         */
+        retrieve_handoff_data_with_skipped_v0((void *)td_preserving_hod_ptr, tdx_global_data_ptr);
+    }
+    else
+    {
+        /**
+         * @brief the 'generic' helper is used for all handoff data with HV >=3.
+         */
+        retrieve_handoff_data_generic(td_preserving_hod_ptr, tdx_global_data_ptr, prev_hv);
     }
 }

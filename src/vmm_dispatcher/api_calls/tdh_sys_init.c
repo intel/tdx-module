@@ -32,6 +32,7 @@
 
 #include "data_structures/tdx_global_data.h"
 #include "data_structures/loader_data.h"
+#include "data_structures/preserving_defs.h"
 #include "helpers/tdx_locks.h"
 #include "helpers/helpers.h"
 #include "x86_defs/x86_defs.h"
@@ -44,8 +45,6 @@
 #include TD_VMCS_FIELDS_LOOKUP_HEADER
 #include "helpers/fatal_info.h"
 #include "helpers/preserving.h"
-
-#include "metadata_handlers/metadata_generic.h"
 
 
 /*
@@ -548,7 +547,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
             // So, set all bitmap bits per EDX[4:0] and OR with the bitmap in ECX.
             global_data_ptr->fc_bitmap = (uint32_t)((BIT(cpuid_0a_edx.num_fcs) - 1) | cpuid_0a_ecx.raw);
 
-            if ((BIT(MAX_FIXED_CTR) - 1) < global_data_ptr->fc_bitmap)
+            if ((BIT(MAX_FIXED_CTRS) - 1) < global_data_ptr->fc_bitmap)
             {
                 tdx_local_data_ptr->vmm_regs.rcx = cpuid_config.leaf_subleaf.raw;
                 tdx_local_data_ptr->vmm_regs.rdx = CPUID_PERFMON_EDX_MASK_LOW;
@@ -1316,6 +1315,7 @@ _STATIC_INLINE_ api_error_type check_platform_config_and_cpu_enumeration(tdx_mod
 
 _STATIC_INLINE_ void tdx_init_global_data(tdx_module_global_t* tdx_global_data_ptr)
 {
+
     sysinfo_table_t* sysinfo_table_ptr = get_sysinfo_table();
 
     //NUM_LPS
@@ -1352,24 +1352,6 @@ _STATIC_INLINE_ void tdx_init_global_data(tdx_module_global_t* tdx_global_data_p
     tdx_global_data_ptr->td_build_count = 0;
     tdx_global_data_ptr->mig_interrupted_count = 0;
 
-    // TD-Guest system info buffer - to be used later by TDG.SYS.RD.ALL
-    md_access_qualifier_t   access_qual = { .raw = 0 };
-    md_context_ptrs_t       md_ctx;
-
-    md_field_id_t           field_id = { .raw = MD_FIELD_ID_NA };
-
-    md_ctx.tdr_ptr = NULL;
-    md_ctx.tdcs_ptr = NULL;
-    md_ctx.tdvps_ptr = NULL;
-
-    api_error_type retval = md_dump_list(MD_CTX_SYS,
-                                         field_id,
-                                         md_ctx,
-                                         (md_list_header_t*)tdx_global_data_ptr->td_guest_cached_system_info,
-                                         TD_GUEST_SYSTEM_INFO_SIZE,
-                                         MD_GUEST_RD, access_qual, &field_id);
-
-    tdx_sanity_check(retval == TDX_SUCCESS, FATAL_ERROR_ID_373, 0);
 }
 
 _STATIC_INLINE_ api_error_type tdx_init_stack_canary(void)
@@ -1433,10 +1415,10 @@ _STATIC_INLINE_ api_error_type check_module_build_time_defs(tdx_module_global_t*
     tdx_global_data_ptr->no_downgrade      = sysinfo_table->no_downgrade;
     tdx_global_data_ptr->num_handoff_pages = sysinfo_table->num_handoff_pages;
 
-    if ((tdx_global_data_ptr->module_hv != TDX_MODULE_HV) ||
-        (tdx_global_data_ptr->min_update_hv < TDX_MIN_UPDATE_HV) ||
-        ((tdx_global_data_ptr->no_downgrade == 0) && (TDX_NO_DOWNGRADE == 1)) ||
-        ((tdx_global_data_ptr->num_handoff_pages + 1) < TDX_MIN_HANDOFF_PAGES))
+    if ((tdx_global_data_ptr->module_hv != MODULE_HV) ||
+        (tdx_global_data_ptr->min_update_hv < MIN_UPDATE_HV) ||
+        ((tdx_global_data_ptr->no_downgrade == 0) && (NO_DOWNGRADE == 1)) ||
+        ((tdx_global_data_ptr->num_handoff_pages + 1) < TD_PRESERVING_HANDOFF_PAGE_COUNT))
     {
         TDX_ERROR("Incompatible TD preserving defs\n");
         return TDX_SYS_INCOMPATIBLE_SIGSTRUCT;

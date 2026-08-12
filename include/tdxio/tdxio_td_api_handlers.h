@@ -175,7 +175,7 @@ api_error_type tdg_spdm_tpa_get(
  *
  * @return Success or Error type
  */
-api_error_type tdg_mmio_accept(
+api_error_type tdg_tdi_mmio_accept(
     page_info_api_input_t gpa_mapping,
     uint64_t mmio_pa_offset);
 

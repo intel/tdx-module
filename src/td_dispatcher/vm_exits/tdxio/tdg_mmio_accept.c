@@ -1,27 +1,26 @@
-// Copyright (C) 2023 Intel Corporation
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"),
-// to deal in the Software without restriction, including without limitation
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,
-// and/or sell copies of the Software, and to permit persons to whom
-// the Software is furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
-// OR OTHER DEALINGS IN THE SOFTWARE.
-//
+// Copyright (C) 2023 Intel Corporation                                          
+//                                                                               
+// Permission is hereby granted, free of charge, to any person obtaining a copy  
+// of this software and associated documentation files (the "Software"),         
+// to deal in the Software without restriction, including without limitation     
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
+// and/or sell copies of the Software, and to permit persons to whom             
+// the Software is furnished to do so, subject to the following conditions:      
+//                                                                               
+// The above copyright notice and this permission notice shall be included       
+// in all copies or substantial portions of the Software.                        
+//                                                                               
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
+// OR OTHER DEALINGS IN THE SOFTWARE.                                            
+//                                                                               
 // SPDX-License-Identifier: MIT
-
 /**
- * @file tdg_mmio_accept.c
+ * @file tdg_tdi_mmio_accept.c
  * @brief TDGMMIOACCEPT API handler
  */
 
@@ -62,7 +61,7 @@ _STATIC_INLINE_ void ept_violation_exit(
     tdx_ept_violation_exit_to_vmm(gpa, vm_exit_reason, exit_qual.raw, eeq.raw);
 }
 
-api_error_type tdg_mmio_accept(
+api_error_type tdg_tdi_mmio_accept(
     page_info_api_input_t gpa_mapping,
     uint64_t mmio_pa_offset)
 {
@@ -197,7 +196,7 @@ api_error_type tdg_mmio_accept(
      *  SEPT walk terminated with a non-ACCEPTable (not PENDING nor PENDING_EXPORTED_DIRTY) leaf entry
      *  at level == requested ACCEPT size
      */
-    if (!sept_state_is_tdcall_leaf_allowed(TDG_MMIO_ACCEPT_LEAF, cached_sept_entry))
+    if (!sept_state_is_tdcall_leaf_allowed(TDG_TDI_MMIO_ACCEPT_LEAF, cached_sept_entry))
     {
         TDX_ERROR("SEPT walk terminated with a non-ACCEPTable (not PENDING nor PENDING_EXPORTED_DIRTY) \
                     leaf entry at level == requested ACCEPT size\n");

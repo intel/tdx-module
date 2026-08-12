@@ -70,10 +70,10 @@ tdx_static_assert(sizeof_field(handoff_dynamic_blob_t, header) == HANDOFF_DYNAMI
 
 #define IS_HANDOFF_DYNAMIC_BLOB_SUPPORTED (MODULE_HV >= 3)
 
-#define NBE_FIELD_SIZES (0)
+#define NBE_FIELD_SIZES (2)
 
 // Used as padding to achieve 4KB alignment
-#define HANDOFF_RESERVED_V2_SIZE (3944 - NBE_FIELD_SIZES)
+#define HANDOFF_RESERVED_V2_SIZE (3945 - NBE_FIELD_SIZES)
 
 typedef struct td_preserving_hod_s
 {
@@ -92,9 +92,9 @@ typedef struct td_preserving_hod_s
     uint16_t td_build_count; // Not naturally aligned
     uint16_t mig_interrupted_count;
 
-
-    // v2_v3 fields
-    uint8_t padding;
+    // v2 fields
+    bool_t non_blocking_export;
+    uint8_t write_blocking_export_used;
 
     // Padding to complete 4KB alignment
     uint8_t round_up_to_4k_1[HANDOFF_RESERVED_V2_SIZE];
@@ -115,6 +115,9 @@ tdx_static_assert(sizeof_field(tdx_module_global_t, dynamic_pamt_enabled) == siz
 
 tdx_static_assert(sizeof_field(tdx_module_global_t, td_build_count) == sizeof_field(td_preserving_hod_t, td_build_count), PRESERVING_HOD_TD_BUILD_COUNT_SIZE2);
 tdx_static_assert(sizeof_field(tdx_module_global_t, mig_interrupted_count) == sizeof_field(td_preserving_hod_t, mig_interrupted_count), PRESERVING_HOD_MIG_INTERRUPTED_COUNT_SIZE2);
+
+tdx_static_assert(sizeof_field(tdx_module_global_t, non_blocking_export_configured) == sizeof_field(td_preserving_hod_t, non_blocking_export), PRESERVING_HOD_NON_BLOCKING_EXPORT_SIZE2);
+tdx_static_assert(sizeof_field(tdx_module_global_t, write_blocking_export_used) == sizeof_field(td_preserving_hod_t, non_blocking_export), PRESERVING_HOD_WRITE_BLOCKING_EXPORT_USED_SIZ2);
 
 tdx_static_assert((TDX_PAGE_SIZE_IN_BYTES - (offsetof(td_preserving_hod_t, round_up_to_4k_1) % TDX_PAGE_SIZE_IN_BYTES)) == HANDOFF_RESERVED_V2_SIZE, HANDOFF_RESERVED_V2_SIZE);
 

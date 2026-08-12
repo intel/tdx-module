@@ -264,6 +264,16 @@ typedef struct xsave_component_info_s
     bool_t   align;
 } xsave_component_info_t;
 
+#define SEALKEY_SIZE_128_BIT 0
+#define SEALKEY_SIZE_256_BIT 1
+
+typedef enum
+{
+    WRITE_BLOCKING_EXPORT_UNUSED        = 0,
+    WRITE_BLOCKING_EXPORT_POSSIBLY_USED = 1,
+    WRITE_BLOCKING_EXPORT_USED          = 2
+} write_blocking_export_used_e;
+
 /**
  * @struct tdx_module_local_t
  *
@@ -381,6 +391,8 @@ typedef struct tdx_module_global_s
 
     seam_ops_capabilities_t seam_capabilities;
     bool_t     seamverifyreport_available;
+    bool_t     sealing_supported;
+    uint8_t    sealing_supported_sizes_bitmap; // bitmap of supported sealing key sizes
 
     uint8_t num_rdseed_retries;
     uint8_t num_rdseed_pauses;
@@ -400,7 +412,11 @@ typedef struct tdx_module_global_s
 
     bool_t          dynamic_pamt_enabled;
 
+    bool_t non_blocking_export_configured;
+    uint8_t write_blocking_export_used;
+    bool_t scan_export_restore;
 
+    bool_t tdid_vmid_reporting_enabled;
 
 
 #ifdef DEBUGFEATURE_TDX_DBG_TRACE

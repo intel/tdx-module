@@ -204,10 +204,19 @@ tdx_static_assert(sizeof(tdr_t) == TDX_PAGE_SIZE_IN_BYTES, tdr_t);
 
 typedef enum
 {
+    FIELD_SUPPORT_AT_INIT_BLOCKED_COUNT         = 0,
+    FIELD_SUPPORT_AT_INIT_PENDING_BLOCKED_COUNT = 1,
+    FIELD_SUPPORT_AT_INIT_MEM_COUNT             = 2,
+    FIELD_SUPPORT_AT_INIT_NL_SEPT_DIRTY         = 3,
+    FIELD_SUPPORT_AT_INIT_NBE_OK                = 5,
     FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT = 4
 
 }field_support_at_init_e;
 
+#define FIELD_SUPPORT_AT_INIT_INITIALIZATION_VALUE (BIT(FIELD_SUPPORT_AT_INIT_BLOCKED_COUNT) | \
+                                                    BIT(FIELD_SUPPORT_AT_INIT_PENDING_BLOCKED_COUNT) | \
+                                                    BIT(FIELD_SUPPORT_AT_INIT_MEM_COUNT) | \
+                                                    BIT(FIELD_SUPPORT_AT_INIT_NL_SEPT_DIRTY))
 
 #define MEM_SCAN_CONFIG_PAGES             2
 
@@ -271,7 +280,7 @@ tdx_static_assert(sizeof(tdcs_management_fields_t) == 128, tdcs_management_field
 #define TDX_ATTRIBUTES_FIXED1 0x0
 
 // gpaw, flexible_pending_ve, no_rbp_mode, maxpa_virt, maxgpa_virt
-#define CONFIG_FLAGS_FIXED0   (BIT(0) | BIT(1) | BIT(2) | BIT(3) | BIT(4))
+#define CONFIG_FLAGS_FIXED0   (BIT(0) | BIT(1) | BIT(2) | BIT(3) | BIT(4) | BIT(7))
 #define CONFIG_FLAGS_FIXED1   0x0
 
 
@@ -433,12 +442,13 @@ typedef union
 {
     struct
     {
-        uint64_t pending_ve_disable : 1; // Bit 0:  Control the way guest TD access to a PENDING page is processed
-        uint64_t enum_topology      : 1; // Bit 1:  Controls the enumeration of virtual platform topology
-        uint64_t virt_cpuid2        : 1; // Bit 2:  Controls the virtualization of CPUID(2)
-        uint64_t reduce_ve          : 1; // Bit 3:  Control #VE reduction
-        uint64_t reserved           : 59;
-        uint64_t lock               : 1; // Bit 63: Lock
+        uint64_t pending_ve_disable :  1; // Bit 0:  Control the way guest TD access to a PENDING page is processed
+        uint64_t enum_topology      :  1; // Bit 1:  Controls the enumeration of virtual platform topology
+        uint64_t virt_cpuid2        :  1; // Bit 2:  Controls the virtualization of CPUID(2)
+        uint64_t reduce_ve          :  1; // Bit 3:  Control #VE reduction
+        uint64_t enable_hw_keys     :  1; // Bit 4:  Control if a TD is allowed to get a HW key (non-Migratable key) when calling TDG.MR.KEY.GET when the TD Migratable.
+        uint64_t reserved           : 58;
+        uint64_t lock               :  1; // Bit 63: Lock
     };
     uint64_t raw;
 } td_ctls_t;
@@ -782,10 +792,10 @@ typedef struct tdcs_tdxio_fields_s
     uint8_t reserved0[14];
     uint128_t req_iommu_bm;
     bool_t status_complete_wr;
-    uint8_t reserved1[3];
-    uint32_t status_complete_data;
+    uint8_t reserved1[7];
     pa_t status_complete_gpa;
-    uint8_t reserved2[16];
+    uint32_t status_complete_data;
+    uint8_t reserved2[12];
     iotlb_inv_tracker_t iotlb_track_array[TOT_NUM_IOMMUS];
     uint8_t iotlb_committed[TOT_NUM_IOMMUS];
     uint8_t iotlb_complete[TOT_NUM_IOMMUS];

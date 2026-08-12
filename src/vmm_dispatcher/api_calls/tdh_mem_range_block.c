@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -33,6 +33,7 @@
 #include "memory_handlers/pamt_manager.h"
 #include "memory_handlers/sept_manager.h"
 #include "helpers/helpers.h"
+#include "helpers/mem_scan.h"
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
 
@@ -41,6 +42,11 @@ static void block_sept_entry(tdcs_t* tdcs_p, ia32e_sept_t* sept_entry, ept_level
     sept_cleanup_if_pending(sept_entry, level);
 
     uint64_t state_encoding_mask;
+    if (is_non_blocking_export_configured())
+    {
+        state_encoding_mask = SEPT_STATE_ENCODING_WO_D_MASK;
+    }
+    else
     {
         state_encoding_mask = SEPT_STATE_ENCODING_MASK;
     }
@@ -58,9 +64,34 @@ static void block_sept_entry(tdcs_t* tdcs_p, ia32e_sept_t* sept_entry, ept_level
     case SEPT_STATE_BLOCKEDW_MASK:
         // No need to save the L1 permission bits; their values are implicit
         sept_entry->raw &= ~SEPT_PERMISSIONS_MASK;    // set permissions to NONE
+        if (is_non_blocking_export_configured())
+        {
+            sept_entry->d = 0;
+        }
         sept_update_state(sept_entry, SEPT_STATE_BLOCKED_MASK, false, false);
         break;
-		UNUSED(tdcs_p);
+    case SEPT_STATE_EXPORTED_MASK:
+        sept_entry->raw &= ~SEPT_PERMISSIONS_MASK;    // set permissions to NONE
+        sept_entry->d = 0; // Blocking clears the D bit
+        sept_update_state(sept_entry, SEPT_STATE_EXPORTED_BLOCKED_MASK, false, false);
+        // Atomically increment DIRTY_COUNT by 1 (the page size is 4KB) indicating that the page must be re-exported
+        (void)_lock_xadd_64b(&tdcs_p->migration_fields.dirty_count, 1);
+        break;
+    case SEPT_STATE_EXPORTED_MODIFIED_MASK:
+        sept_entry->raw &= ~SEPT_PERMISSIONS_MASK;    // set permissions to NONE
+        sept_update_state(sept_entry, SEPT_STATE_EXPORTED_BLOCKED_MASK, false, false);
+        atomically_clear_d_bit(sept_entry);
+        break;
+    case SEPT_STATE_PENDING_EXPORTED_MASK:
+        sept_entry->raw &= ~SEPT_PERMISSIONS_MASK;    // set permissions to NONE
+        sept_update_state(sept_entry, SEPT_STATE_PENDING_EXPORTED_BLOCKED_MASK, false, false);
+        // Atomically increment DIRTY_COUNT by 1 (the page size is 4KB) indicating that the page must be re-exported
+        (void)_lock_xadd_64b(&tdcs_p->migration_fields.dirty_count, 1);
+        break;
+    case SEPT_STATE_PENDING_EXPORTED_MODIFIED_MASK:
+        sept_entry->raw &= ~SEPT_PERMISSIONS_MASK;    // set permissions to NONE
+        sept_update_state(sept_entry, SEPT_STATE_PENDING_EXPORTED_BLOCKED_MASK, false, false);
+        break;
     case SEPT_STATE_PEND_MASK:
     case SEPT_STATE_PEND_BLOCKEDW_MASK:
         // No need to save the permission bits
@@ -173,6 +204,19 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
         TDX_ERROR("State check or TDCS lock failure - error = %llx\n", return_val);
         goto EXIT;
     }
+    if (is_non_blocking_export_configured() && (OP_STATE_PAUSED_EXPORT == tdcs_ptr->management_fields.op_state))
+    {
+        TDX_ERROR("The TD must not be paused when non-blocking export is configured\n", sept_level_and_gpa.raw);
+        return_val = TDX_BLOCKING_DISALLOWED;
+        goto EXIT;
+    }
+
+    return_val = check_td_for_export_mode(tdr_ptr, tdcs_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
 
     if (!verify_page_info_input(sept_level_and_gpa, LVL_PT, tdcs_ptr->executions_ctl_fields.eptp.fields.ept_pwl))
     {
@@ -199,7 +243,7 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
         {
             // Update output register operands
-            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         }
 
         TDX_ERROR("Failed on GPA check, SEPT lock or walk - error = %llx\n", return_val);
@@ -211,7 +255,7 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
     if (TDX_SUCCESS != return_val)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Failed on SEPT host-side lock attempt\n");
         goto EXIT;
     }
@@ -232,7 +276,7 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
             return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
         }
 
-        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, sept_level_and_gpa.level, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, sept_level_and_gpa.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("MEM.RANGE.BLOCK not allowed in current SEPT entry - 0x%llx!\n", page_sept_entry_copy.raw);
         goto EXIT;
     }
@@ -244,6 +288,20 @@ api_error_type tdh_mem_range_block(page_info_api_input_t sept_level_and_gpa,
     block_sept_entry(tdcs_ptr, &new_septe_val, sept_level_and_gpa.level, page_gpa, target_tdr_pa);
 
     // Update the SEPT entry in memory
+    if (sept_state_is_any_pending(page_sept_entry_copy))
+    {
+        (void)_lock_xadd_64b(&tdcs_ptr->executions_ctl2_fields.pending_blocked_count, (uint64_t)BIT(9 * sept_level_and_gpa.level));
+    }
+    else
+    {
+        (void)_lock_xadd_64b(&tdcs_ptr->executions_ctl2_fields.blocked_count, (uint64_t)BIT(9 * sept_level_and_gpa.level));
+    }
+
+    if (is_non_blocking_export_configured() && !is_secure_ept_leaf_entry(&page_sept_entry_copy, false))
+    {
+        atomically_update_sept_state_keep_ad_tdhp(page_sept_entry_ptr, new_septe_val.raw);
+    }
+    else
     {
         atomically_update_sept_state_keep_tdhp(page_sept_entry_ptr, new_septe_val.raw);
     }

@@ -36,7 +36,7 @@
 #include "metadata_handlers/metadata_generic.h"
 #include "memory_handlers/sept_manager.h"
 
-api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa)
+api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa, uint8_t version)
 {
     // Local data for return values
     tdx_module_local_t  * local_data_ptr = get_local_data();
@@ -55,7 +55,7 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
     gpa_list_entry_t       *gpa_list_p = NULL;
     volatile gpa_list_entry_t        gpa_list_entry;
     uint64_t                entry_num = gpa_list_info.first_entry;
-    uint64_t                problem_ops_count = 0;
+    uint64_t                gpa_list_err_count = 0;
 
     // Secure-EPT
     bool_t                  sept_locked_flag = false;   // Indicate SEPT is locked
@@ -68,6 +68,14 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
 
     // Input register operands
     tdr_pa.raw = target_tdr_pa;
+
+    // Only versions 0 and 1 are supported
+    if (version > 1)
+    {
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
+        goto EXIT;
+    }
+
     // Check, lock and map the owner TDR page
     return_val = check_lock_and_map_explicit_tdr(tdr_pa,
                                                  OPERAND_ID_RDX,
@@ -94,6 +102,13 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
     }
     op_state_locked_flag = true;
 
+    return_val = check_td_for_export_mode(tdr_p, tdcs_p);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
+
     // Acquire Secure-EPT lock as shared
     if (acquire_sharex_lock_hp(&tdcs_p->executions_ctl_fields.secure_ept_lock, TDX_LOCK_SHARED, false) != TDX_SUCCESS)
     {
@@ -118,6 +133,11 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
         goto EXIT;
     }
 
+    tdx_module_global_t* global_data = get_global_data();
+    if (!global_data->non_blocking_export_configured)
+    {
+        get_global_data()->write_blocking_export_used = WRITE_BLOCKING_EXPORT_USED;
+    }
 
     // Loop over the GPA list
     for (entry_num = gpa_list_info.first_entry; entry_num <= gpa_list_info.last_entry; entry_num++)
@@ -192,6 +212,39 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
             //   - Release the entry lock
             ia32e_sept_t new_sept_entry = sept_entry_copy;
 
+            if (is_non_blocking_export_configured())
+            {
+                if (is_sept_exported(&new_sept_entry) ||
+                    is_sept_exported_modified(&new_sept_entry))
+                {
+                    sept_update_state(&new_sept_entry, SEPT_STATE_MAPPED_MASK, false, true);
+                }
+                else if (is_sept_exported_blocked(&new_sept_entry))
+                {
+                    sept_update_state(&new_sept_entry, SEPT_STATE_BLOCKED_MASK, false, true);
+                }
+                else if(is_sept_exported_removed(&new_sept_entry))
+                {
+                    sept_update_state(&new_sept_entry, SEPT_STATE_FREE_MASK, false, true);
+                }
+                else if (is_sept_pending_exported(&new_sept_entry) ||
+                        is_sept_pending_exported_modified(&new_sept_entry))
+                {
+                    sept_update_state(&new_sept_entry, SEPT_STATE_PEND_MASK, false, true);
+                }
+                else if (is_sept_pending_exported_blocked(&new_sept_entry))
+                {
+                    sept_update_state(&new_sept_entry, SEPT_STATE_PEND_BLOCKED_MASK, false, true);
+                }
+
+                if (is_sept_free(&new_sept_entry))
+                {
+                    // Atomically decrement TDCS.MEM_COUNT by 1, 512 or 5122 depending on the removed TD private page size (4KB, 2MB or 1GB, respectively).
+                    (void)_lock_xadd_64b(&(tdcs_p->executions_ctl2_fields.mem_count), -(BIT(9 * sept_entry_level)));
+                }
+            }
+            else
+            {
                 if (sept_state_is_any_pending(new_sept_entry))
                 {
                     sept_update_state(&new_sept_entry, SEPT_STATE_PEND_MASK, false, true);
@@ -225,6 +278,7 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
                     sept_update_state(&new_sept_entry, SEPT_STATE_MAPPED_MASK, false, true);
                     new_sept_entry.w = 1;
                 }
+            }
 
             // Write the new SEPT entry value to memory in a single 64b write.
             //  The new SEPT entry value is written as unlocked.
@@ -242,7 +296,7 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
             gpa_list_entry.status = err_status;
             if (err_status != GPA_ENTRY_STATUS_SKIPPED)
             {
-                problem_ops_count++;
+                gpa_list_err_count++;
             }
         }
 
@@ -277,7 +331,7 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
         {
             // If the last entry was 511, entry_num will become 512, and on later assignment to first_entry
             // will become 0, as expected by the definition
-            return_val = api_error_with_operand_id(TDX_SUCCESS, problem_ops_count);
+            return_val = TDX_SUCCESS;
         }
     }
 
@@ -286,6 +340,12 @@ EXIT:
     gpa_list_info.first_entry = entry_num;
 
     local_data_ptr->vmm_regs.rcx = gpa_list_info.raw;
+
+    // When called with version=1, a GPA list error counter will be returned in R8
+    if (version >= 1)
+    {
+        local_data_ptr->vmm_regs.r8 = gpa_list_err_count;
+    }
 
     if (gpa_list_p != NULL)
     {

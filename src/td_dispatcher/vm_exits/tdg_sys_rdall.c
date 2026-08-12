@@ -85,9 +85,11 @@ api_error_type tdg_sys_rdall(uint64_t md_list_gpa, md_field_id_t field_id)
     md_ctx.tdcs_ptr = NULL;
     md_ctx.tdvps_ptr = NULL;
 
-    retval = md_dump_list(MD_CTX_SYS, field_id, md_ctx, md_list_hdr_p, 64,
+    uint32_t buff_size = 64;
+    retval = md_dump_list(MD_CTX_SYS, field_id, md_ctx, md_list_hdr_p, buff_size,
                           MD_GUEST_RD, access_qual, &next_field_id);
 
+    // temporary buff size for flavor 1.5, till 1.5 and 2.0 flows are merged
     if (retval == TDX_METADATA_LIST_OVERFLOW)
     {
         retval = TDX_SUCCESS;

@@ -32,6 +32,7 @@
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
 #include "helpers/migration.h"
+#include "helpers/mem_scan.h"
 
 api_error_type tdh_export_pause(uint64_t target_tdr_pa)
 {
@@ -78,6 +79,26 @@ api_error_type tdh_export_pause(uint64_t target_tdr_pa)
         goto EXIT;
     }
 
+    if (is_non_blocking_export_configured())
+    {
+        // If TDCS.FIELD_SUPPORT_AT_INIT[BLOCKED_COUNT_SUPPORT] is set, check that TDCS.BLOCKED_COUNT is 0.
+        if ((tdcs_p->executions_ctl2_fields.field_support_at_init & BIT(FIELD_SUPPORT_AT_INIT_BLOCKED_COUNT)) &&
+            (tdcs_p->executions_ctl2_fields.blocked_count > 0))
+        {
+            TDX_ERROR("Illegal blocked count = %llx\n", tdcs_p->executions_ctl2_fields.blocked_count);
+            return_val = TDX_BLOCKED_MEMORY_EXISTS;
+            goto EXIT;
+        }
+
+        // If TDCS.FIELD_SUPPORT_AT_INIT[PEDNING_BLOCKED_COUNT_SUPPORT] is set, check that TDCS.PENDING_BLOCKED_COUNT is 0.
+        if ((tdcs_p->executions_ctl2_fields.field_support_at_init & BIT(FIELD_SUPPORT_AT_INIT_PENDING_BLOCKED_COUNT)) &&
+            (tdcs_p->executions_ctl2_fields.pending_blocked_count > 0))
+        {
+            TDX_ERROR("Illegal pending blocked count = %llx\n", tdcs_p->executions_ctl2_fields.pending_blocked_count);
+            return_val = TDX_BLOCKED_MEMORY_EXISTS;
+            goto EXIT;
+        }
+    }
 
     /*------------------------------------------------------------------------------------------------
        TDX I/O Placeholder

@@ -27,6 +27,7 @@
 #include "metadata_generic.h"
 #include "metadata_td.h"
 #include TDVPS_FIELDS_LOOKUP_HEADER
+#include TDR_TDCS_FIELDS_LOOKUP_HEADER
 #include TD_VMCS_FIELDS_LOOKUP_HEADER
 #include CPUID_CONFIGURATIONS_HEADER
 #include "helpers/error_reporting.h"
@@ -945,7 +946,7 @@ api_error_code_e md_td_write_element(md_field_id_t field_id, const md_lookup_t* 
                         }
                     }
 
-                    // REDUCE_VE implicitly turns on ENUM_TOPLOGY and VIRT_CPUID2
+                    // REDUCE_VE implicitly turns on ENUM_TOPOLOGY and VIRT_CPUID2
                     if (td_ctls.reduce_ve)
                     {
                         td_ctls.enum_topology = 1;
@@ -958,13 +959,18 @@ api_error_code_e md_td_write_element(md_field_id_t field_id, const md_lookup_t* 
                         return TDX_METADATA_FIELD_VALUE_NOT_VALID;
                     }
 
+                    if(td_ctls.enable_hw_keys && !get_global_data()->sealing_supported)
+                    {
+                        return TDX_METADATA_FIELD_VALUE_NOT_VALID;
+                    }
+
                     // check that no reserved bits are set
                     if (td_ctls.reserved)
                     {
                         return TDX_METADATA_FIELD_VALUE_NOT_VALID;
                     }
 
-                    // Upudate the TDCS field now, since it's used below
+                    // Update the TDCS field now, since it's used below
                     md_ctx.tdcs_ptr->executions_ctl_fields.td_ctls = td_ctls;
 
                     if (td_ctls_modified_bits.reduce_ve)
@@ -1007,13 +1013,13 @@ tdx_static_assert(MD_TDCS_EXECUTION_CONTROLS_CLASS_CODE < MD_TDCS_CPUID_CLASS_CO
 
 api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* entry,md_access_t access_type,
                                    md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx,
-                                   uint64_t value[MAX_ELEMENTS_IN_FIELD], uint64_t wr_request_mask, bool_t is_import, bool_t wr_mask_valid)
+                                   uint64_t value[MAX_ELEMENTS_IN_FIELD], bool_t is_import)
 {
     // Since we read a multiple elements of the same field, we would like to directly access the ptr of
     // the first element of the field, which will save us the time of searching the offset and size
     // of every element in the above if-else blocks.
 
-    uint64_t rd_mask = 0, wr_mask = 0, combined_wr_mask = 0;
+    uint64_t rd_mask = 0, wr_mask = 0;
     uint64_t read_value;
     uint64_t* elem_ptr;
     api_error_code_e status;
@@ -1035,17 +1041,10 @@ api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* en
         return status;
     }
 
-    // Narrow down the bits to be written with the input mask
-    combined_wr_mask = wr_mask;
-    if (wr_mask_valid)
-    {
-        combined_wr_mask &= wr_request_mask;
-    }
-
     // Check if the requested field is writable.
     // Note that there is no check for readable; we don't have write-only
     // fields.
-    if (combined_wr_mask == 0)
+    if (wr_mask == 0)
     {
         return TDX_METADATA_FIELD_NOT_WRITABLE;
     }
@@ -1088,7 +1087,7 @@ api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* en
             {
                 tdx_debug_assert(entry->num_of_elem == 1);
                 td_param_attributes_t attributes;
-                attributes.raw = value[0] & combined_wr_mask;
+                attributes.raw = value[0] & wr_mask;
                 if (!verify_td_attributes(attributes, is_import))
                 {
                     return TDX_METADATA_FIELD_VALUE_NOT_VALID;
@@ -1098,7 +1097,7 @@ api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* en
             case MD_TDCS_CONFIG_FLAGS_FIELD_ID:
             {
                 config_flags_t config_flags;
-                config_flags.raw = value[0] & combined_wr_mask;
+                config_flags.raw = value[0] & wr_mask;
                 if (!verify_td_config_flags(config_flags))
                 {
                     return TDX_METADATA_FIELD_VALUE_NOT_VALID;
@@ -1115,7 +1114,7 @@ api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* en
             {
                 tdx_debug_assert(entry->num_of_elem == 1);
                 ia32e_eptp_t eptp;
-                eptp.raw = value[0] & combined_wr_mask;
+                eptp.raw = value[0] & wr_mask;
                 if (!verify_and_set_td_eptp_controls(md_ctx.tdr_ptr, md_ctx.tdcs_ptr,
                                                      md_ctx.tdcs_ptr->executions_ctl_fields.gpaw, eptp))
                 {
@@ -1131,7 +1130,7 @@ api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* en
             }
             case MD_TDCS_HP_LOCK_TIMEOUT_FIELD_ID:
             {
-                if (!check_hp_lock_timeout_and_translate_to_tsc(value[0] & combined_wr_mask,
+                if (!check_hp_lock_timeout_and_translate_to_tsc(value[0] & wr_mask,
                         &md_ctx.tdcs_ptr->executions_ctl_fields.hp_lock_timeout))
                 {
                     return TDX_METADATA_FIELD_VALUE_NOT_VALID;
@@ -1228,7 +1227,7 @@ api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* en
             {
                 tdx_debug_assert(entry->num_of_elem == 1);
                 ia32_xcr0_t xfam;
-                xfam.raw = value[0] & combined_wr_mask;
+                xfam.raw = value[0] & wr_mask;
                 if (!check_xfam(xfam))
                 {
                     return TDX_METADATA_FIELD_VALUE_NOT_VALID;
@@ -1299,17 +1298,8 @@ api_error_code_e md_td_write_field(md_field_id_t field_id, const md_lookup_t* en
             elem_ptr = (uint64_t*)(first_elem_addr + ((uint64_t)i * elem_size));
             read_value = *elem_ptr & md_get_element_size_mask(entry->field_id.element_size_code);
 
-            // future features might use write_field not as part of import
-            if ((MD_IMPORT_IMMUTABLE != access_type) && (MD_IMPORT_MUTABLE != access_type))
-            {
-                if (!md_check_forbidden_bits_unchanged(read_value, value[i], wr_request_mask, wr_mask, rd_mask))
-                {
-                    return TDX_METADATA_FIELD_VALUE_NOT_VALID;
-                }
-            }
-
             // Update only the relevant bits per the write mask
-            if (!write_element_by_size(elem_ptr, read_value, value[i], combined_wr_mask, elem_size))
+            if (!write_element_by_size(elem_ptr, read_value, value[i], wr_mask, elem_size))
             {
                 return api_error_with_operand_id(TDX_OPERAND_BUSY, OPERAND_ID_METADATA_FIELD);
             }

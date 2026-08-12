@@ -59,14 +59,13 @@ void prepare_handoff_data(const uint16_t curr_hv)
     td_preserving_hod_ptr->mig_interrupted_count = tdx_global_data_ptr->mig_interrupted_count;
 
     // Populate HV2 fields
+    td_preserving_hod_ptr->non_blocking_export = tdx_global_data_ptr->non_blocking_export_configured;
+    td_preserving_hod_ptr->write_blocking_export_used = tdx_global_data_ptr->write_blocking_export_used;
 
-    td_preserving_hod_ptr->padding = 0;
     basic_memset_to_zero(td_preserving_hod_ptr->round_up_to_4k_1, sizeof(td_preserving_hod_ptr->round_up_to_4k_1));
 }
 
-_STATIC_INLINE_ void retrieve_handoff_data_default(
-    const td_preserving_hod_t *const td_preserving_hod_ptr,
-    tdx_module_global_t *const tdx_global_data_ptr)
+_STATIC_INLINE_ void retrieve_handoff_data_default(const td_preserving_hod_t *const td_preserving_hod_ptr, tdx_module_global_t *const tdx_global_data_ptr)
 {
     // Populate HV0 fields
     tdx_memcpy(
@@ -86,21 +85,21 @@ _STATIC_INLINE_ void retrieve_handoff_data_default(
     tdx_global_data_ptr->pkg_config_bitmap = td_preserving_hod_ptr->package_config_bitmap;
 }
 
-_STATIC_INLINE_ void retrieve_handoff_data_with_skipped_v0(
-    const td_preserving_skipped_hod_t *const td_preserving_hod_ptr,
-    tdx_module_global_t *const tdx_global_data_ptr)
+_STATIC_INLINE_ void retrieve_handoff_data_with_skipped_v0(const td_preserving_skipped_hod_t *const td_preserving_hod_ptr, tdx_module_global_t *const tdx_global_data_ptr)
 {
     /**
      * @note td_preserving_skipped_hod_t already takes the skipped TDX Connect fields
      *       into account when setting the dynamic PAMT enable bit
      */
     tdx_global_data_ptr->dynamic_pamt_enabled = td_preserving_hod_ptr->dynamic_pamt_enabled;
+
+    tdx_global_data_ptr->non_blocking_export_configured = false;
+    tdx_global_data_ptr->write_blocking_export_used = WRITE_BLOCKING_EXPORT_POSSIBLY_USED;
 }
 
-_STATIC_INLINE_ void retrieve_handoff_data_generic(
-    const td_preserving_hod_t *const td_preserving_hod_ptr,
-    tdx_module_global_t *const tdx_global_data_ptr,
-    const uint64_t hv)
+_STATIC_INLINE_ void retrieve_handoff_data_generic(const td_preserving_hod_t *const td_preserving_hod_ptr,
+                                                   tdx_module_global_t *const tdx_global_data_ptr,
+                                                   const uint64_t hv)
 {
     UNUSED(hv);
     // Populate HV0 fields
@@ -109,6 +108,18 @@ _STATIC_INLINE_ void retrieve_handoff_data_generic(
     // Populate HV1 fields
     tdx_global_data_ptr->td_build_count = td_preserving_hod_ptr->td_build_count;
     tdx_global_data_ptr->mig_interrupted_count = td_preserving_hod_ptr->mig_interrupted_count;
+
+    // Populate HV2 fields
+    if (hv < 2)
+    {
+        tdx_global_data_ptr->non_blocking_export_configured = false;
+        tdx_global_data_ptr->write_blocking_export_used = WRITE_BLOCKING_EXPORT_POSSIBLY_USED;
+    }
+    else
+    {
+        tdx_global_data_ptr->non_blocking_export_configured = td_preserving_hod_ptr->non_blocking_export;
+        tdx_global_data_ptr->write_blocking_export_used = td_preserving_hod_ptr->write_blocking_export_used;
+    }
 }
 
 void retrieve_handoff_data(const uint16_t prev_hv)

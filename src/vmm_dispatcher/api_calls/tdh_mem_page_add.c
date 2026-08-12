@@ -134,7 +134,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     {
         return_val = api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX);
         // Update output register operands
-        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Failed on SEPT walk - error = %llx\n", return_val);
         goto EXIT;
     }
@@ -145,7 +145,7 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     if (!sept_state_is_seamcall_leaf_allowed(TDH_MEM_PAGE_ADD_LEAF, page_sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("TDH_MEM_PAGE_ADD is not allowed in current SEPT entry state - 0x%llx\n", page_sept_entry_copy.raw);
         goto EXIT;
     }
@@ -235,6 +235,8 @@ api_error_type tdh_mem_page_add(page_info_api_input_t gpa_page_info,
     // restore VMM's XCR0 state
     ia32_xsetbv(0, local_data_ptr->vmm_xcr0_state);
 
+    // Increment TDCS.MEM_COUNT
+    tdcs_ptr->executions_ctl2_fields.mem_count++;
 
     // Increment TDR child count
     tdr_ptr->management_fields.chldcnt++;

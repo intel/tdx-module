@@ -22,7 +22,7 @@
 
 /**
  * @file tdh_sys_tdmr_init.c
- * @brief TDHSYSTDMRINI API handler
+ * @brief TDHSYSTDMRINIT API handler
  */
 
 #include "tdx_api_defs.h"
@@ -56,7 +56,7 @@ api_error_type tdh_sys_tdmr_init(uint64_t tdmr_pa)
 
     tdx_local_data->vmm_regs.rdx = 0ULL;
 
-    // For each TDMR, the VMM executes a loop of SEAMCALL(TDHSYSINITTDMR),
+    // For each TDMR, the VMM executes a loop of SEAMCALL(TDHSYSTDMRINIT),
     // providing the TDMR start address (at 1GB granularity) as an input
     if (!is_addr_aligned_pwr_of_2(tdmr_pa, _1GB) ||
         !is_pa_smaller_than_max_pa(tdmr_pa) ||

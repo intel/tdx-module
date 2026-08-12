@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -532,9 +532,9 @@ api_error_type tdh_sys_rdall(uint64_t md_list_hpa, md_field_id_t field_id);
  * @brief Globally initialize the TDX-SEAM module.
  *
  * @note
- * 
+ *
  * @param version Version of the API
- * 
+ *
  * @return Success or Error type
  */
 api_error_type tdh_sys_init(uint8_t version);
@@ -753,12 +753,13 @@ api_error_type tdh_export_pause(uint64_t target_tdr_pa);
  * @param migs_i_and_cmd_val - Migration stream index and command
  * @param mac_list_0_pa - HPA (including HKID bits) of a MAC list
  * @param mac_list_1_pa - HPA (including HKID bits) of a MAC list
+ * @param version - Can be 0 or 1
  *
  * @return  Success or Error type
  */
 api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa, uint64_t hpa_and_size_pa,
                               uint64_t mig_buff_list_pa_val, uint64_t migs_i_and_cmd_val,
-                              uint64_t  mac_list_0_pa, uint64_t  mac_list_1_pa);
+                              uint64_t  mac_list_0_pa, uint64_t  mac_list_1_pa, uint8_t version);
 
 /**
  * @brief API handler for TDH_IMPORT_MEM_LEAF
@@ -772,12 +773,13 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
  * @param mac_list_1_pa - HPA (including HKID bits) of a MAC list
  * @param new_page_list_pa_val - HPA (including HKID bits) of a destination page if in-place import is not requested,
  *                               otherwise, should be set to NULL_PA (all 1's).
+ * @param version - Can be either 0 or 1
  *
  * @return  Success or Error type
  */
 api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa, uint64_t hpa_and_size_pa,
                               uint64_t mig_buff_list_pa_val, uint64_t migs_i_and_cmd_pa, uint64_t mac_list_0_pa,
-                              uint64_t  mac_list_1_pa, uint64_t new_page_list_pa_val);
+                              uint64_t  mac_list_1_pa, uint64_t new_page_list_pa_val, uint8_t version);
 
 /**
  * @brief API handler for TDH_IMPORT_ABORT_LEAF
@@ -825,20 +827,22 @@ api_error_type tdh_import_page_cancel(uint64_t target_tdr_pa,
  *
  * @param gpa_list_info
  * @param target_tdr_pa
+ * @param version
  *
  * @return Success or Error type
  */
-api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa);
+api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa, uint8_t version);
 
 /**
  * @brief API handler for TDH_EXPORT_RESTORE_LEAF
  *
  * @param gpa_list_info
  * @param target_tdr_pa
+ * @param version
  *
  * @return Success or Error type
  */
-api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa);
+api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa, uint8_t version);
 
 /**
  * @brief
@@ -847,6 +851,62 @@ api_error_type tdh_export_restore(gpa_list_info_t gpa_list_info, uint64_t target
  */
 api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa);
 
+/**
+ * @brief Scan a range of the TD’s private GPA space and perform the requested operation.
+ *
+ * @note
+ *
+ * @param list_of_lists_info - HPA of a list-of-lists in shared memory, and first and last entries to process.  The list contains up to 512 PAGE_LIST_INFO entries, each pointing to a GPA list containing up to 512 entries.
+ * @param tdr - HPA of the source TD’s TDR page (HKID bits must be 0).
+ * @param controls - SCAN control fields.
+ * @param range_start - The start address of the private GPA range to scan. Must be a valid private GPA, aligned on 4KB.
+ * @param range_size - The size of the GPA range to scan. Must be a multiple of 4KB.  Bits 63:52 must be 0.
+ * @param overall_next_entry - The next overall index of the GPA List entry to be written by TDH.MEM.SCAN.RANGE.
+ *
+ * @return Success or Error type
+ */
+api_error_type tdh_mem_scan_range(uint64_t list_of_lists_info, uint64_t tdr, uint64_t controls, uint64_t range_start, uint64_t range_size, uint64_t overall_next_entry);
+
+/**
+ * @brief Do a comprehensive scan of the TD’s private GPA space and perform the requested operation.
+ *
+ * @note
+ *
+ * @param list_of_lists_info - HPA of a list-of-lists in shared memory, and first and last entries to process.  The list contains up to 512 PAGE_LIST_INFO entries, each pointing to a GPA list containing up to 512 entries.
+ * @param tdr - HPA of the source TD’s TDR page (HKID bits must be 0).
+ * @param controls - SCAN control fields.
+ * @param overall_next_entry - The next overall index of the GPA List entry to be written by TDH.MEM.SCAN.COMP.
+ *
+ * @return Success or Error type
+ */
+api_error_type tdh_mem_scan_comp(uint64_t list_of_lists_info, uint64_t tdr, uint64_t controls, uint64_t overall_next_entry);
+
+/**
+ * @brief Configure memory scan and add control structure pages.
+ *
+ * @note
+ *
+ * @param range_list_info - The shared physical address (including HKID) of a page where memory scan control page will be created.
+ * @param tdr - The physical address of the owner TDR page (HKID bits must be 0).
+ * @param cx0_hpa - The physical address where memory scan control page 0 will be created (HKID bits must be 0).
+ * @param cx1_hpa - The physical address where memory scan control page 1 will be created (HKID bits must be 0).
+ * @param cx2_hpa - The physical address where memory scan control page 2 will be created (HKID bits must be 0).
+ * @param cx3_hpa - The physical address where memory scan control page 3 will be created (HKID bits must be 0).
+ *
+ * @return Success or Error type
+ */
+api_error_type tdh_mem_scan_config(uint64_t range_list_info, uint64_t tdr, uint64_t cx0_hpa, uint64_t cx1_hpa, uint64_t cx2_hpa, uint64_t cx3_hpa);
+
+/**
+ * @brief Reset the TDX module’s comprehensive memory scan internal state for the specified TD.
+ *
+ * @note
+ *
+ * @param tdr - HPA of the source TD’s TDR page (HKID bits must be 0).
+ *
+ * @return Success or Error type
+ */
+api_error_type tdh_mem_scan_reset(uint64_t tdr);
 
 /**
  * @brief Shuts down the system and prepared handoff data buffer for the next module

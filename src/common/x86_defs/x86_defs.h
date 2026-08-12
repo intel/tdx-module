@@ -1015,17 +1015,6 @@ typedef union cpuid_0a_eax_u
 } cpuid_0a_eax_t;
 tdx_static_assert(sizeof(cpuid_0a_eax_t) == 4, cpuid_0a_eax_t);
 
-typedef union cpuid_0a_ecx_u
-{
-    struct
-    {
-        uint32_t fc_ditmap     : 4; // Bits 3:0
-        uint32_t reserved      : 28;
-    };
-    uint32_t raw;
-} cpuid_0a_ecx_t;
-tdx_static_assert(sizeof(cpuid_0a_ecx_t) == 4, cpuid_0a_ecx_t);
-
 typedef union cpuid_0a_edx_u
 {
     struct

@@ -65,12 +65,12 @@ Binary's generation includes the date it was compiled at, build number, module's
 
 Build date, build number and update version could be extracted from the production binary, please use TDH.SYS.RD SEAMCALL (leaf #34) with MD_SYS_TDX_MODULE_VERSION_CLASS_CODE(8) as a class_code and MD_SYS_BUILD_DATE_FIELD_CODE(1)/MD_SYS_BUILD_NUM_FIELD_CODE(2)/MD_SYS_UPDATE_VERSION_FIELD_CODE(5) as field codes. The date format should be YYYYMMDD.  
 
-Current TDX version was built with: TDX_MODULE_BUILD_DATE=20251204 TDX_MODULE_BUILD_NUM=994 TDX_MODULE_UPDATE_VER=16 TPA_HASH=c950d14dec5b4e3db6b162a4f8ba5428a07b7db1f39c1da4a2c9aab496719a359369e3de11b89ce5a380261b1a75ffe3
+Current TDX version was built with: TDX_MODULE_BUILD_DATE=20260211 TDX_MODULE_BUILD_NUM=1013 TDX_MODULE_UPDATE_VER=18 TPA_HASH=612ff95af7db2c9e41f3ecd61d470da361d06d26d40c24944ba5614cfa2f4e23b793eca3c87d6abe27ab41f5e91cf938
 
 1) In order to reproduce the exact binary, it is required to specify the original date, build number, update version and TPA hash signature:
 
 	```bash
-	make RELEASE=1 TDX_MODULE_BUILD_DATE=20251204 TDX_MODULE_BUILD_NUM=994 TDX_MODULE_UPDATE_VER=16 TPA_HASH=c950d14dec5b4e3db6b162a4f8ba5428a07b7db1f39c1da4a2c9aab496719a359369e3de11b89ce5a380261b1a75ffe3
+	make RELEASE=1 TDX_MODULE_BUILD_DATE=20260211 TDX_MODULE_BUILD_NUM=1013 TDX_MODULE_UPDATE_VER=18 TPA_HASH=612ff95af7db2c9e41f3ecd61d470da361d06d26d40c24944ba5614cfa2f4e23b793eca3c87d6abe27ab41f5e91cf938
 	```
 
 	In case binary reproduction is not required, "make RELEASE=1" will suffice.
@@ -89,4 +89,4 @@ Current TDX version was built with: TDX_MODULE_BUILD_DATE=20251204 TDX_MODULE_BU
 
 
 ## Expected module hash (MRSEAM)
-0xF40772D82608DA5443887DD7247BE3E0092927E62409A9BB8DA98EAED9017704BE075466A13D3CA30501000D69407495
+0x2D2DE102461684F14C8D0984A09D895E3E9E15944CE020A03B977E1F114D5E1ED32EF666A47FD19A5851B3800EDA3AFA

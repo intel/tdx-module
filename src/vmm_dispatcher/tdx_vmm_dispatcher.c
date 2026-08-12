@@ -156,6 +156,10 @@ void tdx_vmm_dispatcher(void)
             case TDH_SYS_INIT_LEAF:
             case TDH_SYS_CONFIG_LEAF:
             case TDH_SYS_UPDATE_LEAF:
+            case TDH_EXPORT_MEM_LEAF:
+            case TDH_EXPORT_BLOCKW_LEAF:
+            case TDH_EXPORT_RESTORE_LEAF:
+            case TDH_IMPORT_MEM_LEAF:
             case TDH_MEM_SHARED_SEPT_WR_LEAF:
                 break;
             default:
@@ -564,14 +568,16 @@ void tdx_vmm_dispatcher(void)
     case TDH_EXPORT_BLOCKW_LEAF:
     {
         local_data->vmm_regs.rax = tdh_export_blockw((gpa_list_info_t)local_data->vmm_regs.rcx,
-                                                     local_data->vmm_regs.rdx);
+                                                     local_data->vmm_regs.rdx,
+                                                     (uint8_t)leaf_opcode.version);
 
         break;
     }
     case TDH_EXPORT_RESTORE_LEAF:
     {
         local_data->vmm_regs.rax = tdh_export_restore((gpa_list_info_t)local_data->vmm_regs.rcx,
-                                                      local_data->vmm_regs.rdx);
+                                                      local_data->vmm_regs.rdx,
+                                                      (uint8_t)leaf_opcode.version);
 
         break;
     }
@@ -704,7 +710,8 @@ void tdx_vmm_dispatcher(void)
                                             local_data->vmm_regs.r9,
                                             local_data->vmm_regs.r10,
                                             local_data->vmm_regs.r11,
-                                            local_data->vmm_regs.r12);
+                                            local_data->vmm_regs.r12,
+                                            (uint8_t)leaf_opcode.version);
         break;
     }
     case TDH_IMPORT_MEM_LEAF:
@@ -718,7 +725,41 @@ void tdx_vmm_dispatcher(void)
                                             local_data->vmm_regs.r10,
                                             local_data->vmm_regs.r11,
                                             local_data->vmm_regs.r12,
-                                            local_data->vmm_regs.r13);
+                                            local_data->vmm_regs.r13,
+                                            (uint8_t)leaf_opcode.version);
+        break;
+    }
+    case TDH_MEM_SCAN_RANGE_LEAF:
+    {
+        local_data->vmm_regs.rax = tdh_mem_scan_range(local_data->vmm_regs.rcx,
+                                                      local_data->vmm_regs.rdx,
+                                                      local_data->vmm_regs.r8,
+                                                      local_data->vmm_regs.r9,
+                                                      local_data->vmm_regs.r10,
+                                                      local_data->vmm_regs.r11);
+        break;
+    }
+    case TDH_MEM_SCAN_COMP_LEAF:
+    {
+        local_data->vmm_regs.rax = tdh_mem_scan_comp(local_data->vmm_regs.rcx,
+                                                     local_data->vmm_regs.rdx,
+                                                     local_data->vmm_regs.r8,
+                                                     local_data->vmm_regs.r11);
+        break;
+    }
+    case TDH_MEM_SCAN_CONFIG_LEAF:
+    {
+        local_data->vmm_regs.rax = tdh_mem_scan_config(local_data->vmm_regs.rcx,
+                                                       local_data->vmm_regs.rdx,
+                                                       local_data->vmm_regs.r8,
+                                                       local_data->vmm_regs.r9,
+                                                       local_data->vmm_regs.r10,
+                                                       local_data->vmm_regs.r11);
+        break;
+    }
+    case TDH_MEM_SCAN_RESET_LEAF:
+    {
+        local_data->vmm_regs.rax = tdh_mem_scan_reset(local_data->vmm_regs.rdx);
         break;
     }
 

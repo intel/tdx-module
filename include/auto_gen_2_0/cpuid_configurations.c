@@ -527,6 +527,494 @@ const cpuid_lookup_t cpuid_lookup[MAX_NUM_CPUID_LOOKUP] = {
   }
 };
 
+const ordered_cpuid_lookup_t ordered_cpuid_lookup[MAX_NUM_ORDERED_CPUID_LOOKUP] = {
+ [0] = { .leaf_subleaf = {.leaf = 0x0, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 10
+  },
+ [1] = { .leaf_subleaf = {.leaf = 0x1, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 0
+  },
+ [2] = { .leaf_subleaf = {.leaf = 0x2, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 72
+  },
+ [3] = { .leaf_subleaf = {.leaf = 0x3, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 11
+  },
+ [4] = { .leaf_subleaf = {.leaf = 0x4, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 1
+  },
+ [5] = { .leaf_subleaf = {.leaf = 0x4, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 2
+  },
+ [6] = { .leaf_subleaf = {.leaf = 0x4, .subleaf = 0x2},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 3
+  },
+ [7] = { .leaf_subleaf = {.leaf = 0x4, .subleaf = 0x3},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 4
+  },
+ [8] = { .leaf_subleaf = {.leaf = 0x4, .subleaf = 0x4},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 12
+  },
+ [9] = { .leaf_subleaf = {.leaf = 0x5, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 63
+  },
+ [10] = { .leaf_subleaf = {.leaf = 0x6, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 13
+  },
+ [11] = { .leaf_subleaf = {.leaf = 0x7, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 5
+  },
+ [12] = { .leaf_subleaf = {.leaf = 0x7, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 6
+  },
+ [13] = { .leaf_subleaf = {.leaf = 0x7, .subleaf = 0x2},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 14
+  },
+ [14] = { .leaf_subleaf = {.leaf = 0x8, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 15
+  },
+ [15] = { .leaf_subleaf = {.leaf = 0x9, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [16] = { .leaf_subleaf = {.leaf = 0xa, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 7
+  },
+ [17] = { .leaf_subleaf = {.leaf = 0xb, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 64
+  },
+ [18] = { .leaf_subleaf = {.leaf = 0xb, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 65
+  },
+ [19] = { .leaf_subleaf = {.leaf = 0xb, .subleaf = 0x2},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 66
+  },
+ [20] = { .leaf_subleaf = {.leaf = 0xc, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [21] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 16
+  },
+ [22] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 17
+  },
+ [23] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x2},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 18
+  },
+ [24] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x3},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 19
+  },
+ [25] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x4},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 20
+  },
+ [26] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x5},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 21
+  },
+ [27] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x6},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 22
+  },
+ [28] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x7},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 23
+  },
+ [29] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x8},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 24
+  },
+ [30] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x9},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 25
+  },
+ [31] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0xa},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 26
+  },
+ [32] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0xb},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 27
+  },
+ [33] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0xc},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 28
+  },
+ [34] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0xd},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 29
+  },
+ [35] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0xe},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 30
+  },
+ [36] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0xf},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 31
+  },
+ [37] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x10},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 32
+  },
+ [38] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x11},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 33
+  },
+ [39] = { .leaf_subleaf = {.leaf = 0xd, .subleaf = 0x12},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 34
+  },
+ [40] = { .leaf_subleaf = {.leaf = 0xe, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 35
+  },
+ [41] = { .leaf_subleaf = {.leaf = 0xf, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [42] = { .leaf_subleaf = {.leaf = 0xf, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [43] = { .leaf_subleaf = {.leaf = 0x10, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [44] = { .leaf_subleaf = {.leaf = 0x10, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [45] = { .leaf_subleaf = {.leaf = 0x10, .subleaf = 0x2},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [46] = { .leaf_subleaf = {.leaf = 0x10, .subleaf = 0x3},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [47] = { .leaf_subleaf = {.leaf = 0x11, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 36
+  },
+ [48] = { .leaf_subleaf = {.leaf = 0x12, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 37
+  },
+ [49] = { .leaf_subleaf = {.leaf = 0x13, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 38
+  },
+ [50] = { .leaf_subleaf = {.leaf = 0x14, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 39
+  },
+ [51] = { .leaf_subleaf = {.leaf = 0x14, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 40
+  },
+ [52] = { .leaf_subleaf = {.leaf = 0x15, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 41
+  },
+ [53] = { .leaf_subleaf = {.leaf = 0x16, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [54] = { .leaf_subleaf = {.leaf = 0x17, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [55] = { .leaf_subleaf = {.leaf = 0x17, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [56] = { .leaf_subleaf = {.leaf = 0x17, .subleaf = 0x2},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [57] = { .leaf_subleaf = {.leaf = 0x17, .subleaf = 0x3},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [58] = { .leaf_subleaf = {.leaf = 0x18, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 68
+  },
+ [59] = { .leaf_subleaf = {.leaf = 0x18, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 69
+  },
+ [60] = { .leaf_subleaf = {.leaf = 0x18, .subleaf = 0x2},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 70
+  },
+ [61] = { .leaf_subleaf = {.leaf = 0x18, .subleaf = 0x3},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 71
+  },
+ [62] = { .leaf_subleaf = {.leaf = 0x18, .subleaf = 0x4},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 73
+  },
+ [63] = { .leaf_subleaf = {.leaf = 0x18, .subleaf = 0x5},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 74
+  },
+ [64] = { .leaf_subleaf = {.leaf = 0x18, .subleaf = 0x6},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 75
+  },
+ [65] = { .leaf_subleaf = {.leaf = 0x18, .subleaf = 0x7},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 76
+  },
+ [66] = { .leaf_subleaf = {.leaf = 0x18, .subleaf = 0x8},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 77
+  },
+ [67] = { .leaf_subleaf = {.leaf = 0x19, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 42
+  },
+ [68] = { .leaf_subleaf = {.leaf = 0x1a, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 67
+  },
+ [69] = { .leaf_subleaf = {.leaf = 0x1b, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [70] = { .leaf_subleaf = {.leaf = 0x1b, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [71] = { .leaf_subleaf = {.leaf = 0x1c, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 8
+  },
+ [72] = { .leaf_subleaf = {.leaf = 0x1d, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 43
+  },
+ [73] = { .leaf_subleaf = {.leaf = 0x1d, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 44
+  },
+ [74] = { .leaf_subleaf = {.leaf = 0x1e, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 45
+  },
+ [75] = { .leaf_subleaf = {.leaf = 0x1f, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 46
+  },
+ [76] = { .leaf_subleaf = {.leaf = 0x1f, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 47
+  },
+ [77] = { .leaf_subleaf = {.leaf = 0x1f, .subleaf = 0x2},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 48
+  },
+ [78] = { .leaf_subleaf = {.leaf = 0x1f, .subleaf = 0x3},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 49
+  },
+ [79] = { .leaf_subleaf = {.leaf = 0x1f, .subleaf = 0x4},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 50
+  },
+ [80] = { .leaf_subleaf = {.leaf = 0x1f, .subleaf = 0x5},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 51
+  },
+ [81] = { .leaf_subleaf = {.leaf = 0x20, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 52
+  },
+ [82] = { .leaf_subleaf = {.leaf = 0x21, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 53
+  },
+ [83] = { .leaf_subleaf = {.leaf = 0x22, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 58
+  },
+ [84] = { .leaf_subleaf = {.leaf = 0x23, .subleaf = 0x0},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 59
+  },
+ [85] = { .leaf_subleaf = {.leaf = 0x23, .subleaf = 0x1},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 60
+  },
+ [86] = { .leaf_subleaf = {.leaf = 0x23, .subleaf = 0x2},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 61
+  },
+ [87] = { .leaf_subleaf = {.leaf = 0x23, .subleaf = 0x3},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 62
+  },
+ [88] = { .leaf_subleaf = {.leaf = 0x80000000, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 54
+  },
+ [89] = { .leaf_subleaf = {.leaf = 0x80000001, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 55
+  },
+ [90] = { .leaf_subleaf = {.leaf = 0x80000002, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 78
+  },
+ [91] = { .leaf_subleaf = {.leaf = 0x80000003, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [92] = { .leaf_subleaf = {.leaf = 0x80000004, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [93] = { .leaf_subleaf = {.leaf = 0x80000005, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = (uint32_t)(-1)
+  },
+ [94] = { .leaf_subleaf = {.leaf = 0x80000006, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 56
+  },
+ [95] = { .leaf_subleaf = {.leaf = 0x80000007, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = true,
+  .index_to_cpuid_lookup = 57
+  },
+ [96] = { .leaf_subleaf = {.leaf = 0x80000008, .subleaf = 0xffffffff},
+  .valid_entry = true,
+  .fixed0 = false,
+  .index_to_cpuid_lookup = 9
+  }
+};
+
 const cpuid_configurable_t cpuid_configurable[MAX_NUM_CPUID_CONFIG] = {
  [0] = { .leaf_subleaf = {.leaf = 0x1, .subleaf = 0xffffffff},
   .valid_entry = true,

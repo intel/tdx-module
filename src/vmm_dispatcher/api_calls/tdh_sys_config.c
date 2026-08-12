@@ -844,8 +844,18 @@ api_error_type tdh_sys_config(uint64_t tdmr_info_array_pa,
             goto EXIT;
         }
 
+        // Set PL.NON_BLOCKING_EXPORT to the export mode request by the host VMM
+        tdx_global_data_ptr->non_blocking_export_configured = (bool_t)(enabled_features.non_blocking_export);
+        tdx_global_data_ptr->scan_export_restore = (bool_t)(enabled_features.scan_export_restore);
 
+        tdx_global_data_ptr->tdid_vmid_reporting_enabled = (bool_t)(enabled_features.tdid_vmid_reporting);
     }
+    else
+    {
+        tdx_global_data_ptr->non_blocking_export_configured = false;
+    }
+    
+    tdx_global_data_ptr->write_blocking_export_used = WRITE_BLOCKING_EXPORT_UNUSED;
 
     tdx_global_data_ptr->dynamic_pamt_enabled = sysconfig_options.dynamic_pamt;
 

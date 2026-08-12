@@ -33,6 +33,7 @@
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
 #include "helpers/migration.h"
+#include "helpers/mem_scan.h"
 #include "metadata_handlers/metadata_generic.h"
 #include "memory_handlers/sept_manager.h"
 
@@ -47,6 +48,11 @@ api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa)
     local_data_ptr->vmm_regs.rcx = 0ULL;
     local_data_ptr->vmm_regs.rdx = 0ULL;
 
+    if (is_non_blocking_export_configured())
+    {
+        TDX_ERROR("TDH.EXPORT.UNBLOCKW is only available if the TDX module is configured for write-blocking based export.\n");
+        return api_error_with_operand_id(return_val, OPERAND_ID_RAX);
+    }
 
 
     // TDR and TDCS
@@ -142,7 +148,7 @@ api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa)
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
         {
             // Update output register operands
-            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_p->executions_ctl_fields.attributes.debug);
         }
 
         TDX_ERROR("Secure EPT lock and walk failed. Error code 0x%llx\n", return_val);
@@ -166,7 +172,7 @@ api_error_type tdh_export_unblockw(uint64_t page_pa, uint64_t target_tdr_pa)
     if (!sept_state_is_seamcall_leaf_allowed(TDH_EXPORT_UNBLOCKW_LEAF, page_sept_entry_copy))
     {
         TDX_ERROR("SEAMCALL not allowed in this state (page_sept_entry_copy.raw0x%llx)\n", page_sept_entry_copy.raw);
-        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, (ept_level_t)gpa_and_level.level, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, (ept_level_t)gpa_and_level.level, local_data_ptr, tdcs_p->executions_ctl_fields.attributes.debug);
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
         goto EXIT;
     }

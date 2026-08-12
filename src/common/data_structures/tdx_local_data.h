@@ -42,10 +42,9 @@
  */
 typedef struct PACKED lp_info_s
 {
-    uint32_t  lp;     /**< number of lp in package and core context */
-    uint32_t  core;   /**< number of core in package context */
-    uint32_t  pkg;    /**< number of package */
     uint32_t  x2apic_id;  /**< The unique sequential index of the current lp in the platform */
+    uint32_t  core;       /**< number of core in package context */
+    uint32_t  pkg;        /**< number of package */
 } lp_info_t;
 
 

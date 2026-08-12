@@ -187,7 +187,7 @@ _STATIC_INLINE_ bool_t ia32_rdrand(uint64_t* rand)
 
     _ASM_VOLATILE_ ("rdrand %0 \n"
                     "pushfq; popq %1\n"
-                    : "=r"(*rand) , "=r"(rflags.raw));
+                    : "=r"(*rand) , "=r"(rflags.raw):: "cc");
 
     if (!rflags.cf)
     {
@@ -202,7 +202,7 @@ _STATIC_INLINE_ bool_t ia32_rdseed(uint64_t* rand)
 
     _ASM_VOLATILE_ ("rdseed %0 \n"
                     "pushfq; popq %1\n"
-                    : "=r"(*rand) , "=r"(rflags.raw));
+                    : "=r"(*rand) , "=r"(rflags.raw) :: "cc");
 
     if (!rflags.cf)
     {
@@ -449,7 +449,7 @@ _STATIC_INLINE_ uint8_t _lock_cmpxchg_8bit(uint8_t cmp_val, uint8_t set_val, uin
 {
     _ASM_VOLATILE_ ("lock\n"
             "cmpxchgb %3,%0"
-            : "=m"(*sem), "=a"(set_val)
+            : "+m"(*sem), "=a"(set_val)
             : "a"(cmp_val), "r" (set_val)
             : "memory" , "cc");
     return set_val;
@@ -459,7 +459,7 @@ _STATIC_INLINE_ uint16_t _lock_cmpxchg_16b(uint16_t cmp_val, uint16_t set_val, u
 {
     _ASM_VOLATILE_ ("lock\n"
             "cmpxchgw %3,%0"
-            : "=m"(*sem), "=a"(set_val)
+            : "+m"(*sem), "=a"(set_val)
             : "a"(cmp_val), "r" (set_val)
             : "memory" , "cc");
     return set_val;
@@ -469,7 +469,7 @@ _STATIC_INLINE_ uint32_t _lock_cmpxchg_32b(uint32_t cmp_val, uint32_t set_val, u
 {
     _ASM_VOLATILE_ ("lock\n"
             "cmpxchgl %3,%0"
-            : "=m"(*sem), "=a"(set_val)
+            : "+m"(*sem), "=a"(set_val)
             : "a"(cmp_val), "r" (set_val)
             : "memory" , "cc");
     return set_val;
@@ -479,7 +479,7 @@ _STATIC_INLINE_ uint64_t _lock_cmpxchg_64b(uint64_t cmp_val, uint64_t set_val, u
 {
     _ASM_VOLATILE_ ("lock\n"
             "cmpxchgq %3,%0"
-            : "=m"(*sem), "=a"(set_val)
+            : "+m"(*sem), "=a"(set_val)
             : "a"(cmp_val), "r" (set_val)
             : "memory" , "cc");
     return set_val;
@@ -499,7 +499,7 @@ _STATIC_INLINE_ uint128_t _lock_read_128b(uint128_t * src)
             "cmpxchg16b %2"
             : "=a"(result.qwords[0]), "=d"(result.qwords[1])
             : "m"(*src) , "a"(0),"b"(0),"c"(0),"d"(0)
-            : "memory" );
+            : "memory" , "cc" );
     return result;
 }
 
@@ -507,7 +507,7 @@ _STATIC_INLINE_ uint8_t _xchg_8_bit(uint8_t* mem, uint8_t quantum)
 {
     //according to SDM, XCHG on memory operand is automatically uses the processor's locking protocol
     //regardless of LOCK prefix
-    _ASM_VOLATILE_("xchgb %2, %0" : "=m" (*mem), "=a"(quantum) : "a"(quantum) : "memory");
+    _ASM_VOLATILE_("xchgb %2, %0" : "+m" (*mem), "=a"(quantum) : "a"(quantum) : "memory");
     return quantum;
 }
 
@@ -515,7 +515,7 @@ _STATIC_INLINE_ uint16_t _xchg_16b(uint16_t *mem, uint16_t quantum)
 {
     //according to SDM, XCHG on memory operand is automatically uses the processor's locking protocol
     //regardless of LOCK prefix
-    _ASM_VOLATILE_ ("xchgw %2, %0" : "=m" ( *mem ), "=a"(quantum) : "a"(quantum) : "memory");
+    _ASM_VOLATILE_ ("xchgw %2, %0" : "+m" ( *mem ), "=a"(quantum) : "a"(quantum) : "memory");
     return quantum;
 }
 
@@ -523,69 +523,69 @@ _STATIC_INLINE_ uint32_t _xchg_32b(uint32_t *mem, uint32_t quantum)
 {
     //according to SDM, XCHG on memory operand is automatically uses the processor's locking protocol
     //regardless of LOCK prefix
-    _ASM_VOLATILE_ ("xchgl %2, %0" : "=m" ( *mem ), "=a"(quantum) : "a"(quantum) : "memory");
+    _ASM_VOLATILE_ ("xchgl %2, %0" : "+m" ( *mem ), "=a"(quantum) : "a"(quantum) : "memory");
     return quantum;
 }
 
 _STATIC_INLINE_ uint8_t _lock_xadd_8b(uint8_t* mem, uint8_t quantum)
 {
-    _ASM_VOLATILE_("lock; xaddb %2, %0" : "=m" (*mem), "=a"(quantum) : "a"(quantum) : "memory", "cc");
+    _ASM_VOLATILE_("lock; xaddb %2, %0" : "+m" (*mem), "=a"(quantum) : "a"(quantum) : "memory", "cc");
     return quantum;
 }
 
 _STATIC_INLINE_ uint16_t _lock_xadd_16b(uint16_t *mem, uint16_t quantum)
 {
-    _ASM_VOLATILE_ ("lock; xaddw %2, %0" : "=m" ( *mem ), "=a"(quantum) : "a"(quantum) : "memory", "cc");
+    _ASM_VOLATILE_ ("lock; xaddw %2, %0" : "+m" ( *mem ), "=a"(quantum) : "a"(quantum) : "memory", "cc");
     return quantum;
 }
 
 _STATIC_INLINE_ uint32_t _lock_xadd_32b(uint32_t *mem, uint32_t quantum)
 {
-    _ASM_VOLATILE_ ("lock; xaddl %2, %0" : "=m" ( *mem ), "=a"(quantum) : "a"(quantum) : "memory", "cc");
+    _ASM_VOLATILE_ ("lock; xaddl %2, %0" : "+m" ( *mem ), "=a"(quantum) : "a"(quantum) : "memory", "cc");
     return quantum;
 }
 
 _STATIC_INLINE_ uint64_t _lock_xadd_64b(uint64_t *mem, uint64_t quantum)
 {
-    _ASM_VOLATILE_ ("lock; xaddq %2, %0" : "=m" ( *mem ), "=a"(quantum) : "a"(quantum) : "memory", "cc");
+    _ASM_VOLATILE_ ("lock; xaddq %2, %0" : "+m" ( *mem ), "=a"(quantum) : "a"(quantum) : "memory", "cc");
     return quantum;
 }
 
 _STATIC_INLINE_ void _lock_or_16b(uint16_t *mem, uint16_t quantum)
 {
-    _ASM_VOLATILE_ ("lock; orw %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
+    _ASM_VOLATILE_ ("lock; orw %1, %0" : "+m" ( *mem ) : "a"(quantum) : "memory" , "cc");
 }
 
 _STATIC_INLINE_ void _lock_or_32b(uint32_t *mem, uint32_t quantum)
 {
-    _ASM_VOLATILE_ ("lock; or %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
+    _ASM_VOLATILE_ ("lock; or %1, %0" : "+m" ( *mem ) : "a"(quantum) : "memory");
 }
 
 _STATIC_INLINE_ void _lock_or_64b(uint64_t *mem, uint64_t quantum)
 {
-    _ASM_VOLATILE_ ("lock; orq %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
+    _ASM_VOLATILE_ ("lock; orq %1, %0" : "+m" ( *mem ) : "a"(quantum) : "memory");
 }
 
 _STATIC_INLINE_ void _lock_and_8b(uint8_t *mem, uint8_t quantum)
 {
-    _ASM_VOLATILE_ ("lock; andb %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
+    _ASM_VOLATILE_ ("lock; andb %1, %0" : "+m" ( *mem ) : "a"(quantum) : "memory", "cc");
 }
 
 _STATIC_INLINE_ void _lock_and_16b(uint16_t *mem, uint16_t quantum)
 {
-    _ASM_VOLATILE_ ("lock; andw %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
+    _ASM_VOLATILE_ ("lock; andw %1, %0" : "+m" ( *mem ) : "a"(quantum) : "memory", "cc");
 }
 
 _STATIC_INLINE_ void _lock_xor_16b(uint16_t *mem, uint16_t quantum)
 {
-    _ASM_VOLATILE_ ("lock; xorw %1, %0" : "=m" ( *mem ) : "a"(quantum) : "memory");
+    _ASM_VOLATILE_ ("lock; xorw %1, %0" : "+m" ( *mem ) : "a"(quantum) : "memory", "cc");
 }
 
 _STATIC_INLINE_ bool_t _lock_bts_16b(volatile uint16_t* mem, uint16_t bit)
 {
     bool_t result;
 
-    _ASM_VOLATILE_ ("lock; btsw %2, %0; adc %1,%1" : "=m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
+    _ASM_VOLATILE_ ("lock; btsw %2, %0; adc %1,%1" : "+m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
     return result;
 }
 
@@ -593,7 +593,7 @@ _STATIC_INLINE_ bool_t _lock_bts_32b(volatile uint32_t* mem, uint32_t bit)
 {
     bool_t result;
 
-    _ASM_VOLATILE_ ("lock; bts %2, %0; adc %1,%1" : "=m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
+    _ASM_VOLATILE_ ("lock; bts %2, %0; adc %1,%1" : "+m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
     return result;
 }
 
@@ -601,7 +601,7 @@ _STATIC_INLINE_ bool_t _lock_btr_16b(volatile uint16_t* mem, uint16_t bit)
 {
     bool_t result;
 
-    _ASM_VOLATILE_ ("lock; btrw %2, %0; adc %1,%1" : "=m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
+    _ASM_VOLATILE_ ("lock; btrw %2, %0; adc %1,%1" : "+m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
     return result;
 }
 
@@ -609,7 +609,7 @@ _STATIC_INLINE_ bool_t _lock_btr_32b(volatile uint32_t* mem, uint32_t bit)
 {
     bool_t result;
 
-    _ASM_VOLATILE_ ("lock; btr %2, %0; adc %1,%1" : "=m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
+    _ASM_VOLATILE_ ("lock; btr %2, %0; adc %1,%1" : "+m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
     return result;
 }
 
@@ -617,7 +617,7 @@ _STATIC_INLINE_ bool_t _lock_bts_64b(volatile uint64_t* mem, uint64_t bit)
 {
     bool_t result;
 
-    _ASM_VOLATILE_ ("lock; btsq %2, %0; adc %1,%1" : "=m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
+    _ASM_VOLATILE_ ("lock; btsq %2, %0; adc %1,%1" : "+m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
     return result;
 }
 
@@ -625,7 +625,7 @@ _STATIC_INLINE_ bool_t _lock_btr_64b(volatile uint64_t* mem, uint64_t bit)
 {
     bool_t result;
 
-    _ASM_VOLATILE_ ("lock; btrq %2, %0; adc %1,%1" : "=m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
+    _ASM_VOLATILE_ ("lock; btrq %2, %0; adc %1,%1" : "+m" ( *mem ) , "=b"(result) : "a"(bit) , "b"(0) : "cc" , "memory");
     return result;
 }
 
@@ -671,7 +671,7 @@ _STATIC_INLINE_ bool_t bit_scan_reverse64(uint64_t value, uint64_t* msb_position
 
 _STATIC_INLINE_ void btr_32b(volatile uint32_t* mem, uint32_t bit)
 {
-    _ASM_VOLATILE_ ("btr %1, %0;" : "=m" ( *mem ) : "a"(bit) : "cc" , "memory");
+    _ASM_VOLATILE_ ("btr %1, %0;" : "+m" ( *mem ) : "a"(bit) : "cc" , "memory");
 }
 
 _STATIC_INLINE_ void movdir64b(const void *src, uint64_t dst)
@@ -745,7 +745,9 @@ _STATIC_INLINE_ void load_xmms_from_buffer(const uint128_t xmms[16])
             "movdqa 0xE0(%0), %%xmm14\n"
             "movdqa 0xF0(%0), %%xmm15\n"
 
-        : : "r"(xmms));
+        : : "r"(xmms)
+        : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
+          "xmm8", "xmm9", "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15");
 }
 
 _STATIC_INLINE_ void clear_ymms(void)
@@ -768,7 +770,9 @@ _STATIC_INLINE_ void clear_ymms(void)
         "vpxor %%ymm13, %%ymm13, %%ymm13\n"
         "vpxor %%ymm14, %%ymm14, %%ymm14\n"
         "vpxor %%ymm15, %%ymm15, %%ymm15\n"
-        :::);
+        ::
+        : "ymm0", "ymm1", "ymm2", "ymm3", "ymm4", "ymm5", "ymm6", "ymm7",
+          "ymm8", "ymm9", "ymm10", "ymm11", "ymm12", "ymm13", "ymm14", "ymm15");
 }
 
 _STATIC_INLINE_ void store_ymms_in_buffer(uint256_t ymms[16])
@@ -815,7 +819,9 @@ _STATIC_INLINE_ void load_ymms_from_buffer(const uint256_t ymms[16])
         "vmovdqa 0x1C0(%0), %%ymm14\n"
         "vmovdqa 0x1E0(%0), %%ymm15\n"
 
-        : : "r"(ymms));
+        : : "r"(ymms)
+        : "ymm0", "ymm1", "ymm2", "ymm3", "ymm4", "ymm5", "ymm6", "ymm7",
+          "ymm8", "ymm9", "ymm10", "ymm11", "ymm12", "ymm13", "ymm14", "ymm15");
 }
 
 _STATIC_INLINE_ void atomic_mem_write_64b(uint64_t* mem, uint64_t val)

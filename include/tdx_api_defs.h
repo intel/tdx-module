@@ -113,6 +113,10 @@ typedef enum seamcall_leaf_opcode_e
     TDH_IMPORT_STATE_IMMUTABLE_LEAF  = 85,
     TDH_IMPORT_STATE_TD_LEAF         = 86,
     TDH_IMPORT_STATE_VP_LEAF         = 87,
+    TDH_MEM_SCAN_RANGE_LEAF          = 92,
+    TDH_MEM_SCAN_COMP_LEAF           = 93,
+    TDH_MEM_SCAN_CONFIG_LEAF         = 94,
+    TDH_MEM_SCAN_RESET_LEAF          = 95,
     TDH_MIG_STREAM_CREATE_LEAF       = 96,
     TDH_SERVTD_REBIND_LEAF           = 97
     ,TDH_IOMMU_SETREG_LEAF           = 128,
@@ -181,6 +185,8 @@ typedef enum tdcall_leaf_opcode_e
     TDG_VP_ENTER_LEAF            = 25,
     TDG_VP_INVEPT_LEAF           = 26,
     TDG_VP_INVVPID_LEAF          = 27
+
+    ,TDG_MR_KEY_GET_LEAF         = 29
 
 
     ,TDG_SPDM_TPA_SET_LEAF        = 64,
@@ -367,11 +373,11 @@ typedef union md_field_id_u
             uint32_t last_field_in_sequence : 9;    // Bits 46:38
             uint32_t reserved_1             : 3;    // Bits 49:47
             uint32_t inc_size               : 1;    // Bit 50
-            uint32_t write_mask_valid       : 1;    // Bit 51
+            uint32_t reserved_2             : 1;    // Bit 51
             uint32_t context_code           : 3;    // Bits 54:52
-            uint32_t reserved_2             : 1;    // Bit 55
+            uint32_t reserved_3             : 1;    // Bit 55
             uint32_t class_code             : 6;    // Bits 61:56
-            uint32_t reserved_3             : 1;    // Bit 62
+            uint32_t reserved_4             : 1;    // Bit 62
             uint32_t ignored                : 1;    // Bit 63
         };
     };
@@ -432,7 +438,7 @@ typedef union td_param_attributes_s {
     {
         uint64_t debug           : 1;   // Bit 0
         uint64_t reserved_tud    : 3;   // Bits 3:1
-        uint64_t reserved_tup    : 2;   // Bits 5:4
+        uint64_t tup             : 2;   // Bits 5:4
         uint64_t pmt_prof        : 1;   // Bits 6
         uint64_t reserved_tup2   : 9;   // Bits 15:7
         uint64_t icssd           : 1;   // Bit 16
@@ -491,7 +497,8 @@ typedef union config_flags_s {
         maxgpa_virt         : 1,  /**< Controls MAXGPA Virtualization. */
         tdx_connect         : 1,  /**< Enables TDX Connect for the current TD. */
         page_release        : 1,  /**< Enables TDG.MEM.PAGE.RELEASE for the current TD. */
-        reserved            : 57; /**< Must be 0. */
+        sealing             : 1,  /**< Enables TDG.MR.KEY.GET for the current TD. */
+        reserved            : 56; /**< Must be 0. */
     };
     uint64_t raw;
 } config_flags_t;
@@ -736,10 +743,11 @@ typedef union tdg_commands_available_u
 } tdg_commands_available_t;
 tdx_static_assert(sizeof(tdg_commands_available_t) == 8, tdg_commands_available_t);
 
-#define TDX_REPORT_TYPE                  0x81
-#define TDX_REPORT_SUBTYPE               0
-#define TDX_REPORT_VERSION_NO_SERVTDS    0
-#define TDX_REPORT_VERSION_WITH_SERVTDS  1
+#define TDX_REPORT_TYPE                   0x81
+#define TDX_REPORT_SUBTYPE                0
+#define TDX_REPORT_VERSION_NO_SERVTDS     0
+#define TDX_REPORT_VERSION_WITH_SERVTDS   1
+#define TDX_REPORT_VERSION_WITH_UUID_VMID 3
 
 /**
  * @struct td_report_type_s
@@ -762,7 +770,7 @@ typedef union PACKED td_report_type_s
         uint8_t type;
         uint8_t subtype; /**< TYPE-specific subtype */
         uint8_t version; /**< TYPE-specific version. */
-        uint8_t requestor; /**< Requestor VM id  */
+        uint8_t reserved; /**< Reserved - must be 0 - checked by SEAMOPS  */
     };
     uint32_t raw;
 } td_report_type_t;
@@ -803,6 +811,21 @@ tdx_static_assert(sizeof(report_mac_struct_t) == SIZE_OF_REPORTMAC_STRUCT_IN_BYT
 
 #define SIZE_OF_TEE_TCB_SVN_IN_BYTES         16
 #define SIZE_OF_TEE_TCB_INFO_STRUCT_IN_BYTES 239
+#define SIZE_OF_TEE_TCB_SVN_STRUCT_IN_BYTES 16
+
+/**
+ * @struct tee_tcb_svn_t
+ *
+ * @brief
+ */
+typedef struct PACKED tee_tcb_svn_s
+{
+    uint8_t        tdx_module_svn_minor;
+    uint8_t        tdx_module_svn_major;
+    uint8_t        seam_last_patch_svn;
+    uint8_t        reserved[13];
+} tee_tcb_svn_t;
+tdx_static_assert(sizeof(tee_tcb_svn_t) == SIZE_OF_TEE_TCB_SVN_STRUCT_IN_BYTES, tee_tcb_svn_t);
 
 /**
  * @struct tee_tcb_info_t
@@ -865,7 +888,7 @@ typedef struct PACKED td_info_s
     measurement_t  rtmr[NUM_OF_RTMRS]; /**<  Array of NUM_RTMRS runtime extendable measurement registers */
 
     measurement_t  servtd_hash;
-    uint256_t      td_uuid;
+    uint256_t      tdid256;
     uint8_t        reserved0[24];
     uint8_t        vmid;
     uint8_t        reserved1[3];
@@ -1100,6 +1123,9 @@ typedef enum gpa_list_format_e
 {
     GPA_LIST_FORMAT_GPA_ONLY      = 0,
     GPA_LIST_FORMAT_GPA_AND_ATTR  = 1,
+    GPA_LIST_FORMAT_LIST_OF_LISTS = 2,
+    // Compute MAX based on enabled features
+    GPA_LIST_FORMAT_MAX = 2
 } gpa_list_info_format_t;
 
 typedef union gpa_list_info_u
@@ -1144,6 +1170,9 @@ typedef enum gpa_list_entry_operation_e
     GPA_ENTRY_OP_REMIGRATE       = 0b11,   // 3
     GPA_ENTRY_OP_EXPORT_NOP_MASK = 0b01
 
+    ,GPA_ENTRY_OP_EXPORT          = 0b01,   // 1
+    GPA_ENTRY_OP_NOP2            = 0b10,   // 2
+    GPA_ENTRY_OP_NOP3            = 0b11,   // 3
 } gpa_list_entry_operation_t;
 
 // Values of MIG_TYPE
@@ -1172,6 +1201,7 @@ typedef enum gpa_list_entry_status_e
     GPA_ENTRY_STATUS_ATTR_LIST_ENTRY_INVALID        = 14,
     GPA_ENTRY_STATUS_GPA_LIST_ENTRY_INVALID         = 15,
     GPA_ENTRY_STATUS_INVALID_MIGRATION_BUFFER_HPA   = 16,
+    GPA_ENTRY_STATUS_PAGE_DIRTY                     = 17
 } gpa_list_entry_status_t;
 
 #define NUM_TDX_FEATRUES        1   // Number of TDX_FEATURES entries
@@ -1181,55 +1211,61 @@ typedef union tdx_features_enum0_u
 {
     struct
     {
-        uint64_t td_migration                      :  1;    // Bit      0
-        uint64_t td_preserving                     :  1;    // Bit      1
-        uint64_t service_td                        :  1;    // Bit      2
-        uint64_t tdg_vp_rdwr                       :  1;    // Bit      3
-        uint64_t relaxed_mem_mng_concurrency       :  1;    // Bit      4
-        uint64_t cpuid_virt_guest_ctrl             :  1;    // Bit      5
-        uint64_t tdx_io                            :  1;    // Bit      6
-        uint64_t td_partitioning                   :  1;    // Bit      7
-        uint64_t local_attestation                 :  1;    // Bit      8
-        uint64_t td_entry_enhancements             :  1;    // Bit      9
-        uint64_t host_priority_locks               :  1;    // Bit     10
-        uint64_t config_ia32_arch_cap              :  1;    // Bit     11
-        uint64_t reserved_1                        :  4;    // Bits 15:12
-        uint64_t pending_ept_violation_v2          :  1;    // Bit     16
-        uint64_t fms_config                        :  1;    // Bit     17
-        uint64_t no_rbp_mod                        :  1;    // Bit     18
-        uint64_t l2_tlb_invd_opt                   :  1;    // Bit     19
-        uint64_t topology_enum                     :  1;    // Bit     20
-        uint64_t partitioned_td_migration          :  1;    // Bit     21
-        uint64_t reserved_2                        :  2;    // Bits 23:22
-        uint64_t event_filtering                   :  1;    // Bit     24
-        uint64_t icssd                             :  1;    // Bit     25
-        uint64_t fixed_ctr12_prof                  :  1;    // Bit     26
-        uint64_t maxpa_virt                        :  1;    // Bit     27
-        uint64_t apx                               :  1;    // Bit     28
-        uint64_t cpuid2_virt                       :  1;    // Bit     29
-        uint64_t ve_reduction                      :  1;    // Bit     30
-        uint64_t enhanced_event_filtering          :  1;    // Bit     31
-        uint64_t tdx_connect_partitioning          :  1;    // Bit     32
-        uint64_t maxgpa_virt                       :  1;    // Bit     33
-        uint64_t reserved_5                        :  2;    // Bits 35:34
-        uint64_t dynamic_pamt                      :  1;    // Bit     36
-        uint64_t fatal_diagnostics                 :  1;    // Bit     37
-        uint64_t page_release                      :  1;    // Bit     38
-        uint64_t nrx                               :  1;    // Bit     39
-        uint64_t enhanced_intr_state               :  1;    // Bit     40
-        uint64_t non_blocking_export               :  1;    // Bit     41
-        uint64_t perf_mask                         :  1;    // Bit     42
-        uint64_t scan_export_restore               :  1;    // Bit     43
-        uint64_t import_page_status                :  1;    // Bit     44
-        uint64_t enhanced_intr_virtualization      :  1;    // Bit     45
-        uint64_t ve_info_intr_state                :  1;    // Bit     46
-        uint64_t update_compatibility              :  1;    // Bit     47
-        uint64_t servtd_rebind                     :  1;    // Bit     48
-        uint64_t uuid_reporting                    :  1;    // Bit     49
-        uint64_t sealkey_128                       :  1;    // Bit     50
-        uint64_t enhanced_demote_interruptibility  :  1;    // Bit     51
-        uint64_t debug_ro_td_migration             :  1;    // Bit     52
-        uint64_t reserved_6                        : 11;    // Bits 63:53
+        uint64_t td_migration                      : 1;    // Bit      0
+        uint64_t td_preserving                     : 1;    // Bit      1
+        uint64_t service_td                        : 1;    // Bit      2
+        uint64_t tdg_vp_rdwr                       : 1;    // Bit      3
+        uint64_t relaxed_mem_mng_concurrency       : 1;    // Bit      4
+        uint64_t cpuid_virt_guest_ctrl             : 1;    // Bit      5
+        uint64_t tdx_io                            : 1;    // Bit      6
+        uint64_t td_partitioning                   : 1;    // Bit      7
+        uint64_t local_attestation                 : 1;    // Bit      8
+        uint64_t td_entry_enhancements             : 1;    // Bit      9
+        uint64_t host_priority_locks               : 1;    // Bit     10
+        uint64_t config_ia32_arch_cap              : 1;    // Bit     11
+        uint64_t hw_sealing                        : 1;    // Bit     12
+        uint64_t reserved_1                        : 3;    // Bits 15:13
+        uint64_t pending_ept_violation_v2          : 1;    // Bit     16
+        uint64_t fms_config                        : 1;    // Bit     17
+        uint64_t no_rbp_mod                        : 1;    // Bit     18
+        uint64_t l2_tlb_invd_opt                   : 1;    // Bit     19
+        uint64_t topology_enum                     : 1;    // Bit     20
+        uint64_t partitioned_td_migration          : 1;    // Bit     21
+        uint64_t reserved_2                        : 2;    // Bits 23:22
+        uint64_t event_filtering                   : 1;    // Bit     24
+        uint64_t icssd                             : 1;    // Bit     25
+        uint64_t fixed_ctr12_prof                  : 1;    // Bit     26
+        uint64_t maxpa_virt                        : 1;    // Bit     27
+        uint64_t apx                               : 1;    // Bit     28
+        uint64_t cpuid2_virt                       : 1;    // Bit     29
+        uint64_t ve_reduction                      : 1;    // Bit     30
+        uint64_t enhanced_event_filtering          : 1;    // Bit     31
+        uint64_t tdx_connect_partitioning          : 1;    // Bit     32
+        uint64_t maxgpa_virt                       : 1;    // Bit     33
+        uint64_t reserved_5                        : 2;    // Bits 35:34
+        uint64_t dynamic_pamt                      : 1;    // Bit     36
+        uint64_t fatal_diagnostics                 : 1;    // Bit     37
+        uint64_t page_release                      : 1;    // Bit     38
+        uint64_t nrx                               : 1;    // Bit     39
+        uint64_t enhanced_intr_state               : 1;    // Bit     40
+        uint64_t non_blocking_export               : 1;    // Bit     41
+        uint64_t perf_mask                         : 1;    // Bit     42
+        uint64_t scan_export_restore               : 1;    // Bit     43
+        uint64_t import_page_status                : 1;    // Bit     44
+        uint64_t enhanced_intr_virtualization      : 1;    // Bit     45
+        uint64_t ve_info_intr_state                : 1;    // Bit     46
+        uint64_t update_compatibility              : 1;    // Bit     47
+        uint64_t servtd_rebind                     : 1;    // Bit     48
+        uint64_t tdid_vmid_reporting               : 1;    // Bit     49
+        uint64_t reserved_6                        : 1;    // Bit     50
+        uint64_t enhanced_demote_interruptibility  : 1;    // Bit     51
+        uint64_t debug_ro_td_migration             : 1;    // Bit     52
+        uint64_t sys_disable                       : 1;    // Bit     53
+        uint64_t list_error_count                  : 1;    // Bit     54
+        uint64_t reserved_7                        : 1;    // Bit     55
+        uint64_t sealkey_128                       : 1;    // Bit     56
+        uint64_t sealkey_256                       : 1;    // Bit     57
+        uint64_t reserved_8                        : 6;    // Bits 63:58
     };
     uint64_t raw;
 } tdx_features_enum0_t;
@@ -1451,6 +1487,93 @@ typedef union exit_reason_and_ve_category_u
 tdx_static_assert(sizeof(exit_reason_and_ve_category_t) == 8, exit_reason_and_ve_category_t);
 
 #define TDX_CONNECT_FEATURES_MASK (BIT(0) | BIT(7) | BIT(9) | BIT(12))
+
+typedef union td_key_policy_u
+{
+    struct
+    {
+        uint64_t mrtd           : 1;  // Include MRTD
+        uint64_t mrowner        : 1;  // Include MROWNER
+        uint64_t mrconfigid     : 1;  // Include MRCONFIGID & CONFIGIDSVN
+        uint64_t mrownerconfig  : 1;  // Include MROWNERCONFIG & OWNERCONFIGSVN
+        uint64_t reserved_0     : 4;  // Must be 0
+        uint64_t mrsigroot      : 1;  // Include MRSIGROOT
+        uint64_t mrsigner       : 1;  // Include MRSIGNER
+        uint64_t mrprodid       : 1;  // Include ISVPRODID & ISVSVN
+        uint64_t reserved_1     : 21; // Must be 0
+        uint64_t rtmr           : 16; // Include RTMR n
+        uint64_t reserved_2     : 16; // Must be 0
+    };
+
+    uint64_t raw;
+} td_key_policy_t;
+tdx_static_assert(sizeof(td_key_policy_t) == 8, td_key_policy_t);
+
+#define TD_KEY_REQUEST_ALIGNMENT_IN_BYTES 128
+#define MR_KEY_ALIGNMENT_IN_BYTES 32
+#define SIZE_OF_SALT_IN_BYTES 32
+
+typedef struct PACKED td_key_request_s
+{
+    uint16_t              keyname;
+    uint8_t               sw_keyname;
+    uint8_t               keysize_bitmap;
+    uint8_t               reserved_0[4];
+    td_key_policy_t       tdkeypolicy;
+    td_param_attributes_t attributes_mask;
+    uint64_t              xfam_mask;
+    uint8_t               cpusvn[CPUSVN_SIZE];
+    tee_tcb_svn_t         tee_tcb_svn;
+    uint16_t              isvsvn;
+    uint16_t              mrconfigsvn;
+    uint16_t              mrownerconfigsvn;
+    uint8_t               salt[SIZE_OF_SALT_IN_BYTES];
+    uint8_t               reserved_1[26];
+} td_key_request_t;
+tdx_static_assert(sizeof(td_key_request_t) == 128, td_key_request_t);
+
+typedef struct PACKED tdgetkey_derivation_string_s
+{
+    uint16_t              keyname;
+    uint8_t               sw_keyname;
+    uint8_t               requestor;
+    uint8_t               reserved_0[4];
+    td_key_policy_t       keypolicy;
+    td_param_attributes_t masked_attributes;
+    uint64_t              attributes_mask;
+    uint64_t              masked_xfam;
+    uint64_t              xfam_mask;
+    measurement_t         mrtd;
+    measurement_t         mrconfig;
+    measurement_t         mrowner;
+    measurement_t         mrownerconfig;
+    measurement_t         rtmr[NUM_OF_RTMRS];
+    measurement_t         mrsigroot;
+    measurement_t         mrsigner;
+    uint128_t             isvprodid;
+    uint16_t              isvsvn;
+    uint16_t              mrconfigsvn;
+    uint16_t              mrownerconfigsvn;
+    uint8_t               reserved_1[10];
+    measurement_t         servtd_hash;
+    uint8_t               salt[SIZE_OF_SALT_IN_BYTES];
+    uint8_t               reserved_2[64];
+} tdgetkey_derivation_string_t;
+tdx_static_assert(sizeof(tdgetkey_derivation_string_t) == 704, tdgetkey_derivation_string_t);
+
+#define REQUESTOR_TYPE_MAX 0x3
+
+typedef union requestor_info_u
+{
+    struct
+    {
+        uint64_t requestor      :  8; // Bits  7: 0
+        uint64_t reserved       : 56; // Bits 63: 8
+    };
+
+    uint64_t raw;
+} requestor_info_t;
+tdx_static_assert(sizeof(requestor_info_t) == 8, requestor_info_t);
 
 typedef union phymem_page_rdmd_pt_ret_u
 {

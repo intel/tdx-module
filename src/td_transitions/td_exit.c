@@ -744,6 +744,7 @@ static void td_l2_to_l1_exit_internal(api_error_code_e tdexit_case, vm_vmexit_ex
     // Update L1's host state fields before entry
     update_host_state_in_td_vmcs(ld_p, tdvps_ptr, tdvps_ptr->management.curr_vm);
 
+    update_eptp_enable_ad_bits(ld_p->vp_ctx.tdcs);
 
     // Advance L1 guest RIP to the next instruction, following the TDCALL(TDG.VP.VMCALL) which entered L2
     increment_fixed_ctr0(ld_p->vp_ctx.tdcs);

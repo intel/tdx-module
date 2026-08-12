@@ -108,7 +108,6 @@ api_error_type tdg_tdi_mmio_accept(
         &page_level_entry,
         &cached_sept_entry,
         true);
-
     // Read the SEPT entry without locking, it is only used to provide an error indication
     bool_t is_leaf = is_secure_ept_leaf_entry(&cached_sept_entry, false);
 

@@ -29,6 +29,7 @@
 #include TDX_ERROR_CODES_DEFS_HEADER
 #include "helpers/helpers.h"
 #include "helpers/migration.h"
+#include "helpers/mem_scan.h"
 #include "metadata_handlers/metadata_generic.h"
 #include "memory_handlers/sept_manager.h"
 #include "memory_handlers/keyhole_manager.h"
@@ -101,6 +102,12 @@ static api_error_type handle_new_command(gpa_list_info_t gpa_list_info, tdcs_t* 
         (mbmd->header.reserved_1 != 0) ||
         (mbmd->header.mig_epoch != tdcs_p->migration_fields.mig_epoch) ||
         (mbmd->mem.num_gpas != gpa_list_info.last_entry + 1) ||
+        ((mbmd->mem.gpa_list_attr.format == GPA_LIST_FORMAT_GPA_ONLY) && ((gpa_list_info.format != GPA_LIST_FORMAT_GPA_ONLY))) ||
+        ((mbmd->mem.gpa_list_attr.format == GPA_LIST_FORMAT_GPA_AND_ATTR) && ((gpa_list_info.format != GPA_LIST_FORMAT_GPA_AND_ATTR))) ||
+        ((mbmd->mem.gpa_list_attr.format != GPA_LIST_FORMAT_GPA_ONLY)
+        && (mbmd->mem.gpa_list_attr.format != GPA_LIST_FORMAT_GPA_AND_ATTR)
+        ) ||
+        (mbmd->mem.gpa_list_attr.reserved != 0) ||
         (mbmd->mem.reserved != 0))
     {
         TDX_ERROR("mbmd check failed\n");
@@ -339,7 +346,7 @@ static api_error_type handle_import(page_list_entry_t* new_page_list_p, volatile
 }
 
 static api_error_type handle_rare_errors(gpa_list_entry_status_t err_status, volatile gpa_list_entry_t* gpa_list_entry,
-                                         gpa_list_error_type_t gpa_list_error_type, uint32_t* problem_ops_count,
+                                         gpa_list_error_type_t gpa_list_error_type, uint32_t* gpa_list_err_count,
                                          gpa_list_entry_t* gpa_list_p, uint64_t entry_num,
                                          page_list_entry_t* new_page_list_p, tdcs_t* tdcs_p,
                                          volatile page_list_entry_t* new_page_list_entry, api_error_type* return_val)
@@ -354,7 +361,7 @@ static api_error_type handle_rare_errors(gpa_list_entry_status_t err_status, vol
             new_page_list_entry->invalid = 1;
             if (err_status != GPA_ENTRY_STATUS_SKIPPED)
             {
-                (*problem_ops_count)++;
+                (*gpa_list_err_count)++;
             }
         }
         else if ((gpa_list_error_type == GPA_LIST_ERROR_TYPE_LIST_ABORT) ||
@@ -367,12 +374,14 @@ static api_error_type handle_rare_errors(gpa_list_entry_status_t err_status, vol
                 {
                     new_page_list_p[entry_num].invalid = 1;
                 }
+                (*gpa_list_err_count)++;
                 api_error_code_t tmp_return_val = {.raw = *return_val};
                 *return_val = abort_import_session(tdcs_p, *return_val, tmp_return_val.operand);
                 return *return_val;
             }
             else // GPA_LIST_ERROR_TYPE_LIST_ABORT_IN_ORDER
             {
+                (*gpa_list_err_count)++;
                 if (op_state_is_import_in_order(tdcs_p->management_fields.op_state))
                 {
                     if (new_page_list_p)
@@ -385,7 +394,6 @@ static api_error_type handle_rare_errors(gpa_list_entry_status_t err_status, vol
                 }
 
                 new_page_list_entry->invalid = 1;
-                (*problem_ops_count)++;
             }
         }
     }
@@ -395,7 +403,7 @@ static api_error_type handle_rare_errors(gpa_list_entry_status_t err_status, vol
 
 static api_error_type finish_entry_processing(uint64_t* entry_num, gpa_list_info_t gpa_list_info,
                                               migsc_t* migsc_p, pa_t mig_buff_list_pa, pa_t* mac_list_pa,
-                                              pa_t new_page_list_pa, tdcs_t* tdcs_p, uint32_t problem_ops_count
+                                              pa_t new_page_list_pa, tdcs_t* tdcs_p
                                               , pa_t l2_attr_list_pa
                                               )
 {
@@ -433,9 +441,8 @@ static api_error_type finish_entry_processing(uint64_t* entry_num, gpa_list_info
         // will become 0, as expected by the definition
         (void)_lock_xadd_64b(&tdcs_p->migration_fields.total_mb_count, 1);
 
-        /* Indicate an overall success and the
-           number of problematic GPA list entries. */
-        return_val = api_error_with_operand_id(TDX_SUCCESS, problem_ops_count);
+        /* Indicate an overall success */
+        return_val = TDX_SUCCESS;
     }
 
     return return_val;
@@ -443,7 +450,7 @@ static api_error_type finish_entry_processing(uint64_t* entry_num, gpa_list_info
 
 api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa, uint64_t hpa_and_size_pa,
                               uint64_t mig_buff_list_pa_val, uint64_t migs_i_and_cmd_pa, uint64_t mac_list_0_pa,
-                              uint64_t  mac_list_1_pa, uint64_t new_page_list_pa_val)
+                              uint64_t  mac_list_1_pa, uint64_t new_page_list_pa_val, uint8_t version)
 {
     // Local data for return values
     tdx_module_local_t* local_data_ptr = get_local_data();
@@ -460,7 +467,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
     gpa_list_entry_t* gpa_list_p = NULL;
     volatile gpa_list_entry_t        gpa_list_entry;
     uint64_t                entry_num = gpa_list_info.first_entry;
-    uint32_t                problem_ops_count = 0;
+    uint32_t                gpa_list_err_count = 0;
 
     // GPA and Secure-EPT
     pa_t                    page_gpa;
@@ -534,6 +541,13 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
     new_page_list_pa.raw = new_page_list_pa_val;
 
     l2_attr_list_pa.raw = local_data_ptr->vmm_regs.r14;
+
+    // Only versions 0 and 1 are supported
+    if (version > 1)
+    {
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
+        goto EXIT;
+    }
 
     // Check, lock and map the owner TDR page
     return_val = check_lock_and_map_explicit_tdr(tdr_pa,
@@ -891,16 +905,14 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                 break;
             }
 
-            // Check and lock the new TD page in PAMT
-            return_val = check_and_lock_explicit_4k_private_hpa(
-                                td_page_pa,
-                                OPERAND_ID_NEW_PAGE_LIST_ENTRY,
-                                TDX_LOCK_EXCLUSIVE, PT_NDA,
-                                &td_page_pamt_walk_result,
-                                &td_page_pamt_block_locked_flag
-                            );
+            
 
-            td_page_pamt_entry_p = td_page_pamt_walk_result.pamt_entry_p;
+            // Check and lock the new TD page in PAMT
+            return_val = check_and_lock_explicit_4k_private_hpa(td_page_pa,
+                                                                OPERAND_ID_NEW_PAGE_LIST_ENTRY,
+                                                                TDX_LOCK_EXCLUSIVE, PT_NDA,
+                                                                &td_page_pamt_walk_result,
+                                                                &td_page_pamt_block_locked_flag);
 
             // Handle the case of a missing PAMT page pair to map the imported page
             // Note that at this point crypto operation for this page hasn't started yet, so we can abort now and the host
@@ -922,6 +934,8 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                 gpa_list_error_type = GPA_LIST_ERROR_TYPE_LIST_ABORT_IN_ORDER;
                 err_status = GPA_ENTRY_STATUS_NEW_PAGE_NOT_AVAILABLE; break;
             }
+
+            td_page_pamt_entry_p = td_page_pamt_walk_result.pamt_entry_p;
 
             td_page_p = map_pa_with_hkid(td_page_pa.raw_void, tdr_p->key_management_fields.hkid, TDX_RANGE_RW);
 
@@ -1006,6 +1020,8 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                 break;
             }
 
+            // Atomically increment TDCS.MEM_COUNT.
+            (void)_lock_xadd_64b(&(tdcs_p->executions_ctl2_fields.mem_count), 1);
 
             // Atomically increment TDR child count
             (void)_lock_xadd_64b(&tdr_p->management_fields.chldcnt, 1);
@@ -1362,6 +1378,8 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
             atomically_update_sept_state_keep_tdhp(sept_entry_ptr, sept_entry_copy.raw);
             septe_locked_flag = false;
 
+            // Atomically decrement TDCS.MEM_COUNT.
+            (void)_lock_xadd_64b(&(tdcs_p->executions_ctl2_fields.mem_count), (uint64_t)(-1));
 
             // Atomically decrement TDR child count
             (void)_lock_xadd_64b(&tdr_p->management_fields.chldcnt, (uint64_t)-1);
@@ -1396,7 +1414,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
         } // end switch
 
     FINALIZE_ENTRY:
-        // finilize processing current entry and prepare for the next one
+        // finalize processing current entry and prepare for the next one
 
         for (uint16_t vm_id = 1; vm_id < MAX_VMS; vm_id++)
         {
@@ -1440,6 +1458,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
         if (td_page_pamt_nl_entry_p)
         {
             free_la(td_page_pamt_nl_entry_p);
+            td_page_pamt_nl_entry_p = NULL;
         }
 
         if ((err_status != GPA_ENTRY_STATUS_SUCCESS) &&
@@ -1455,7 +1474,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
 
         page_list_entry_t new_page_list_entry_tmp = {.raw = new_page_list_entry.raw};
         if (TDX_SUCCESS != (return_val = handle_rare_errors(err_status, &gpa_list_entry, gpa_list_error_type,
-                                                            &problem_ops_count, gpa_list_p, entry_num,
+                                                            &gpa_list_err_count, gpa_list_p, entry_num,
                                                             new_page_list_p, tdcs_p,
                                                             &new_page_list_entry_tmp, &return_val)))
         {
@@ -1474,7 +1493,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
         --------------------------------------*/
         return_val = finish_entry_processing(&entry_num, gpa_list_info, migsc_p,
                                                                                mig_buff_list_pa, mac_list_pa,
-                                                                               new_page_list_pa, tdcs_p, problem_ops_count
+                                                                               new_page_list_pa, tdcs_p
                                                                                , l2_attr_list_pa
                                                                                );
         if ((return_val == TDX_INTERRUPTED_RESUMABLE) ||
@@ -1504,6 +1523,12 @@ EXIT:
 
     // In all cases, including error cases, RCX returns the updated GPA_LIST_INFO
     local_data_ptr->vmm_regs.rcx = gpa_list_info.raw;
+
+    // When called with version=1, a GPA list error counter will be returned in R8
+    if (version >= 1)
+    {
+        local_data_ptr->vmm_regs.r8 = gpa_list_err_count;
+    }
 
     // Release all acquired locks
 

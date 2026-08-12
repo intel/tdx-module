@@ -35,6 +35,7 @@
 #include "x86_defs/x86_defs.h"
 #include "accessors/ia32_accessors.h"
 #include "helpers/helpers.h"
+#include "helpers/mem_scan.h"
 #include "td_dispatcher/vm_exits/td_vmexit.h"
 
 typedef enum tdaccept_failure_type_e
@@ -267,6 +268,32 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
         // Clearing the TDP bit relies of specific encoding of the SEPT entry state.
         // The following assertions verify this.
 
+        if (is_non_blocking_export_configured())
+        {
+            if (is_sept_pending_wo_d_mask(&sept_entry_copy))
+            {
+                sept_update_state(&sept_entry_copy, SEPT_STATE_MAPPED_MASK, false, true);
+            }
+            else if (is_sept_pending_exported(&sept_entry_copy))
+            {
+                // If the entry state was PENDING_EXPORTED, update to EXPORTED_MODIFIED
+                // and atomically increment TDCS.DIRT_COUNT to count the page as requiring re-export.
+                sept_update_state(&sept_entry_copy, SEPT_STATE_EXPORTED_MODIFIED_MASK, false, true);
+                (void)_lock_xadd_64b(&tdcs_p->migration_fields.dirty_count, 1);
+            }
+            else if (is_sept_pending_exported_modified(&sept_entry_copy))
+            {
+                // If the entry state was PENDING_EXPORTED_MODIFIED, update to EXPORTED_MODIFIED.
+                sept_update_state(&sept_entry_copy, SEPT_STATE_EXPORTED_MODIFIED_MASK, false, true);
+            }
+            else
+            {
+                // should not reach here
+                extended_fatal_info_t extended_fatal_info = prepare_extended_fatal_info_sept_td_handle(tdx_local_data_ptr->vp_ctx.tdr_pa.raw, 0, req_accept_level, page_gpa.raw, sept_entry_copy);
+                fatal_error(FATAL_ERROR_ID_348, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
+            }
+        }
+        else
         {
             if (is_sept_pending(&sept_entry_copy))
             {

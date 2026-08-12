@@ -229,7 +229,7 @@ _STATIC_INLINE_ api_error_type compare_cpuid_configuration(tdx_module_global_t* 
             Special Handling of Selected CPUID Leaves/Sub-Leaves
             ------------------------------------------------------*/
 
-            // Determine current core and packege IDs.
+            // Determine current core and package IDs.
             if ((tmp_cpuid_config.leaf_subleaf.leaf == CPUID_GET_TOPOLOGY_LEAF) &&
                 (tmp_cpuid_config.leaf_subleaf.subleaf == 0))
             {
@@ -650,17 +650,12 @@ api_error_type tdh_sys_lp_init(void)
     // Initialize keyhole
     init_keyhole_state();
 
-    /**
-     * Calc LPID from local_data_ptr
-     */
-    tdx_local_data_ptr->lp_info.x2apic_id = (uint32_t)get_current_thread_num(get_sysinfo_table(), tdx_local_data_ptr);
-
     // This check can only be done after initializing the keyhole
     if (is_smrr_overlap_io_range())
     {
         TDX_ERROR("SMRR %d overlaps IO range\n");
         tdx_local_data_ptr->lp_info.x2apic_id = 0;
-        retval = TDX_SMRR_OVERLAPS_IORANGE;
+        retval = TDX_SMRR_OVERLAPS_IO_RANGE;
         goto EXIT;
     }
 

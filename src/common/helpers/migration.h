@@ -134,12 +134,20 @@ typedef enum migs_index_and_command_e
     MIGS_INDEX_COMMAND_INORDER_DONE = 1  // Used by TDH.EXPORT.TRACK
 } migs_index_and_command_t;
 
+typedef struct PACKED mbmd_gpa_list_attr_s
+{
+    uint8_t           format        : 3;
+    uint8_t           reserved      : 5;
+} mbmd_gpa_list_attr_t;
+tdx_static_assert(sizeof(mbmd_gpa_list_attr_t) == 1, mbmd_gpa_list_attr_t);
+
 typedef struct PACKED mbmd_mem_s
 {
-    mbmd_header_t     header;
-    uint64_t          num_gpas    : 16; // uint16_t
-    uint64_t          reserved    : 48;
-    uint8_t           mac[MAC256_LEN];
+    mbmd_header_t           header;
+    uint64_t                num_gpas      : 16; // uint16_t
+    mbmd_gpa_list_attr_t    gpa_list_attr;
+    uint64_t                reserved      : 40;
+    uint8_t                 mac[MAC256_LEN];
 } mbmd_mem_t;
 tdx_static_assert(sizeof(mbmd_mem_t) == TOTAL_MDMD_SIZE, mbmd_mem_t);
 

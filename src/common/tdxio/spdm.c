@@ -147,7 +147,7 @@ _STATIC_INLINE_ api_error_type is_valid_tpa_td(void)
     }
 
     ignore_tdinfo_bitmap_t ignore = {.raw = 0};
-    api_error_code_e ret_val = get_tdinfo_and_teeinfohash(tdcs_ptr, ignore, &td_info, &tee_info_hash, true, get_local_data()->vp_ctx.tdr, 0, true);
+    api_error_code_e ret_val = get_tdinfo_and_teeinfohash(tdcs_ptr, ignore, &td_info, &tee_info_hash, true, get_local_data()->vp_ctx.tdr, 0, true, 0);
     if (ret_val != TDX_SUCCESS)
     {
         return api_error_with_operand_id(ret_val, OPERAND_ID_RTMR);

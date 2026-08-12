@@ -925,8 +925,8 @@ const md_lookup_t td_vmcs_lookup[MAX_NUM_TD_VMCS_LOOKUP] = {
    .num_of_fields = 1, .num_of_elem = 1, .attributes = { .raw = 0x0 },
    .prod_rd_mask = (0ULL & 0xFFFFFFFFULL), .prod_wr_mask = (0ULL & 0xFFFFFFFFULL),
    .dbg_rd_mask = (-1ULL & 0xFFFFFFFFULL), .dbg_wr_mask = (0ULL & 0xFFFFFFFFULL),
-   .export_mask = (0ULL & 0xFFFFFFFFULL), .import_mask = (0ULL & 0xFFFFFFFFULL),
-   .mig_export = MIG_NONE, .mig_import = MIG_NONE,
+   .export_mask = (-1ULL & 0xFFFFFFFFULL), .import_mask = (-1ULL & 0xFFFFFFFFULL),
+   .mig_export = MIG_ME, .mig_import = MIG_MEO,
    .special_rd_handling = false,
    .special_wr_handling = false 
  },

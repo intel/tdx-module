@@ -33,11 +33,14 @@
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
 #include "helpers/migration.h"
+#include "helpers/mem_scan.h"
 #include "metadata_handlers/metadata_generic.h"
 #include "memory_handlers/sept_manager.h"
 #include "memory_handlers/keyhole_manager.h"
 
-#define GPA_ENTRY_IS_NOP(e) ( (e).operation == GPA_ENTRY_OP_NOP )
+#define GPA_ENTRY_IS_NOP(e) ( (e).operation == GPA_ENTRY_OP_NOP || \
+    (is_non_blocking_export_configured() && \
+     ( (e).operation == GPA_ENTRY_OP_NOP2 || (e).operation == GPA_ENTRY_OP_NOP3 )) )
 
 typedef   uint8_t mac_list_entry_t[MAC256_LEN];
 
@@ -79,7 +82,10 @@ static api_error_type handle_new_command(gpa_list_info_t gpa_list_info, tdcs_t* 
     {
         migsc_p->interrupted_state.num_processed++;
     }
-
+    if (gpa_list_info.format == GPA_LIST_FORMAT_GPA_AND_ATTR)
+    {
+        migsc_p->interrupted_state.num_processed++;
+    }
     // Increment the IV counter so we don't reuse a previous IV even if aborted
     migsc_p->iv_counter++;
 
@@ -94,6 +100,15 @@ static api_error_type handle_new_command(gpa_list_info_t gpa_list_info, tdcs_t* 
     mbmd->header.iv_counter = 0;   // Real value is written later, after MAC calculation
 
     mbmd->mem.num_gpas = gpa_list_info.last_entry + 1;
+    if (gpa_list_info.format == GPA_LIST_FORMAT_GPA_ONLY)
+    {
+        mbmd->mem.gpa_list_attr.format = GPA_LIST_FORMAT_GPA_ONLY;
+    }
+    else // gpa_list_info.format == GPA_LIST_FORMAT_GPA_AND_ATTR
+    {
+        mbmd->mem.gpa_list_attr.format = GPA_LIST_FORMAT_GPA_AND_ATTR;
+    }
+    mbmd->mem.gpa_list_attr.reserved = 0;
     mbmd->mem.reserved = 0;
 
     reset_to_next_iv(migsc_p, migsc_p->iv_counter, migs_i);
@@ -193,7 +208,28 @@ static gpa_list_entry_status_t check_tlb_tracking(tdcs_t* tdcs_p, ia32e_sept_t s
 
         bepoch_t bw_epoch;
 
-        UNUSED(sept_entry_level);
+        if (is_non_blocking_export_configured())
+        {
+            // During LIVE_EXPORT, if the Dirty bit is set, skip this page.  It will be discovered by the next TDH.MEM.SCAN(DSCAN/DCHECK).
+            if (is_sept_entry_dirty(&sept_entry_copy))
+            {
+                return GPA_ENTRY_STATUS_PAGE_DIRTY;
+            }
+
+            pa_t td_page_pa = { .raw = (sept_entry_copy.raw & BITS(51, (9 * sept_entry_level) + 12)) };
+            pamt_entry_t* td_page_pamt_entry_ptr = pamt_implicit_get(td_page_pa, (page_size_t)sept_entry_level);
+            tdx_sanity_check(NULL != td_page_pamt_entry_ptr, FATAL_ERROR_ID_382, 0);
+            bw_epoch.raw = MAX(td_page_pamt_entry_ptr->bepoch.raw, tdcs_p->migration_fields.bw_epoch.raw);
+
+            // Release all acquired locks
+            free_la(td_page_pamt_entry_ptr);
+
+            if (!is_tlb_tracked(tdcs_p, bw_epoch))
+            {
+                return GPA_ENTRY_STATUS_TLB_TRACKING_NOT_DONE;
+            }
+        }
+        else
         {
             // A live export was requested; check that it's allowed
             if (!sept_state_is_live_export_allowed(sept_entry_copy))
@@ -217,6 +253,36 @@ static gpa_list_entry_status_t handle_export_in_order(tdcs_t* tdcs_p, volatile g
 {
 	gpa_list_entry_status_t return_val = GPA_ENTRY_STATUS_SUCCESS;
     gpa_list_entry_operation_t operation;
+    if (is_non_blocking_export_configured())
+    {
+        if (sept_state_is_first_time_export_allowed(sept_entry_copy))
+        {
+            operation = GPA_ENTRY_OP_MIGRATE;
+        }
+        else if (sept_state_is_export_cancel_allowed(sept_entry_copy))
+        {
+            operation = GPA_ENTRY_OP_CANCEL;
+        }
+        else if (sept_state_is_any_exported_and_dirty(sept_entry_copy))
+        {
+            operation = GPA_ENTRY_OP_REMIGRATE;
+        }
+        else
+        {
+            return GPA_ENTRY_STATUS_SEPT_ENTRY_STATE_INCORRECT;
+        }
+
+        if (GPA_ENTRY_OP_MIGRATE == operation || GPA_ENTRY_OP_REMIGRATE == operation)
+        {
+            // the check is based on the individual page BEPOCH set previously by TDH.MEM.SCAN(DSCAN).  This allows DSCAN to run concurrently with TDH.EXPORT.MEM.
+            return_val = check_tlb_tracking(tdcs_p, sept_entry_copy, sept_entry_level);
+			if (GPA_ENTRY_STATUS_SUCCESS != return_val)
+			{
+				return return_val;
+            }
+        }
+    }
+    else
     {
         // Export is in the in-order phase
         if (gpa_list_entry->operation == GPA_ENTRY_OP_CANCEL)
@@ -307,7 +373,7 @@ static gpa_list_entry_status_t handle_operation(gpa_list_entry_t gpa_list_entry,
                                                 pa_t page_gpa, ept_level_t sept_entry_level, uint64_t target_tdr_pa
 )
 {
-    bool_t keep_ad = false;
+    bool_t keep_ad = is_non_blocking_export_configured();
 
     if (gpa_list_entry.operation == GPA_ENTRY_OP_CANCEL)
     {
@@ -320,6 +386,32 @@ static gpa_list_entry_status_t handle_operation(gpa_list_entry_t gpa_list_entry,
         // No migration buffer is used
         mig_buff_list_entry->invalid = 1;
 
+        if (is_non_blocking_export_configured())
+        {
+            if(is_sept_exported_blocked(sept_entry_copy))
+            {
+                sept_update_state(sept_entry_copy, SEPT_STATE_BLOCKED_MASK, keep_ad, true);
+            }
+            else if(is_sept_exported_removed(sept_entry_copy))
+            {
+                sept_update_state(sept_entry_copy, SEPT_STATE_FREE_MASK, keep_ad, true);
+            }
+            else if(is_sept_pending_exported_blocked(sept_entry_copy))
+            {
+                sept_update_state(sept_entry_copy, SEPT_STATE_PEND_BLOCKED_MASK, keep_ad, true);
+            }
+            else
+            {
+                fatal_error(FATAL_ERROR_ID_355, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
+            }
+
+            if (is_sept_free(sept_entry_copy))
+            {
+                // Atomically decrement TDCS.MEM_COUNT by 1, 512 or 5122 depending on the removed TD private page size (4KB, 2MB or 1GB, respectively).
+                (void)_lock_xadd_64b(&(tdcs_p->executions_ctl2_fields.mem_count), -(BIT(9 * sept_entry_level)));
+            }
+        }
+        else
         {
             if (gpa_list_entry.pending)
             {
@@ -376,6 +468,11 @@ static gpa_list_entry_status_t handle_operation(gpa_list_entry_t gpa_list_entry,
         {
             // No migration buffer is used
             mig_buff_list_entry->invalid = 1;
+            if (is_non_blocking_export_configured())
+            {
+                sept_update_state(sept_entry_copy, SEPT_STATE_PENDING_EXPORTED_MASK, keep_ad, true);
+            }
+            else
             {
                 sept_update_state(sept_entry_copy, SEPT_STATE_PEND_EXP_BLOCKEDW_MASK, keep_ad, true);
             }
@@ -418,6 +515,11 @@ static gpa_list_entry_status_t handle_operation(gpa_list_entry_t gpa_list_entry,
 
             *mig_buff_p = map_pa(mig_buff_list_entry_pa.raw_void, TDX_RANGE_RW);
 
+            if (is_non_blocking_export_configured())
+            {
+                sept_update_state(sept_entry_copy, SEPT_STATE_EXPORTED_MASK, keep_ad, true);
+            }
+            else
             {
                 if (!sept_state_is_any_blockedw(*sept_entry_copy))
                 {
@@ -445,7 +547,7 @@ static gpa_list_entry_status_t handle_operation(gpa_list_entry_t gpa_list_entry,
 
 static api_error_type finish_entry_processing(uint64_t* entry_num, gpa_list_info_t gpa_list_info,
                                               migsc_t* migsc_p, pa_t mig_buff_list_pa, pa_t* mac_list_pa,
-                                              tdcs_t* tdcs_p, uint32_t problem_ops_count
+                                              tdcs_t* tdcs_p
                                               , pa_t l2_attr_list_pa
                                               )
 {
@@ -482,10 +584,9 @@ static api_error_type finish_entry_processing(uint64_t* entry_num, gpa_list_info
         // will become 0, as expected by the definition
         (void)_lock_xadd_64b(&tdcs_p->migration_fields.total_mb_count, 1);
 
-        // Indicate the number of pages processed, an overall success and
-        // the number of problematic GPA list entries.
+        // Indicate the number of pages processed, an overall success
         get_local_data()->vmm_regs.rdx = migsc_p->interrupted_state.num_processed;
-        return_val = api_error_with_operand_id(TDX_SUCCESS, problem_ops_count);
+        return_val = TDX_SUCCESS;
     }
 
     return return_val;
@@ -493,7 +594,8 @@ static api_error_type finish_entry_processing(uint64_t* entry_num, gpa_list_info
 
 api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa,
     uint64_t hpa_and_size_pa, uint64_t mig_buff_list_pa_val,
-    uint64_t migs_i_and_cmd_val, uint64_t  mac_list_0_pa, uint64_t  mac_list_1_pa)
+    uint64_t migs_i_and_cmd_val, uint64_t  mac_list_0_pa, uint64_t  mac_list_1_pa,
+    uint8_t version)
 {
     // Local data for return values
     tdx_module_local_t* local_data_ptr = get_local_data();
@@ -510,7 +612,7 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
     gpa_list_entry_t* gpa_list_p = NULL;
     volatile gpa_list_entry_t        gpa_list_entry;
     uint64_t                entry_num = gpa_list_info.first_entry;
-    uint32_t                problem_ops_count = 0;
+    uint32_t                gpa_list_err_count = 0;
 
     // GPA and Secure-EPT
     pa_t                    page_gpa;
@@ -568,6 +670,13 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
     migs_i_and_cmd.raw = migs_i_and_cmd_val;
 
     l2_attr_list_pa.raw = local_data_ptr->vmm_regs.r14;
+
+    // Only versions 0 and 1 are supported
+    if (version > 1)
+    {
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
+        goto EXIT;
+    }
 
     // Check, lock and map the owner TDR page
     return_val = check_lock_and_map_explicit_tdr(tdr_pa,
@@ -638,6 +747,13 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
         goto EXIT;
     }
     migsc_locked_flag = true;
+
+    return_val = check_td_for_export_mode(tdr_p, tdcs_p);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
 
     // Map the MIGSC
     migsc_pa.raw = 0;
@@ -764,6 +880,7 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
         do
         {
             if (gpa_list_entry.operation == GPA_ENTRY_OP_NOP
+				|| (is_non_blocking_export_configured() && ((gpa_list_entry.operation == GPA_ENTRY_OP_NOP2) || (gpa_list_entry.operation == GPA_ENTRY_OP_NOP3)))
                 )
             {
                 if (!gpa_list_entry_is_valid(gpa_list_entry, true))
@@ -825,10 +942,19 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
             gpa_list_entry.pending = sept_state_is_any_pending(sept_entry_copy);
             gpa_list_entry.l2_map = 0;
 
+            if(is_non_blocking_export_configured())
+            {
+                if (tdcs_p->management_fields.op_state != OP_STATE_LIVE_EXPORT)
+                {
+                    // During PAUSED_EXPORT and POST_EXPORT, the Dirty bit is always cleared
+                    atomically_clear_d_bit(sept_entry_ptr);
+                }
+            }
 
             // Build the L2 attributes list entry
             if (sept_state_is_any_aliased(sept_entry_copy) && (GPA_ENTRY_OP_CANCEL != gpa_list_entry.operation)) // Is any alias
             {
+                bool_t is_page_dirty = false;
                 // Update the L2 attributes list entry with each applicable alias attributes
                 for (uint16_t vm_id = 1; vm_id <= tdcs_p->management_fields.num_l2_vms; vm_id++)
                 {
@@ -848,6 +974,38 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                             fatal_error(FATAL_ERROR_ID_26, FATAL_INFO_FORMAT_SEPT_TD_HANDLE_INFO, &extended_fatal_info);
                         }
 
+                        if(is_non_blocking_export_configured())
+                        {
+                            if (tdcs_p->management_fields.op_state == OP_STATE_LIVE_EXPORT)
+                            {
+                                // During LIVE_EXPORT, if the Dirty bit is set, skip this page.  It will be discovered by the next TDH.MEM.SCAN(DSCAN/DCHECK).
+                                if(is_sept_entry_dirty(l2_septe_ptrs[vm_id]))
+                                {
+                                    err_status = GPA_ENTRY_STATUS_PAGE_DIRTY;
+                                    is_page_dirty = true;
+
+                                    for (uint16_t vm = 1; vm <= vm_id; vm++)
+                                    {
+                                        if (l2_septe_ptrs[vm] != NULL)
+                                        {
+                                            free_la(l2_septe_ptrs[vm]);
+                                            l2_septe_ptrs[vm] = NULL;
+                                        }
+                                    }
+
+                                    break;
+                                }
+                            }
+                            else
+                            {
+                                // During PAUSED_EXPORT and POST_EXPORT, the Dirty bit is always cleared
+                                atomically_clear_d_bit(l2_septe_ptrs[vm_id]);
+                            }
+
+                            l2_attr_list_entry.attr_arr[vm_id] = l2_sept_get_gpa_attr(l2_septe_ptrs[vm_id], false, sept_state_is_any_pending(sept_entry_copy));
+
+                        }
+                        else
                         {
                             // Get the L2 attributes.  L2 SEPT entry does not hold BLOCKEDW or PENDING indications
                             // of its own, so provide them based on the L1 state.
@@ -856,6 +1014,10 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                     }
                 }
 
+                if(is_page_dirty)
+                {
+                    break;
+                }
             }
 
 
@@ -880,6 +1042,11 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
             }
 
             // Update the SEPT entry in memory, but keep it locked since we still access the page later.
+            if (is_non_blocking_export_configured())
+            {
+                atomically_update_sept_state_keep_ad_tdhp(sept_entry_ptr, sept_entry_copy.raw);
+            }
+            else
             {
                 atomically_update_sept_state_keep_tdhp(sept_entry_ptr, sept_entry_copy.raw);
             }
@@ -902,7 +1069,7 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
             mig_buff_list_entry.invalid = 1;
             if (err_status != GPA_ENTRY_STATUS_SKIPPED)
             {
-                problem_ops_count++;
+                gpa_list_err_count++;
             }
         }
 
@@ -915,6 +1082,8 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
 
         // Calculate a MAC over the GPA list entry
         reset_to_next_iv(migsc_p, migsc_p->iv_counter, migs_i);
+
+        gpa_list_entry.state = 0;
 
         if (aes_gcm_process_aad(&migsc_p->aes_gcm_context, (const uint8_t*)&gpa_list_entry,
             sizeof(gpa_list_entry)) != AES_GCM_NO_ERROR)
@@ -956,7 +1125,6 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
 
         // Write back the updated migration buffer list and GPA list entries to memory
         mig_buff_list_p[entry_num] = mig_buff_list_entry;
-        gpa_list_entry.state = 0;
         gpa_list_p[entry_num] = gpa_list_entry;
 
         // Now that we're done processing the page, unlock the SEPT entry
@@ -976,7 +1144,7 @@ api_error_type tdh_export_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
         --------------------------------------*/
         return_val = finish_entry_processing(&entry_num, gpa_list_info, migsc_p,
                                                                                mig_buff_list_pa, mac_list_pa,
-                                                                               tdcs_p, problem_ops_count
+                                                                               tdcs_p
                                                                                , l2_attr_list_pa
                                                                                );
         if ((return_val == TDX_INTERRUPTED_RESUMABLE) ||
@@ -992,6 +1160,12 @@ EXIT:
 
     // In all cases, including error cases, RCX returns the updated GPA_LIST_INFO
     local_data_ptr->vmm_regs.rcx = gpa_list_info.raw;
+
+    // When called with version=1, a GPA list error counter will be returned in R8
+    if (version >= 1)
+    {
+        local_data_ptr->vmm_regs.r8 = gpa_list_err_count;
+    }
 
     // Release all acquired locks
 

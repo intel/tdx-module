@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 
 /**
@@ -60,7 +60,7 @@ static void init_new_sept_page(tdr_t* tdr_ptr, pa_t tdr_pa, pa_t sept_page_pa,
     free_la(sept_page_ptr);
 }
 
-static api_error_type process_l1_page(tdx_module_local_t* local_data_ptr, uint64_t version,
+static api_error_type process_l1_page(tdcs_t* tdcs_ptr, tdx_module_local_t* local_data_ptr, uint64_t version,
                                       pa_t sept_page_pa[MAX_VMS], pa_t flagged_sept_page_pa[MAX_VMS],
                                       ept_level_t page_level_entry, ia32e_sept_t page_sept_entry_copy,
                                       pamt_walk_result_t sept_page_pamt_walk_result[MAX_VMS],
@@ -78,7 +78,7 @@ static api_error_type process_l1_page(tdx_module_local_t* local_data_ptr, uint64
         }
         if (!is_sept_nl_mapped(&page_sept_entry_copy))
         {
-            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
             TDX_ERROR("Parent entry is not non-leaf and mapped - 0x%llx\n", page_sept_entry_copy.raw);
             return api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
         }
@@ -115,7 +115,7 @@ static api_error_type process_l1_page(tdx_module_local_t* local_data_ptr, uint64
             }
             else
             {
-                set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+                set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
                 TDX_ERROR("SEPT page already exists - 0x%llx, but existing pages are not allowed\n", page_sept_entry_copy.raw);
                 return api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
             }
@@ -252,6 +252,7 @@ static api_error_type add_l1_and_l2_pages(uint64_t version, tdr_t* tdr_ptr, pa_t
                 sept_l2_set_mapped_non_leaf_given_hpa_and_hkid(page_sept_entry_ptr[vm_id],
                                                                sept_page_pa[vm_id],
                                                                tdr_ptr->key_management_fields.hkid
+                                                               , false, false
                                                                );
 
                 // Nullify the page HPA to indicate it no longer needs to be allocated
@@ -368,6 +369,19 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
         goto EXIT;
     }
 
+    if (is_non_blocking_export_configured() && OP_STATE_PAUSED_EXPORT == tdcs_ptr->management_fields.op_state)
+    {
+        TDX_ERROR("TDH.MEM.SEPT.ADD is not allowed when the export is paused\n");
+        return_val = api_error_with_operand_id(TDX_OP_STATE_INCORRECT,(uint64_t)tdcs_ptr->management_fields.op_state);
+        goto EXIT;
+    }
+
+    return_val = check_td_for_export_mode(tdr_ptr, tdcs_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
 
     if (!verify_page_info_input(gpa_mappings, LVL_PD, tdcs_ptr->executions_ctl_fields.eptp.fields.ept_pwl))
     {
@@ -397,7 +411,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
         {
             // Update output register operands
-            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         }
 
         TDX_ERROR("Failed on GPA check, SEPT lock or walk - error = %llx\n", return_val);
@@ -409,7 +423,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
     if (TDX_SUCCESS != return_val)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Failed on SEPT host-side lock attempt\n");
         goto EXIT;
     }
@@ -422,7 +436,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
     if (!sept_state_is_seamcall_leaf_allowed(TDH_MEM_SEPT_ADD_LEAF, page_sept_entry_copy))
     {
         TDX_ERROR("L1 SEPT sate (0x%llx) is not allowed for this SEAMCALL\n", page_sept_entry_copy.raw);
-        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
         goto EXIT;
     }
@@ -431,7 +445,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
     // Check and lock the new L1 and L2 SEPT physical pages.
 
     // Process the L1 SEPT page. Either add a new page or make sure it exists.
-    return_val = process_l1_page(local_data_ptr, version, sept_page_pa, flagged_sept_page_pa,
+    return_val = process_l1_page(tdcs_ptr, local_data_ptr, version, sept_page_pa, flagged_sept_page_pa,
                                  page_level_entry, page_sept_entry_copy,
                                  sept_page_pamt_walk_result, sept_page_locked_flag,
                                  target_tdr_and_flags.allow_existing);

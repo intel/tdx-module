@@ -20,7 +20,7 @@
 #//
 #// SPDX-License-Identifier: MIT
 
-# proj_defs.mk - Project related defintions
+# proj_defs.mk - Project related definitions
 
 PROJ_FLAGS =
 
@@ -52,13 +52,14 @@ endif # TDX_MODULE_INTERNAL_VER
 ifdef TDX_MODULE_SEAM_MINOR_SVN
  PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=$(TDX_MODULE_SEAM_MINOR_SVN)
 else # TDX_MODULE_SEAM_MINOR_SVN
- PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=8
+ PROJ_FLAGS += -DTDX_MINOR_SEAM_SVN=9
 endif # TDX_MODULE_SEAM_MINOR_SVN
+
 
  #######################################
  PROJ_FLAGS += -DTDX_MODULE_MAJOR_VER=2
  PROJ_FLAGS += -DTDX_MODULE_MINOR_VER=0
- PROJ_FLAGS += -DTDX_MODULE_UPDATE_VER=16
+ PROJ_FLAGS += -DTDX_MODULE_UPDATE_VER=18
  #######################################
 
 ################################################################
@@ -77,7 +78,7 @@ endif # DBG_TRACE
 ################################################################
 
 ################################################################
-## Miscelaneous features
+## Miscellaneous features
 
 
 PROJ_FLAGS += -D_NO_IPP_DEPRECATED
@@ -103,10 +104,10 @@ PROJ_FLAGS += -D_NO_IPP_DEPRECATED
 ################################################################
 
 
-#Architecture git data
+# Architecture git data
 ################################################################
-    COMMIT_ID = 6985f76f
-    ARCHITECTURE_BRANCH_NAME = TDX_Module_2.0.16_v0.98
+    COMMIT_ID = 6e5fc15
+    ARCHITECTURE_BRANCH_NAME = TDX_Module_2.0.18_v0.99
     CPUID_EXCEL_VERSION_SUPPORTED = 10
     MSR_EXCEL_VERSION_SUPPORTED = 6
     TDVPS_EXCEL_VERSION_SUPPORTED = 28

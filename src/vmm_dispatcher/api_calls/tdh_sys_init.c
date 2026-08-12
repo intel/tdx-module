@@ -514,13 +514,9 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
         {
             tdx_module_local_t *tdx_local_data_ptr = get_local_data();
 
-            cpuid_0a_eax_t cpuid_0a_eax;
-            cpuid_0a_ecx_t cpuid_0a_ecx;
-            cpuid_0a_edx_t cpuid_0a_edx;
-
-            cpuid_0a_eax.raw = cpuid_config.values.eax;
-            cpuid_0a_ecx.raw = cpuid_config.values.ecx;
-            cpuid_0a_edx.raw = cpuid_config.values.edx;
+            cpuid_0a_eax_t cpuid_0a_eax = { .raw = cpuid_config.values.eax};
+            uint32_t cpuid_0a_ecx = cpuid_config.values.ecx;
+            cpuid_0a_edx_t cpuid_0a_edx = { .raw = cpuid_config.values.edx};
 
             if (cpuid_0a_eax.version < 5)  // not supported
             {
@@ -545,7 +541,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
             // Per Intel SDM, Vol. 3, 19.2.5.2:
             // FxCtr[i]_is_supported := ECX[i] || (EDX[4:0] > i)
             // So, set all bitmap bits per EDX[4:0] and OR with the bitmap in ECX.
-            global_data_ptr->fc_bitmap = (uint32_t)((BIT(cpuid_0a_edx.num_fcs) - 1) | cpuid_0a_ecx.raw);
+            global_data_ptr->fc_bitmap = (uint32_t)((BIT(cpuid_0a_edx.num_fcs) - 1) | cpuid_0a_ecx);
 
             if ((BIT(MAX_FIXED_CTRS) - 1) < global_data_ptr->fc_bitmap)
             {
@@ -1345,9 +1341,8 @@ _STATIC_INLINE_ void tdx_init_global_data(tdx_module_global_t* tdx_global_data_p
 
     tdx_global_data_ptr->num_rdseed_retries = 6;
     tdx_global_data_ptr->num_rdseed_pauses = 32;
-
-    uint32_t freq = (uint32_t)get_tsc_ratio();
-    tdx_global_data_ptr->twenty_usec_in_tsc = translate_usec_to_tsc(USECOND * 20, freq);
+    
+    tdx_global_data_ptr->twenty_usec_in_tsc = translate_usec_to_tsc(USECOND * 20, (uint32_t)tdx_global_data_ptr->native_tsc_frequency);
 
     tdx_global_data_ptr->td_build_count = 0;
     tdx_global_data_ptr->mig_interrupted_count = 0;
@@ -1589,6 +1584,14 @@ api_error_type tdh_sys_init(uint8_t version)
     }
 
     tdx_global_data_ptr->seam_capabilities = caps;
+    tdx_global_data_ptr->sealing_supported = caps.seamgetkey;
+    // currently only 128-bit sealing keys are supported
+    uint8_t sizes_bitmap = 0;
+    if (caps.seamgetkey)
+    {
+        sizes_bitmap |= BIT(SEALKEY_SIZE_128_BIT);
+    }
+    tdx_global_data_ptr->sealing_supported_sizes_bitmap = sizes_bitmap;
 
     uint64_t seamdb_size;
     if ((err = check_module_build_time_defs(tdx_global_data_ptr)) != TDX_SUCCESS)
@@ -1622,6 +1625,11 @@ api_error_type tdh_sys_init(uint8_t version)
 
     config_flags_t config_flags_fixed0 = { .raw = CONFIG_FLAGS_FIXED0 };
     config_flags_t config_flags_fixed1 = { .raw = CONFIG_FLAGS_FIXED1 };
+
+    if(!tdx_global_data_ptr->sealing_supported)
+    {
+        config_flags_fixed0.sealing = 0;
+    }
 
     if (tdx_global_data_ptr->max_pa <= 48)
     {

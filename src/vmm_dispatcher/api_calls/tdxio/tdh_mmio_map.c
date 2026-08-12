@@ -157,7 +157,7 @@ api_error_type tdh_mmio_map(
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
         {
             // Update output register operands
-            set_arch_septe_details_in_vmm_regs(cached_sept_entry, page_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(cached_sept_entry, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         }
 
         TDX_ERROR("Failed on GPA check, SEPT lock or walk - error = %llx\n", return_val);
@@ -168,7 +168,7 @@ api_error_type tdh_mmio_map(
     if (return_val != TDX_SUCCESS)
     {
         TDX_ERROR("Failed on SEPT host lock\n");
-        set_arch_septe_details_in_vmm_regs(cached_sept_entry, page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(cached_sept_entry, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
         goto EXIT;
     }
@@ -179,7 +179,7 @@ api_error_type tdh_mmio_map(
     if (!sept_state_is_seamcall_leaf_allowed(TDH_MMIO_MAP_LEAF, cached_sept_entry))
     {
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(cached_sept_entry, page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(cached_sept_entry, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("TDH_MMIO_MAP is not allowed in current SEPT entry state\n");
         goto EXIT;
     }

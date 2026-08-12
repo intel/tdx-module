@@ -72,6 +72,10 @@ static api_error_type tdg_servtd_rd_wr(servtd_binding_handle_t binding_handle, m
 
     api_error_type        return_val = TDX_SUCCESS;
     api_error_type        cross_td_trap_status = TDX_SUCCESS;
+    
+    tdcs_t* tdcs_p = lp->vp_ctx.tdcs;
+    tdx_sanity_check(tdcs_p != NULL, FATAL_ERROR_ID_374, 0);
+
 
     target_uuid.qwords[0] = lp->vp_ctx.tdvps->guest_state.gpr_state.r10;
     target_uuid.qwords[1] = lp->vp_ctx.tdvps->guest_state.gpr_state.r11;
@@ -84,6 +88,13 @@ static api_error_type tdg_servtd_rd_wr(servtd_binding_handle_t binding_handle, m
         lp->vp_ctx.tdvps->guest_state.gpr_state.rdx = MD_FIELD_ID_NA;
     }
     lp->vp_ctx.tdvps->guest_state.gpr_state.r8 = 0;
+
+    return_val = is_binding_allowed(tdcs_p);
+    if(TDX_SUCCESS != return_val)
+    {
+        TDX_ERROR("Binding not allowed. Error = 0x%llx.\n", return_val);
+        goto EXIT;
+    }
 
     break_servtd_binding_handle(binding_handle, lp->vp_ctx.tdr->management_fields.td_uuid,
                                 &target_tdr_pa, &target_slot);
@@ -193,7 +204,7 @@ static api_error_type tdg_servtd_rd_wr(servtd_binding_handle_t binding_handle, m
 
      // Calculate the service TD's TDINFO_HASH
      if ((return_val = get_tdinfo_and_teeinfohash(lp->vp_ctx.tdcs, target_tdcs_ptr->service_td_fields.servtd_bindings_table[target_slot].attributes.ignore_tdinfo,
-                                                  NULL, &tdinfo_hash, true, lp->vp_ctx.tdr, 0, true)) != TDX_SUCCESS)
+                                                  NULL, &tdinfo_hash, true, lp->vp_ctx.tdr, 0, true, 0)) != TDX_SUCCESS)
      {
          return_val = api_error_with_operand_id(return_val, OPERAND_ID_RTMR);
          goto EXIT;

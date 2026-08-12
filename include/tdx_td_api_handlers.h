@@ -283,5 +283,14 @@ api_error_type tdg_mem_page_attr_wr(
     gpa_attr_t gpa_attr,
     attr_flags_t attr_flags);
 
+/**
+ * @brief allows a TD to request a persistent key be derived for the TD, customized to the TD’s measurements and policy.
+ * @param td_key_request_gpa - 128B-aligned guest private physical address of TDKEYREQUEST
+ * @param key_output_gpa - 32B-aligned guest private physical address for key output
+ * @param requestor_info - Additional information about the requestor
+ * @return Success or Error type
+ */
+api_error_type tdg_mr_key_get(uint64_t td_key_request_gpa, uint64_t key_output_gpa, uint64_t requestor_info);
+
 
 #endif /* INCLUDE_TDX_TD_API_HANDLERS_H_ */

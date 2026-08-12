@@ -99,6 +99,19 @@ api_error_type tdh_mem_page_aug(page_info_api_input_t gpa_page_info,
         goto EXIT;
     }
 
+    if (is_non_blocking_export_configured() && OP_STATE_PAUSED_EXPORT == tdcs_ptr->management_fields.op_state)
+    {
+		TDX_ERROR("TDH.MEM.PAGE.AUG is not allowed when the export is paused\n");
+		return_val = api_error_with_operand_id(TDX_OP_STATE_INCORRECT,(uint64_t)tdcs_ptr->management_fields.op_state);
+		goto EXIT;
+    }
+
+    return_val = check_td_for_export_mode(tdr_ptr, tdcs_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
 
     if (!verify_page_info_input(gpa_mappings, LVL_PT, LVL_PD))
     {
@@ -125,7 +138,7 @@ api_error_type tdh_mem_page_aug(page_info_api_input_t gpa_page_info,
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
         {
             // Update output register operands
-            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         }
 
         TDX_ERROR("Failed on GPA check, SEPT lock or walk - error = %llx\n", return_val);
@@ -137,7 +150,7 @@ api_error_type tdh_mem_page_aug(page_info_api_input_t gpa_page_info,
     if (TDX_SUCCESS != return_val)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Failed on SEPT host-side lock attempt\n");
         goto EXIT;
     }
@@ -149,7 +162,7 @@ api_error_type tdh_mem_page_aug(page_info_api_input_t gpa_page_info,
     if (!sept_state_is_seamcall_leaf_allowed(TDH_MEM_PAGE_AUG_LEAF, page_sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(page_sept_entry_copy, page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("TDH_MEM_PAGE_AUG is not allowed in current SEPT entry state - 0x%llx\n", page_sept_entry_copy.raw);
         goto EXIT;
     }
@@ -172,6 +185,16 @@ api_error_type tdh_mem_page_aug(page_info_api_input_t gpa_page_info,
 
     sept_state_mask_t new_sept_state_mask = SEPT_STATE_PEND_MASK;
 
+    if (is_sept_exported_removed(&page_sept_entry_copy))
+    {
+        new_sept_state_mask = SEPT_STATE_PENDING_EXPORTED_MODIFIED_MASK;
+    }
+    else
+    {
+        // Atomically increment TDCS.MEM_COUNT by 1 (for a 4KB page) or by 512 (for a 2MB page).
+        tdx_sanity_check((page_level_entry <= LVL_PD), FATAL_ERROR_ID_50, 0);
+        (void)_lock_xadd_64b(&(tdcs_ptr->executions_ctl2_fields.mem_count), BIT(9 * page_level_entry));
+    }
 
 
     // Update the parent EPT entry with the new TD page HPA and SEPT_PENDING state

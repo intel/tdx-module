@@ -32,9 +32,10 @@
 #include "helpers/helpers.h"
 #include SEPT_STATE_LOOKUP_HEADER
 #include "data_structures/tdx_local_data.h"
+#include "helpers/mem_scan.h"
 
 
-#define SEPT_SPECIAL_FLAGS_LUT_MUL 1
+#define SEPT_SPECIAL_FLAGS_LUT_MUL 2
 
 ///////////////////////////////////////////////////////////////////////////////////
 /// SEPT state masks
@@ -148,6 +149,17 @@ _STATIC_INLINE_ uint64_t get_sept_state_lut_index(ia32e_sept_t ept_entry)
 {
 	uint64_t idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
 
+
+    // SEPT states (WB) EXPORTED_BLOCKEDW and (NB) EXPORTED have the same encoding.
+	if (is_non_blocking_export_configured())
+	{
+        idx = SEPT_CONVERT_TO_ENCODING_WO_D(ept_entry);
+        if (SEPT_STATE_EXPORTED_ENCODING == idx)
+        {
+            idx += MAX_SEPT_STATE_ENC;
+        }
+	}
+    else
     {
         idx = SEPT_CONVERT_TO_ENCODING(ept_entry);
     }
@@ -160,7 +172,8 @@ _STATIC_INLINE_ uint64_t get_sept_state_lut_index(ia32e_sept_t ept_entry)
                                                (((BITS(6,5) & (e)) >> 5) << SEPT_ENTRY_IPAT_TDMEM_BIT_POSITION))
 
 #define L2_SEPT_STATE_ENC_TO_MASK(e)         (((BIT(0) & (e)) << SEPT_ENTRY_TDB_BIT_POSITION) | \
-                                              (((BITS(2, 1) & (e)) >> 1) << SEPT_ENTRY_IPAT_TDMEM_BIT_POSITION))
+                                              (((BITS(2, 1) & (e)) >> 1) << SEPT_ENTRY_IPAT_TDMEM_BIT_POSITION) |\
+                                              (((BIT(3) & (e)) >> 3) << SEPT_ENTRY_R_BIT_POSITION))
 
 #define L2_SEPT_CONVERT_TO_ENCODING(l2_ept_entry)  ( ((uint64_t)(l2_ept_entry).l2_encoding.tdb) |   \
                                                     (((uint64_t)(l2_ept_entry).l2_encoding.ipat_tdmem) << 1ULL) |  \
@@ -183,6 +196,13 @@ typedef enum sept_state_mask_e
     SEPT_STATE_PEND_EXP_BLOCKEDW_MASK          = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_PENDING_EXPORTED_BLOCKEDW_ENCODING),
     SEPT_STATE_PEND_EXP_DIRTY_MASK             = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_PENDING_EXPORTED_DIRTY_ENCODING),
     SEPT_STATE_PEND_EXP_DIRTY_BLOCKEDW_MASK    = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_PENDING_EXPORTED_DIRTY_BLOCKEDW_ENCODING),
+    SEPT_STATE_EXPORTED_MASK                   = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_EXPORTED_ENCODING),
+    SEPT_STATE_EXPORTED_MODIFIED_MASK          = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_EXPORTED_MODIFIED_ENCODING),
+    SEPT_STATE_EXPORTED_BLOCKED_MASK           = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_EXPORTED_BLOCKED_ENCODING),
+    SEPT_STATE_EXPORTED_REMOVED_MASK           = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_EXPORTED_REMOVED_ENCODING),
+    SEPT_STATE_PENDING_EXPORTED_MASK           = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_PENDING_EXPORTED_ENCODING),
+    SEPT_STATE_PENDING_EXPORTED_MODIFIED_MASK  = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_PENDING_EXPORTED_MODIFIED_ENCODING),
+    SEPT_STATE_PENDING_EXPORTED_BLOCKED_MASK   = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_PENDING_EXPORTED_BLOCKED_ENCODING),
     SEPT_STATE_MMIO_MAPPED_MASK                = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_MMIO_MAPPED_ENCODING),
     SEPT_STATE_MMIO_BLOCKED_MASK               = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_MMIO_BLOCKED_ENCODING),
     SEPT_STATE_MMIO_PENDING_MASK               = SEPT_STATE_ENC_TO_MASK(SEPT_STATE_MMIO_PENDING_ENCODING),
@@ -213,7 +233,8 @@ uint64_t get_ept_entry_idx(pa_t gpa, ept_level_t lvl);
 ///////////////////////////////////////////////////////////////////////////////////
 _STATIC_INLINE_ bool_t is_sept_free(const ia32e_sept_t* ept_entry)
 {
-    return ((ept_entry->raw & SEPT_STATE_ENCODING_MASK) == SEPT_STATE_FREE_MASK);
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_FREE_MASK);
 }
 
 _STATIC_INLINE_ bool_t is_sept_mapped(const ia32e_sept_t* ept_entry)
@@ -224,7 +245,8 @@ _STATIC_INLINE_ bool_t is_sept_mapped(const ia32e_sept_t* ept_entry)
 
 _STATIC_INLINE_ bool_t is_sept_pending(const ia32e_sept_t* ept_entry)
 {
-    return ((ept_entry->raw & SEPT_STATE_ENCODING_MASK) == SEPT_STATE_PEND_MASK);
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_PEND_MASK);
 }
 
 _STATIC_INLINE_ bool_t is_sept_pending_wo_d_mask(const ia32e_sept_t* ept_entry)
@@ -251,7 +273,8 @@ _STATIC_INLINE_ bool_t is_sept_pending_exp_dirty(const ia32e_sept_t* ept_entry)
 
 _STATIC_INLINE_ bool_t is_sept_removed(const ia32e_sept_t* ept_entry)
 {
-    return ((ept_entry->raw & SEPT_STATE_ENCODING_MASK) == SEPT_STATE_REMOVED_MASK);
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_REMOVED_MASK);
 }
 
 _STATIC_INLINE_ bool_t is_sept_blockedw(const ia32e_sept_t* ept_entry)
@@ -266,25 +289,77 @@ _STATIC_INLINE_ bool_t is_sept_exported_blockedw(const ia32e_sept_t* ept_entry)
     return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_EXP_BLOCKEDW_MASK);
 }
 
+_STATIC_INLINE_ bool_t is_sept_exported(const ia32e_sept_t* ept_entry)
+{
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_EXPORTED_MASK);
+}
+
+_STATIC_INLINE_ bool_t is_sept_exported_modified(const ia32e_sept_t* ept_entry)
+{
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_EXPORTED_MODIFIED_MASK);
+}
+
+_STATIC_INLINE_ bool_t is_sept_exported_blocked(const ia32e_sept_t* ept_entry)
+{
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_EXPORTED_BLOCKED_MASK);
+}
+_STATIC_INLINE_ bool_t is_sept_exported_removed(const ia32e_sept_t* ept_entry)
+{
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_EXPORTED_REMOVED_MASK);
+}
+_STATIC_INLINE_ bool_t is_sept_pending_exported(const ia32e_sept_t* ept_entry)
+{
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_PENDING_EXPORTED_MASK);
+}
+_STATIC_INLINE_ bool_t is_sept_pending_exported_modified(const ia32e_sept_t* ept_entry)
+{
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_PENDING_EXPORTED_MODIFIED_MASK);
+}
+_STATIC_INLINE_ bool_t is_sept_pending_exported_blocked(const ia32e_sept_t* ept_entry)
+{
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_PENDING_EXPORTED_BLOCKED_MASK);
+}
+
+_STATIC_INLINE_ bool_t is_sept_pending_blocked(const ia32e_sept_t* ept_entry)
+{
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_PEND_BLOCKED_MASK);
+}
+
+_STATIC_INLINE_ bool_t is_sept_entry_dirty(const ia32e_sept_t* ept_entry)
+{
+    return ept_entry->d;
+}
 
 _STATIC_INLINE_ bool_t is_sept_mmio_mapped(ia32e_sept_t* ept_entry)
 {
-    return ((ept_entry->raw & SEPT_STATE_ENCODING_MASK) == SEPT_STATE_MMIO_MAPPED_MASK);
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_MMIO_MAPPED_MASK);
 }
 
 _STATIC_INLINE_ bool_t is_sept_mmio_pending(ia32e_sept_t* ept_entry)
 {
-    return ((ept_entry->raw & SEPT_STATE_ENCODING_MASK) == SEPT_STATE_MMIO_PENDING_MASK);
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_MMIO_PENDING_MASK);
 }
 
 _STATIC_INLINE_ bool_t is_sept_nl_mapped(const ia32e_sept_t* ept_entry)
 {
-    return ((ept_entry->raw & SEPT_STATE_ENCODING_MASK) == SEPT_STATE_NL_MAPPED_MASK);
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_NL_MAPPED_MASK);
 }
 
 _STATIC_INLINE_ bool_t is_sept_nl_blocked(const ia32e_sept_t* ept_entry)
 {
-    return ((ept_entry->raw & SEPT_STATE_ENCODING_MASK) == SEPT_STATE_NL_BLOCKED_MASK);
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_NL_BLOCKED_MASK);
 }
 
 _STATIC_INLINE_ bool_t is_l2_sept_nl_mapped(const ia32e_sept_t* ept_entry)
@@ -461,6 +536,12 @@ _STATIC_INLINE_ bool_t sept_state_is_guest_fully_accessible_leaf(ia32e_sept_t ep
     return sept_special_flags_lookup[idx].guest_fully_accessible_leaf;
 }
 
+_STATIC_INLINE_ bool_t sept_state_is_any_leaf(ia32e_sept_t ept_entry)
+{
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
+    return sept_special_flags_lookup[idx].any_leaf;
+}
 
 _STATIC_INLINE_ bool_t septe_state_encoding_is_seamcall_allowed(uint64_t septe_state_enc, seamcall_leaf_opcode_t leaf_number)
 {
@@ -533,6 +614,10 @@ _STATIC_INLINE_ bool_t is_ept_pt_mmio(ia32e_sept_t *const ept_entry_ptr)
     return ept_entry_ptr->ipat_tdmem == 0;
 }
 
+_STATIC_INLINE_ void atomically_clear_d_bit(ia32e_sept_t* ept_entry)
+{
+    (void)_lock_btr_64b((uint64_t*)ept_entry, SEPT_ENTRY_D_BIT_POSITION);
+}
 
 void cmpxchg_keep_masked(ia32e_sept_t* ept_entry, uint64_t expected_val, uint64_t* new_val, uint64_t mask);
 
@@ -544,6 +629,17 @@ _STATIC_INLINE_ void atomically_update_sept_state_keep_tdhp(ia32e_sept_t* ept_en
     atomically_update_sept_state_keep_masked_bits(ept_entry, new_state, tdhp_mask);
 }
 
+_STATIC_INLINE_ void atomically_update_sept_state_keep_ad(ia32e_sept_t* ept_entry, uint64_t new_state)
+{
+    static const uint64_t ad_mask = BIT(SEPT_ENTRY_A_BIT_POSITION) | BIT(SEPT_ENTRY_D_BIT_POSITION);
+    atomically_update_sept_state_keep_masked_bits(ept_entry, new_state, ad_mask);
+}
+
+_STATIC_INLINE_ void atomically_update_sept_state_keep_ad_tdhp(ia32e_sept_t* ept_entry, uint64_t new_state)
+{
+    static const uint64_t ad_tdhp_mask = BIT(SEPT_ENTRY_A_BIT_POSITION) | BIT(SEPT_ENTRY_D_BIT_POSITION) | BIT(SEPT_ENTRY_TDHP_BIT_POSITION);
+    atomically_update_sept_state_keep_masked_bits(ept_entry, new_state, ad_tdhp_mask);
+}
 
 void sept_update_state(ia32e_sept_t* ept_entry, sept_state_mask_t state, bool_t keep_ad, bool_t keep_tdhp);
 
@@ -739,6 +835,10 @@ _STATIC_INLINE_ void set_remove_and_release_locks_for_import(ia32e_sept_t *sept_
     sept_entry->mig_epoch = tdcs_p->migration_fields.mig_epoch;
 }
 
+_STATIC_INLINE_ void septe_set_exported_removed_and_release_locks(ia32e_sept_t* sept_entry)
+{
+    sept_entry->raw = SEPT_STATE_EXPORTED_REMOVED_MASK | BIT(SEPT_ENTRY_SVE_BIT_POSITION);
+}
 
 _STATIC_INLINE_ void septe_set_free_or_removed_and_release_locks(ia32e_sept_t *sept_entry, const tdcs_t *tdcs_p)
 {
@@ -789,7 +889,11 @@ _STATIC_INLINE_ bool_t is_ept_leaf_entry(const ia32e_ept_t * ept_entry, ept_leve
  */
 _STATIC_INLINE_ bool_t is_secure_ept_leaf_entry(const ia32e_sept_t * ept_entry, bool_t is_l2_entry)
 {
-    UNUSED(is_l2_entry);
+    if(!is_l2_entry)
+    {
+        return sept_state_is_any_leaf(*ept_entry);
+    }
+    else
     {
         return (ept_entry->leaf == 1);
     }
@@ -873,9 +977,10 @@ void sept_l2_set_leaf_given_hpa_with_hkid(ia32e_sept_t* l2_sept_entry_ptr, gpa_a
  *
  * @param ept_entry Pointer to EPT entry to map
  * @param page_pa Physical address to map in entry
- * @param page_pa hkid that will be assembled to the entry
+ * @param hkid hkid that will be assembled to the entry
  */
 void sept_l2_set_mapped_non_leaf_given_hpa_and_hkid(ia32e_sept_t * ept_entry, pa_t page_pa, uint16_t hkid
+                                                    , bool_t is_demote, bool_t ad_bits
                                                     );
 
 /** @brief Cleanup the SEPT entry if the page is PENDING
@@ -975,8 +1080,9 @@ _STATIC_INLINE_ pa_t sept_get_pa(const ia32e_sept_t *const sept_entry)
  * @param ept_entry - SEPT entry from which the arch state will be extracted
  * @param level - Level of the given SEPT entry
  * @param local_data_ptr - Local data pointer
+ * @param is_debug_td - Indication for a debuggable TD
  */
-void set_arch_septe_details_in_vmm_regs(ia32e_sept_t sept_entry, ept_level_t level, tdx_module_local_t* local_data_ptr);
+void set_arch_septe_details_in_vmm_regs(ia32e_sept_t sept_entry, ept_level_t level, tdx_module_local_t* local_data_ptr, bool_t is_debug_td);
 
 /**
  * @brief Sets arch L2 SEPTE details in RCX and RDX registers of the VMM

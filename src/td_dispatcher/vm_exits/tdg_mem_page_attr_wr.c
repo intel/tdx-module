@@ -29,6 +29,7 @@
 #include "helpers/helpers.h"
 #include "memory_handlers/sept_manager.h"
 #include "td_dispatcher/vm_exits/td_vmexit.h"
+#include "helpers/mem_scan.h"
 
 static void ext_ept_violation_exit(pa_t gpa, ia32e_sept_t sept_entry_copy, uint16_t vm_id, ept_level_t ept_level)
 {
@@ -324,6 +325,11 @@ api_error_type tdg_mem_page_attr_wr(
             {
                 if (is_gpa_attr_present(new_gpa_attr.attr_arr[vm_id]))
                 {
+                    if (is_non_blocking_export_configured())
+                    {
+                        l2_sept_update_gpa_attr_keep_ad(l2_septe_ptr[vm_id], new_gpa_attr.attr_arr[vm_id]);
+                    }
+                    else
                     {
                         l2_sept_update_gpa_attr(l2_septe_ptr[vm_id], new_gpa_attr.attr_arr[vm_id]);
                     }
@@ -366,6 +372,25 @@ api_error_type tdg_mem_page_attr_wr(
         }
     }
 
+    // If the TDX module is configured for non-blocking export, update the L1 SEPT entry state as follows:
+    if (is_non_blocking_export_configured())
+    {
+        // If the entry state was EXPORTED, update to EXPORTED_MODIFIED and atomically increment TDCS.DIRT_COUNT to count the page as requiring re - export.
+        if (is_sept_exported(&page_sept_entry_copy))
+        {
+            sept_update_state(&page_sept_entry_copy, SEPT_STATE_EXPORTED_MODIFIED_MASK, false, true);
+            (void)_lock_xadd_64b(&tdcs_ptr->migration_fields.dirty_count, 1);
+        }
+        // If the entry state was PENDING_EXPORTED, update to PENDING_EXPORTED_MODIFIED and atomically increment TDCS.DIRT_COUNT to count the page as requiring re - export.
+        else if (is_sept_pending_exported(&page_sept_entry_copy))
+        {
+            sept_update_state(&page_sept_entry_copy, SEPT_STATE_PENDING_EXPORTED_MODIFIED_MASK, false, true);
+            (void)_lock_xadd_64b(&tdcs_ptr->migration_fields.dirty_count, 1);
+        }
+
+        sept_update_state(page_sept_entry_ptr, page_sept_entry_copy.raw, true, true);
+    }
+    else
     {
         sept_update_state(page_sept_entry_ptr, page_sept_entry_copy.raw, false, true);
     }

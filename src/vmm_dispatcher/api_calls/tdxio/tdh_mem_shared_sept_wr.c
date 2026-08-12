@@ -136,7 +136,7 @@ api_error_type tdh_mem_shared_sept_wr(
             {
                 TDX_ERROR("Failed on SEPT lock or walk - error = %llx\n", return_val);
                 // Update output register operands
-                set_arch_septe_details_in_vmm_regs(cached_sept_arr[0], page_level_entry, local_data_ptr);
+                set_arch_septe_details_in_vmm_regs(cached_sept_arr[0], page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
             }
             goto EXIT;
         }

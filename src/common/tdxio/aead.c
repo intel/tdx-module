@@ -162,7 +162,7 @@ api_error_type tdx_io_aead_decrypt(
     if (!check_length_and_copy(message_ptr, msg_len, sec_buff_ptr, sec_buff_len))
     {
         TDX_ERROR("Failed to copy message to buffer\n");
-        return_val = TDX_SDPM_INVALID_MESSAGE;
+        return_val = TDX_SPDM_INVALID_MESSAGE;
         goto EXIT;
     }
 
@@ -171,7 +171,7 @@ api_error_type tdx_io_aead_decrypt(
     if (spdm_secure_msg_len < MAC256_LEN)
     {
         TDX_ERROR("Invalid length in secure_spdm_header\n");
-        return_val = TDX_SDPM_INVALID_MESSAGE;
+        return_val = TDX_SPDM_INVALID_MESSAGE;
         goto EXIT;
     }
 
@@ -181,7 +181,7 @@ api_error_type tdx_io_aead_decrypt(
         TDX_ERROR("Secure massage length (=%llu) is larger than \
                     (buffer length - SPDM_APP_DATA_LENGTH_OFST (=%llu))\n",
                     spdm_secure_msg_len, (sec_buff_len - SPDM_APP_DATA_LENGTH_OFST));
-        return_val = TDX_SDPM_INVALID_MESSAGE;
+        return_val = TDX_SPDM_INVALID_MESSAGE;
         goto EXIT;
     }
 
@@ -255,7 +255,7 @@ api_error_type tdx_io_aead_decrypt(
     if (!tdx_memcmp_safe(local_mac, mac, sizeof(local_mac)))
     {
         TDX_ERROR("MAC mismatch\n");
-        return_val = TDX_SDPM_INVALID_MESSAGE;
+        return_val = TDX_SPDM_INVALID_MESSAGE;
         goto EXIT;
     }
 

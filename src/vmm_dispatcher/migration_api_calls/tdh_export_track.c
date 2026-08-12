@@ -32,6 +32,7 @@
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
 #include "helpers/migration.h"
+#include "helpers/mem_scan.h"
 
 api_error_type tdh_export_track(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa, uint64_t idx_and_cmd)
 {
@@ -170,6 +171,24 @@ api_error_type tdh_export_track(uint64_t target_tdr_pa, uint64_t hpa_and_size_pa
             goto EXIT;
         }
 
+        if (is_non_blocking_export_configured())
+        {
+            // Check that TDCS.MEM_SCAN_DONE is true, indicating that a comprehensive memory scan by TDH.MEM.SCAN(DCHECK) has been completed.
+            if (MEM_SCAN_SUCCESS != tdcs_p->migration_fields.mem_scan_state)
+            {
+                TDX_ERROR("Comprehensive scan wasn't completed\n");
+                return_val = TDX_MEM_SCAN_DCHECK_NOT_DONE;
+                goto EXIT;
+            }
+
+            // Check that TDCS.MIG_COUNT is equal to TDCS.MEM_COUNT, indicating all TD memory has been exported.
+            if (tdcs_p->executions_ctl2_fields.mem_count != tdcs_p->migration_fields.mig_count)
+            {
+                TDX_ERROR("There are still dirty pages.\n");
+                return_val = TDX_UNEXPORTED_MEMORY_REMAINS;
+                goto EXIT;
+            }
+        }
 
         tdcs_p->migration_fields.mig_epoch = MIG_EPOCH_OUT_OF_ORDER;
         tdcs_p->management_fields.op_state = OP_STATE_POST_EXPORT;

@@ -35,9 +35,11 @@
 #include "helpers/helpers.h"
 #include "accessors/ia32_accessors.h"
 #include "accessors/data_accessors.h"
+#include "helpers/mem_scan.h"
 
 static void sept_split_entry(tdr_t* tdr_ptr, pa_t sept_page_pa, pa_t split_page_pa, ept_level_t split_page_level_entry,
                              ia32e_sept_t split_page_sept_entry_copy
+                             , bool_t set_a_d_bits
                              )
 {
     ALIGN(64) ia32e_sept_t sept_8_entries_chunk[8];
@@ -56,6 +58,11 @@ static void sept_split_entry(tdr_t* tdr_ptr, pa_t sept_page_pa, pa_t split_page_
 
             sept_8_entries_chunk[j] = split_page_sept_entry_copy;
 
+            if (is_non_blocking_export_configured())
+            {
+                sept_8_entries_chunk[j].d = set_a_d_bits;
+                sept_8_entries_chunk[j].a = set_a_d_bits;
+            }
 
             sept_8_entries_chunk[j].base = page_pa.page_4k_num;
         }
@@ -68,8 +75,10 @@ static void sept_split_entry(tdr_t* tdr_ptr, pa_t sept_page_pa, pa_t split_page_
     free_la(sept_page_ptr);
 }
 
-api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handle_and_flags_t target_tdr_and_flags,
-    uint64_t pamt_hpa0, uint64_t pamt_hpa1)
+api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info,
+                                   td_handle_and_flags_t target_tdr_and_flags,
+                                   uint64_t pamt_hpa0,
+                                   uint64_t pamt_hpa1)
 {
     // Local data for return values
     tdx_module_local_t* local_data_ptr = get_local_data();
@@ -79,16 +88,16 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
     pamt_walk_result_t    tdr_pamt_walk_result;
     bool_t                tdr_locked_flag = false;   // Indicate TDR is locked
 
-    tdcs_t* tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
+    tdcs_t*               tdcs_ptr = NULL;           // Pointer to the TDCS structure (Multi-page)
 
     // GPA and SEPT related variables
-    pa_t                  page_gpa = { .raw = 0 };            // Target page GPA
+    pa_t                  page_gpa = { .raw = 0 };          // Target page GPA
     page_info_api_input_t gpa_mappings = gpa_page_info;     // GPA and level
-    ia32e_sept_t* split_page_sept_entry_ptr = NULL; // SEPT entry of the page
+    ia32e_sept_t*         split_page_sept_entry_ptr = NULL; // SEPT entry of the page
     ia32e_sept_t          split_page_sept_entry_copy;       // Cached SEPT entry of the page
     ept_level_t           split_page_level_entry = gpa_mappings.level; // SEPT entry level of the page
     pa_t                  split_page_pa;
-    pamt_entry_t* split_page_pamt_entry_ptr = NULL; // Pointer to the to-be-splited page PAMT entry
+    pamt_entry_t*         split_page_pamt_entry_ptr = NULL; // Pointer to the to-be-split page PAMT entry
     bool_t                sept_locked_flag = false;         // Indicate SEPT is locked
     bool_t                septe_locked_flag = false;        // Indicate SEPT entry is locked
 
@@ -150,6 +159,13 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
         goto EXIT;
     }
 
+    return_val = check_td_for_export_mode(tdr_ptr, tdcs_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
+
     if (!verify_page_info_input(gpa_mappings, LVL_PD, LVL_PDPT))
     {
         TDX_ERROR("Input GPA page info (0x%llx) is not valid\n", gpa_mappings.raw);
@@ -177,7 +193,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
         {
             // Update output register operands
-            set_arch_septe_details_in_vmm_regs(split_page_sept_entry_copy, split_page_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(split_page_sept_entry_copy, split_page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         }
 
         TDX_ERROR("Failed on GPA check, SEPT lock or walk - error = %llx\n", return_val);
@@ -200,7 +216,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
     if (TDX_SUCCESS != return_val)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(split_page_sept_entry_copy, split_page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(split_page_sept_entry_copy, split_page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Failed on SEPT host-side lock attempt\n");
         goto EXIT;
     }
@@ -209,12 +225,17 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
     // Read the SEPT entry (again after locking)
     split_page_sept_entry_copy = *split_page_sept_entry_ptr;
 
+    // If the page state before the demote operation was MAPPED and a non-blocking export session is in the LIVE_EXPORT phase, set all the small pages Dirty bits.
+    // Otherwise, it clears them.
+    bool_t set_a_d_bits = ((is_non_blocking_export_configured()) &&
+        (tdcs_ptr->management_fields.op_state == OP_STATE_LIVE_EXPORT) &&
+        (is_sept_mapped(&split_page_sept_entry_copy)));
 
     // Verify that the parent entry is leaf entry
     if (!sept_state_is_seamcall_leaf_allowed(TDH_MEM_PAGE_DEMOTE_LEAF, split_page_sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(split_page_sept_entry_copy, split_page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(split_page_sept_entry_copy, split_page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Not leaf entry, or not allowed in current SEPT entry - 0x%llx!\n", split_page_sept_entry_copy.raw);
         goto EXIT;
     }
@@ -235,7 +256,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
         if (!sept_state_is_any_blocked(split_page_sept_entry_copy))
         {
             return_val = api_error_with_operand_id(TDX_GPA_RANGE_NOT_BLOCKED, OPERAND_ID_RCX);
-            set_arch_septe_details_in_vmm_regs(split_page_sept_entry_copy, gpa_mappings.level, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(split_page_sept_entry_copy, gpa_mappings.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
             TDX_ERROR("Demoted SEPT entry is not blocked - 0x%llx\n", split_page_sept_entry_copy.raw);
             goto EXIT;
         }
@@ -323,6 +344,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
     // Split the L1 SEPT
     sept_split_entry(tdr_ptr, sept_page_pa[0], split_page_pa, split_page_level_entry,
         split_page_sept_entry_copy
+        , set_a_d_bits
     );
 
     // Split the L2 SEPT
@@ -360,6 +382,11 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
                 // For L2, it means that if the page is not pending, the L2 entry gets unblocked.
                 // Else, it remains blocked (L2 has a single blocked state that applies for pending too)
                 ia32e_sept_t l2_sept_entry = *l2_sept_entry_ptr[vm_id];
+                // If the page state before the demote operation was MAPPED and a non-blocking export session is in the LIVE_EXPORT phase,
+                // set all the small pages Dirty bits. Otherwise, it clears them.
+                set_a_d_bits = ((is_non_blocking_export_configured()) &&
+                    (tdcs_ptr->management_fields.op_state == OP_STATE_LIVE_EXPORT) &&
+                    (is_l2_sept_mapped(&l2_sept_entry)));
                 if (unblock_required_flag && !sept_state_is_any_pending(split_page_sept_entry_copy))
                 {
                     sept_l2_unblock(&l2_sept_entry);
@@ -368,6 +395,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
                 // Map the L2 new Secure EPT page and fill it with small page SEPT entries
                 sept_split_entry(tdr_ptr, sept_page_pa[vm_id], split_page_pa, split_page_level_entry,
                     l2_sept_entry
+                    , set_a_d_bits
                 );
             }
             else
@@ -418,6 +446,17 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
         set_hkid_to_pa(sept_page_pa[0], tdr_ptr->key_management_fields.hkid),
         true, true); // Keep locked
 
+    if (unblock_required_flag)
+    {
+        if(!sept_state_is_any_pending(split_page_sept_entry_copy))
+        {
+            (void)_lock_xadd_64b(&tdcs_ptr->executions_ctl2_fields.blocked_count, (uint64_t)-(BIT(9 * split_page_level_entry)));
+        }
+        else
+        {
+            (void)_lock_xadd_64b(&tdcs_ptr->executions_ctl2_fields.pending_blocked_count, (uint64_t)-(BIT(9 * split_page_level_entry)));
+	    }
+	}
 
     // Update the new L1 Secure EPT page PAMT entry
     sept_page_pamt_walk_result[0].pamt_entry_p->owner = tdr_pa.page_4k_num;
@@ -435,6 +474,7 @@ api_error_type tdh_mem_page_demote(page_info_api_input_t gpa_page_info, td_handl
             sept_l2_set_mapped_non_leaf_given_hpa_and_hkid(l2_sept_entry_ptr[vm_id],
                                                            sept_page_pa[vm_id],
                                                            tdr_ptr->key_management_fields.hkid
+                                                           , true, is_non_blocking_export_configured()
             );
 
             // Set the aliased flag in the L1 non-leaf SEPT entry (this is done as a locked operation)

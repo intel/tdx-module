@@ -33,13 +33,19 @@
 #include "accessors/data_accessors.h"
 #include "helpers/helpers.h"
 #include "helpers/migration.h"
+#include "helpers/mem_scan.h"
 #include "metadata_handlers/metadata_generic.h"
 #include "memory_handlers/sept_manager.h"
 
-api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa)
+api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_tdr_pa, uint8_t version)
 {
     api_error_type          return_val = TDX_OPERAND_INVALID;
 
+    if (is_non_blocking_export_configured())
+    {
+        TDX_ERROR("TDH.EXPORT.BLOCKW is only available if the TDX module is configured for write-blocking based export.\n");
+        return return_val;
+    }
 
     // Local data for return values
     tdx_module_local_t  * local_data_ptr = get_local_data();
@@ -58,7 +64,7 @@ api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_
     gpa_list_entry_t            *gpa_list_p = NULL;
     volatile gpa_list_entry_t   gpa_list_entry;
     uint64_t                    entry_num = gpa_list_info.first_entry;
-    uint64_t                    problem_ops_count = 0;
+    uint64_t                    gpa_list_err_count = 0;
 
     // Secure-EPT
     bool_t                  sept_locked_flag = false;   // Indicate SEPT is locked
@@ -69,6 +75,14 @@ api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_
 
     // Input register operands
     tdr_pa.raw = target_tdr_pa;
+
+    // Only versions 0 and 1 are supported
+    if (version > 1)
+    {
+        return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RAX);
+        goto EXIT;
+    }
+
     // Check, lock and map the owner TDR page
     return_val = check_lock_and_map_explicit_tdr(tdr_pa,
                                                  OPERAND_ID_RDX,
@@ -253,8 +267,8 @@ api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_
             gpa_list_entry.status = err_status;
             if (err_status != GPA_ENTRY_STATUS_SKIPPED)
             {
-                problem_ops_count++;
-                TDX_ERROR("err_status = %d, problem_ops_count=%u\n", err_status, problem_ops_count);
+                gpa_list_err_count++;
+                TDX_ERROR("err_status = %d, gpa_list_err_count=%u\n", err_status, gpa_list_err_count);
             }
         }
 
@@ -289,7 +303,7 @@ api_error_type tdh_export_blockw(gpa_list_info_t gpa_list_info, uint64_t target_
         {
             // If the last entry was 511, entry_num will become 512, and on later assignment to first_entry
             // will become 0, as expected by the definition
-            return_val = api_error_with_operand_id(TDX_SUCCESS, problem_ops_count);
+            return_val = TDX_SUCCESS;
         }
     }
 
@@ -298,6 +312,12 @@ EXIT:
     gpa_list_info.first_entry = entry_num;
 
     local_data_ptr->vmm_regs.rcx = gpa_list_info.raw;
+
+    // When called with version=1, a GPA list error counter will be returned in R8
+    if (version >= 1)
+    {
+        local_data_ptr->vmm_regs.r8 = gpa_list_err_count;
+    }
 
     if (gpa_list_p != NULL)
     {

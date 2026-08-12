@@ -31,6 +31,7 @@
 #include "x86_defs/x86_defs.h"
 #include "helpers/helpers.h"
 #include "memory_handlers/sept_manager.h"
+#include "helpers/mem_scan.h"
 
 api_error_type tdh_mem_page_relocate(uint64_t source_page_pa,
                                     uint64_t target_tdr_pa,
@@ -109,6 +110,13 @@ api_error_type tdh_mem_page_relocate(uint64_t source_page_pa,
 
     mapped_gpa = page_info_to_pa(gpa_mappings);
 
+    return_val = check_td_for_export_mode(tdr_ptr, tdcs_ptr);
+    if (return_val != TDX_SUCCESS)
+    {
+        TDX_ERROR("TD state check for export mode failed - error = %llx\n", return_val);
+        goto EXIT;
+    }
+
     // Check GPA, lock SEPT and walk to find entry
     return_val = lock_sept_check_and_walk_private_gpa(tdcs_ptr,
                                                       OPERAND_ID_RCX,
@@ -125,7 +133,7 @@ api_error_type tdh_mem_page_relocate(uint64_t source_page_pa,
         if (return_val == api_error_with_operand_id(TDX_EPT_WALK_FAILED, OPERAND_ID_RCX))
         {
             // Update output register operands
-            set_arch_septe_details_in_vmm_regs(mapped_page_sept_entry_copy, mapped_page_level_entry, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(mapped_page_sept_entry_copy, mapped_page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         }
 
         TDX_ERROR("Failed on GPA check, SEPT lock or walk - error = %llx\n", return_val);
@@ -137,7 +145,7 @@ api_error_type tdh_mem_page_relocate(uint64_t source_page_pa,
     if (TDX_SUCCESS != return_val)
     {
         return_val = api_error_with_operand_id(return_val, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(mapped_page_sept_entry_copy, mapped_page_level_entry, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(mapped_page_sept_entry_copy, mapped_page_level_entry, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Failed on SEPT host-side lock attempt\n");
         goto EXIT;
     }
@@ -151,7 +159,7 @@ api_error_type tdh_mem_page_relocate(uint64_t source_page_pa,
         !sept_state_is_seamcall_leaf_allowed(TDH_MEM_PAGE_RELOCATE, mapped_page_sept_entry_copy))
     {
         return_val = api_error_with_operand_id(TDX_EPT_ENTRY_STATE_INCORRECT, OPERAND_ID_RCX);
-        set_arch_septe_details_in_vmm_regs(mapped_page_sept_entry_copy, gpa_mappings.level, local_data_ptr);
+        set_arch_septe_details_in_vmm_regs(mapped_page_sept_entry_copy, gpa_mappings.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
         TDX_ERROR("Is leaf entry, or not allowed in current SEPT entry - 0x%llx!\n", mapped_page_sept_entry_copy.raw);
         goto EXIT;
     }
@@ -187,7 +195,7 @@ api_error_type tdh_mem_page_relocate(uint64_t source_page_pa,
         if (!sept_state_is_any_blocked(mapped_page_sept_entry_copy))
         {
             return_val = api_error_with_operand_id(TDX_GPA_RANGE_NOT_BLOCKED, OPERAND_ID_RCX);
-            set_arch_septe_details_in_vmm_regs(mapped_page_sept_entry_copy, gpa_mappings.level, local_data_ptr);
+            set_arch_septe_details_in_vmm_regs(mapped_page_sept_entry_copy, gpa_mappings.level, local_data_ptr, tdcs_ptr->executions_ctl_fields.attributes.debug);
             TDX_ERROR("Relocated SEPT entry is not blocked - 0x%llx\n", mapped_page_sept_entry_copy.raw);
             goto EXIT;
         }
@@ -275,14 +283,30 @@ api_error_type tdh_mem_page_relocate(uint64_t source_page_pa,
     ia32e_sept_t epte_val = {.raw = mapped_page_sept_entry_copy.raw};
     target_pa = set_hkid_to_pa(target_pa, tdr_ptr->key_management_fields.hkid);
     epte_val.base = target_pa.full_pa >> 12;
-    
+
     sept_unblock(&epte_val);
 
     // Write the whole 64-bit EPT entry in a single operation
+    if (is_non_blocking_export_configured())
+    {
+        atomically_update_sept_state_keep_ad_tdhp(mapped_page_sept_entry_ptr, epte_val.raw);
+    }
+    else
     {
         atomically_update_sept_state_keep_tdhp(mapped_page_sept_entry_ptr, epte_val.raw);
     }
 
+    if (sept_state_is_any_blocked(mapped_page_sept_entry_copy))
+    {
+        if (!sept_state_is_any_pending(mapped_page_sept_entry_copy))
+        {
+            (void)_lock_xadd_64b(&tdcs_ptr->executions_ctl2_fields.blocked_count, (uint64_t)-(BIT(9 * mapped_page_level_entry)));
+        }
+        else
+        {
+            (void)_lock_xadd_64b(&tdcs_ptr->executions_ctl2_fields.pending_blocked_count, (uint64_t)-(BIT(9 * mapped_page_level_entry)));
+        }
+    }
 
     // Update RCX with the old physical page HPA
     local_data_ptr->vmm_regs.rcx = remove_hkid_from_pa(source_pa).raw;

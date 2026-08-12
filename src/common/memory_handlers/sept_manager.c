@@ -22,7 +22,7 @@
 
 /**
  * @file sept_manager.c
- * @brief SEPT manager implementaiton
+ * @brief SEPT manager implementation
  */
 
 
@@ -275,6 +275,10 @@ ept_walk_result_t gpa_translate(ia32e_eptp_t eptp, pa_t gpa, bool_t private_gpa,
 
     mapping_type_t mapping_type = TDX_RANGE_RO;
 
+    if (eptp.fields.enable_ad_bits)
+    {
+        mapping_type = TDX_RANGE_RW;
+    }
 
     for (;current_lvl >= LVL_PT; current_lvl--)
     {
@@ -323,10 +327,29 @@ ept_walk_result_t gpa_translate(ia32e_eptp_t eptp, pa_t gpa, bool_t private_gpa,
         // Check if leaf is reached - page walk done
         if (is_ept_leaf_entry(cached_ept_entry, current_lvl))
         {
+            if (eptp.fields.enable_ad_bits)
+            {
+                uint64_t a_d_mask = BIT(SEPT_ENTRY_A_BIT_POSITION);
+                if (access_rights.w)
+                {
+				    // if there is a WRITE permission, set also the d bit
+                    a_d_mask |= BIT(SEPT_ENTRY_D_BIT_POSITION);
+                }
+                // Set the a and d bits in leaf SEPT entries during the walk as an indication that the GPA range contains memory pages.
+                _lock_or_64b((uint64_t*)pte, a_d_mask);
+            }
             free_la(pt); // Not needed at that point
             // Calculate the final HPA
             hpa->raw = leaf_ept_entry_to_hpa((*(ia32e_sept_t*)cached_ept_entry), gpa.raw, current_lvl);
             break;
+        }
+        else
+        {
+            if (eptp.fields.enable_ad_bits)
+            {
+                // Set the a bit in all non-leaf SEPT entries during the walk as an indication that the GPA range contains memory pages.
+                _lock_or_64b((uint64_t*)pte, BIT(SEPT_ENTRY_A_BIT_POSITION));
+            }
         }
 
         free_la(pt); // Not needed at that point
@@ -409,7 +432,11 @@ ia32e_sept_t* secure_ept_walk(ia32e_eptp_t septp, pa_t gpa, uint16_t private_hki
             fatal_error(FATAL_ERROR_ID_45, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
         }
 
-        UNUSED(set_d_bit);
+        if (is_non_blocking_export_configured() && set_d_bit)
+        {
+            // Set the Dirty bit in all non-leaf SEPT entries during the walk as an indication that the GPA range contains memory pages.
+			_lock_or_64b((uint64_t*)pte, BIT(SEPT_ENTRY_D_BIT_POSITION));
+        }
 
         // Continue to next level in the walk
         pt_pa.raw = cached_sept_entry->raw & IA32E_PAGING_STRUCT_ADDR_MASK;
@@ -432,6 +459,12 @@ static void sept_state_atomic_write(ia32e_sept_t* ept_entry, uint64_t state, boo
         break;
     case 1: // preserve tdhp bit
         atomically_update_sept_state_keep_tdhp(ept_entry, state);
+        break;
+    case 2: // preserve ad bit
+        atomically_update_sept_state_keep_ad(ept_entry, state);
+        break;
+    case 3: // preserve both ad and tdhp bit
+        atomically_update_sept_state_keep_ad_tdhp(ept_entry, state);
         break;
     default:
         TDX_ERROR("SEPT state was not updated! sept entry: 0x%llx\n", ept_entry->raw);
@@ -521,7 +554,15 @@ void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t
     tdx_debug_assert(curr_entry.leaf == 0);
 
     // One aligned assignment to make it atomic
-    UNUSED(set_ad_bits);
+    if (set_ad_bits && is_non_blocking_export_configured())
+    {
+        curr_entry.d = 1;
+        curr_entry.a = 1;
+
+        // If the TDX module is configured for non-blocking export, set the entry’s Dirty bit as an indication that the GPA range contains memory pages.
+        atomically_update_sept_state_keep_tdhp(ept_entry, curr_entry.raw);
+    }
+    else
     {
         atomically_update_sept_state_keep_tdhp(ept_entry, curr_entry.raw);
     }
@@ -621,6 +662,7 @@ void sept_l2_set_leaf_given_hpa_with_hkid(ia32e_sept_t* l2_sept_entry_ptr, gpa_a
 }
 
 void sept_l2_set_mapped_non_leaf_given_hpa_and_hkid(ia32e_sept_t * ept_entry, pa_t page_pa, uint16_t hkid
+                                                    , bool_t is_demote, bool_t ad_bits
                                                     )
 {
     page_pa = set_hkid_to_pa(page_pa, hkid);
@@ -629,12 +671,19 @@ void sept_l2_set_mapped_non_leaf_given_hpa_and_hkid(ia32e_sept_t * ept_entry, pa
     tdx_debug_assert(curr_entry.leaf == 0);   // PS is part of the state encoding assigned above
 
     curr_entry.base = page_pa.page_4k_num;
+    // If the page state before the demote operation was MAPPED and a non-blocking export session is in the LIVE_EXPORT phase, sets all the small pages’ Dirty bits.
+    // Otherwise, it clears them.
+    if (is_demote)
+    {
+        curr_entry.a = ad_bits;
+        curr_entry.d = 0;
+    }
 
     // One aligned assignment to make it atomic
     atomic_mem_write_64b(&ept_entry->raw, curr_entry.raw);
 }
 
-void set_arch_septe_details_in_vmm_regs(ia32e_sept_t sept_entry, ept_level_t level, tdx_module_local_t* local_data_ptr)
+void set_arch_septe_details_in_vmm_regs(ia32e_sept_t sept_entry, ept_level_t level, tdx_module_local_t* local_data_ptr, bool_t is_debug_td)
 {
     ia32e_sept_t detailed_arch_sept_entry;
     sept_entry_arch_info_t detailed_arch_info;
@@ -650,15 +699,22 @@ void set_arch_septe_details_in_vmm_regs(ia32e_sept_t sept_entry, ept_level_t lev
     {
         detailed_arch_sept_entry.raw = sept_entry.raw;
         sept_cleanup_if_pending(&sept_entry, level);
+        
+        ia32e_sept_t ad_mask = {.raw = 0};
+        if(is_non_blocking_export_configured() && is_debug_td)
+        {
+            ad_mask.raw = (BIT(SEPT_ENTRY_A_BIT_POSITION) | BIT(SEPT_ENTRY_D_BIT_POSITION));
+        }
 
         if (is_secure_ept_leaf_entry(&detailed_arch_sept_entry, false))
         {
-            detailed_arch_sept_entry.raw &= SEPT_ARCH_ENTRY_LEAF_MASK;
+            detailed_arch_sept_entry.raw &= (SEPT_ARCH_ENTRY_LEAF_MASK | ad_mask.raw);
         }
         else
         {
-            detailed_arch_sept_entry.raw &= SEPT_ARCH_ENTRY_NON_LEAF_MASK;
+            detailed_arch_sept_entry.raw &= (SEPT_ARCH_ENTRY_NON_LEAF_MASK | ad_mask.raw);
         }
+
         // No need to restore the values of MT1 and MT2, they are not overwritten
     }
 
@@ -691,13 +747,20 @@ void set_arch_l2_septe_details_in_vmm_regs(ia32e_sept_t l2_sept_entry, uint16_t 
     }
     else
     {
+        ia32e_sept_t ad_mask = {.raw = 0};
+
         // Create the architectural SEPT entry as reported to the user
         detailed_arch_sept_entry.raw = l2_sept_entry.raw;
         if (is_secure_ept_leaf_entry(&l2_sept_entry, (bool_t)vm_id))
         {
             if (is_debug)
             {
-                detailed_arch_sept_entry.raw &= L2_SEPT_ARCH_ENTRY_LEAF_DEBUG_MASK;   // Attribute bits are included
+                if(is_non_blocking_export_configured() && is_debug)
+                {
+                    ad_mask.raw = (BIT(SEPT_ENTRY_A_BIT_POSITION) | BIT(SEPT_ENTRY_D_BIT_POSITION));
+                }
+                detailed_arch_sept_entry.raw &= (L2_SEPT_ARCH_ENTRY_LEAF_DEBUG_MASK | ad_mask.raw);   // Attribute bits are included
+
             }
             else if (is_l2_sept_mapped(&l2_sept_entry))
             {
@@ -711,7 +774,11 @@ void set_arch_l2_septe_details_in_vmm_regs(ia32e_sept_t l2_sept_entry, uint16_t 
         }
         else
         {
-            detailed_arch_sept_entry.raw &= L2_SEPT_ARCH_ENTRY_NON_LEAF_MASK;
+            if(is_non_blocking_export_configured() && is_debug)
+            {
+                ad_mask.raw = BIT(SEPT_ENTRY_A_BIT_POSITION);
+            }
+            detailed_arch_sept_entry.raw &= (L2_SEPT_ARCH_ENTRY_NON_LEAF_MASK | ad_mask.raw);
         }
     }
 
@@ -733,6 +800,11 @@ void sept_update_state(ia32e_sept_t* ept_entry, sept_state_mask_t state, bool_t 
 {
     ia32e_sept_t new_septe;
 
+    if (is_non_blocking_export_configured())
+    {
+        new_septe.raw = (ept_entry->raw & ~SEPT_STATE_ENCODING_WO_D_MASK) | (state & SEPT_STATE_ENCODING_MASK);
+    }
+    else
     {
         new_septe.raw = (ept_entry->raw & ~SEPT_STATE_ENCODING_MASK) | (state & SEPT_STATE_ENCODING_MASK);
     }
@@ -779,6 +851,20 @@ void sept_unblock(ia32e_sept_t* ept_entry)
     case SEPT_STATE_PEND_BLOCKED_MASK:
         sept_update_state(ept_entry, SEPT_STATE_PEND_MASK, false, false);
         // Permission bits remain all-0
+        break;
+    case SEPT_STATE_EXPORTED_BLOCKED_MASK:
+        if (is_non_blocking_export_configured())
+        {
+            sept_update_state(ept_entry, SEPT_STATE_EXPORTED_MODIFIED_MASK, false, false);
+            ept_entry->raw |= SEPT_PERMISSIONS_RWX;
+        }
+        break;
+    case SEPT_STATE_PENDING_EXPORTED_BLOCKED_MASK:
+        if (is_non_blocking_export_configured())
+        {
+            sept_update_state(ept_entry, SEPT_STATE_PENDING_EXPORTED_MODIFIED_MASK, false, false);
+            // Permission bits remain all-0
+        }
         break;
     default:
         // The SEPT entry was not blocked, do nothing
@@ -846,10 +932,19 @@ void cmpxchg_keep_masked(ia32e_sept_t* ept_entry, uint64_t expected_val, uint64_
         expected_val = old_value;
     } while ((old_value & ~mask) == (tmp_expected_val & ~mask));
 
-    // Fatal error, the SEPT entry was not as expected. shouold never happen.
+    // Fatal error, the SEPT entry was not as expected. should never happen.
     fatal_error(FATAL_ERROR_ID_345, FATAL_INFO_FORMAT_BASIC_INFO, NULL);
 }
 
+
+void l2_sept_update_gpa_attr_keep_ad(ia32e_sept_t* const l2_sept_entry_ptr, const gpa_attr_single_vm_t gpa_attr_single_vm)
+{
+    ia32e_sept_t l2_sept_entry_copy = *l2_sept_entry_ptr;
+
+    l2_sept_update_gpa_attr(&l2_sept_entry_copy, gpa_attr_single_vm);
+
+    atomically_update_sept_state_keep_ad(l2_sept_entry_ptr, l2_sept_entry_copy.raw);
+}
 
 void atomically_update_sept_state_keep_masked_bits(ia32e_sept_t* ept_entry, uint64_t new_state, uint64_t mask)
 {

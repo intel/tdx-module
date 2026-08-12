@@ -20,7 +20,7 @@
 //
 // SPDX-License-Identifier: MIT
 /**
- * @file tdg_servd_rebind_approve.c
+ * @file tdg_servtd_rebind_approve.c
  * @brief TDGSERVTDREBINDAPPROVE API handler
  */
 

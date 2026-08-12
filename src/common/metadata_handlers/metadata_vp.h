@@ -46,7 +46,7 @@ api_error_code_e md_vp_write_element(md_field_id_t field_id, const md_lookup_t* 
 
 api_error_code_e md_vp_write_field(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
                                    md_access_qualifier_t access_qual, md_context_ptrs_t md_ctx,
-                                   uint64_t value[MAX_ELEMENTS_IN_FIELD], uint64_t wr_mask, bool_t wr_mask_valid);
+                                   uint64_t value[MAX_ELEMENTS_IN_FIELD]);
 
 /**
  * @brief Private helper function to get the L2 VM index 

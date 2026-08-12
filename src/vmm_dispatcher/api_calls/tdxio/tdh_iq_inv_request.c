@@ -108,7 +108,7 @@ api_error_type tdh_iq_inv_request(
     if (iommu_config_ptr->iq_free_cnt < req_num_desc)
     {
         TDX_ERROR("Not enough free space in the invalidation queue (free space: %u, required space: %u)\n", iommu_config_ptr->iq_free_cnt, req_num_desc);
-        return_val = api_error_with_operand_id(TDX_IOMMU_IQ_QUEUE_FULL, OPERAND_ID_RDX);
+        return_val = api_error_with_operand_id(TDX_IOMMU_IQ_FULL, OPERAND_ID_RDX);
         goto EXIT;
     }
 

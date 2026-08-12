@@ -1029,6 +1029,7 @@ EXIT:
 
     check_pending_voe_on_debug_td_return();
 
+
     //Return to TD
     tdx_return_to_td(true, false, &tdx_local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state);
 

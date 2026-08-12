@@ -299,25 +299,10 @@ _STATIC_INLINE_ void pamt_4kb_bitmap_init(pamt_block_t* pamt_block, uint64_t num
     free_la(starting_byte_la);
 }
 
-typedef struct pamt_entry_8bit_pt_s
-{
-    struct
-    {
-        sharex_hp_lock_t entry_lock; // 2 byte (16 bit)
-        page_type_t pt : 8;
-        uint64_t owner : 40; // don't access this field directly, use accessors below
-    }; // primary
-
-    union
-    {
-        bepoch_t bepoch;
-    }; // additional
-} pamt_entry_8bit_pt_t;
-
 _STATIC_INLINE_ void pamt_nodes_init(uint64_t start_pamt_4k_p, uint64_t end_pamt_4k_p,
         pamt_entry_t* nodes_array, uint64_t entries_in_node, tdmr_entry_t *tdmr_entry)
 {
-    pamt_entry_8bit_pt_t* pamt_entry;
+    pamt_entry_t* pamt_entry;
 
     uint64_t entries_start = (start_pamt_4k_p - tdmr_entry->pamt_4k_base) / (entries_in_node * (uint64_t)sizeof(pamt_entry_t));
     uint64_t entries_end   = (end_pamt_4k_p - tdmr_entry->pamt_4k_base) / (entries_in_node * (uint64_t)sizeof(pamt_entry_t));

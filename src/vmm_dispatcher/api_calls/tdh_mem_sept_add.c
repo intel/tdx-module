@@ -88,7 +88,7 @@ static api_error_type process_l1_page(tdx_module_local_t* local_data_ptr, uint64
         // A new L1 SEPT page was provided
         // Verify the parent entry located for new SEPT page is FREE
 
-        if (is_sept_free(&page_sept_entry_copy))
+        if (sept_state_is_free_or_removed(page_sept_entry_copy))
         {
             // Prepare the new L1 SEPT page. The page will be added later after all checks are done.
             // Check and lock the new SEPT page in PAMT
@@ -199,7 +199,6 @@ static api_error_type add_l1_and_l2_pages(uint64_t version, tdr_t* tdr_ptr, pa_t
                                           pa_t flagged_sept_page_pa[MAX_VMS],
                                           pamt_walk_result_t sept_page_pamt_walk_result[MAX_VMS],
                                           ia32e_sept_t* page_sept_entry_ptr[MAX_VMS],
-                                          tdcs_t* tdcs_ptr,
                                           uint64_t original_rcx,
                                           uint64_t original_rdx)
 {
@@ -232,20 +231,15 @@ static api_error_type add_l1_and_l2_pages(uint64_t version, tdr_t* tdr_ptr, pa_t
         {
             if (!(flagged_sept_page_pa[vm_id].raw & BIT(63)))
             {
-                api_error_type return_val = TDX_SUCCESS;
-                if (true == sept_page_added_flag)
+                if ((true == sept_page_added_flag) && is_interrupt_pending_host_side())
                 {
                     // There's a new SEPT page (non-NULL and not pre-existing)
                     // Check for a pending interrupt only if at least one SEPT page has been added
-                    return_val = check_host_interrupt_and_hp_bit(&tdcs_ptr->executions_ctl_fields.secure_ept_lock, true);
-                }
-                
-                if (TDX_SUCCESS != return_val)
-                {
+                    TDX_ERROR("Pending interrupt identified\n");
                     // Restore the original RCX and RDX values and terminate the flow
                     local_data_ptr->vmm_regs.rcx = original_rcx;
                     local_data_ptr->vmm_regs.rdx = original_rdx;
-                    return return_val;
+                    return TDX_INTERRUPTED_RESUMABLE;
                 }
 
                 init_new_sept_page(tdr_ptr, tdr_pa, sept_page_pa[vm_id],
@@ -463,7 +457,7 @@ api_error_type tdh_mem_sept_add(page_info_api_input_t sept_level_and_gpa,
     // Step #3:
     // Add the new L1 and L2 SEPT pages
     return_val = add_l1_and_l2_pages(version, tdr_ptr, tdr_pa, sept_page_pa, flagged_sept_page_pa,
-                                     sept_page_pamt_walk_result, page_sept_entry_ptr, tdcs_ptr, original_rcx, original_rdx);
+                                     sept_page_pamt_walk_result, page_sept_entry_ptr, original_rcx, original_rdx);
 
     if (return_val != TDX_SUCCESS)
     {

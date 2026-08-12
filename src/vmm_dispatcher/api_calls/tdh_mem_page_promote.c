@@ -370,14 +370,17 @@ api_error_type tdh_mem_page_promote(page_info_api_input_t gpa_page_info, uint64_
         {
             // Check for a pending interrupt
             // Interruption is not restartable, no need to save state.  We haven't committed anything yet.
-            return_val = check_host_interrupt_and_hp_bit(&tdcs_ptr->executions_ctl_fields.secure_ept_lock,false);
-            if (TDX_SUCCESS != return_val)
+            if (is_interrupt_pending_host_side())
             {
+                TDX_ERROR("Pending interrupt identified\n");
+
                 // Restore the original RCX and RDX values and terminate the flow
                 local_data_ptr->vmm_regs.rcx = original_rcx;
                 local_data_ptr->vmm_regs.rdx = original_rdx;
+                return_val = TDX_INTERRUPTED_RESTARTABLE;
                 goto EXIT;
             }
+
             // Walk the L2 SEPT to locate the non-leaf entry mapping the large range
             return_val = l2_sept_walk(tdr_ptr, tdcs_ptr, vm_id, page_gpa, &l2_sept_parent_level_entry,
                                       &merged_sept_page_sept_entry_ptr[vm_id]);
@@ -438,14 +441,17 @@ api_error_type tdh_mem_page_promote(page_info_api_input_t gpa_page_info, uint64_
 
     // Check for a pending interrupt
     // Interruption is not restartable, no need to save state.  We haven't committed anything yet.
-    return_val = check_host_interrupt_and_hp_bit(&tdcs_ptr->executions_ctl_fields.secure_ept_lock,false);
-    if (TDX_SUCCESS != return_val)
+    if (is_interrupt_pending_host_side())
     {
+        TDX_ERROR("Pending interrupt identified\n");
+
         // Restore the original RCX and RDX values and terminate the flow
         local_data_ptr->vmm_regs.rcx = original_rcx;
         local_data_ptr->vmm_regs.rdx = original_rdx;
+        return_val = TDX_INTERRUPTED_RESTARTABLE;
         goto EXIT;
     }
+
     // Get the merge page address
     merged_page_pa.raw = leaf_ept_entry_to_hpa(merged_sept_page_ptr[0]->sept[0], 0,
                                           (ept_level_t)(merged_sept_parent_level_entry - 1));

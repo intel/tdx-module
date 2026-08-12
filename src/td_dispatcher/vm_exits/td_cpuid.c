@@ -103,6 +103,8 @@ void td_cpuid_exit(void)
     // Get an index to the CPUID tables
     index = get_cpuid_lookup_entry(leaf, subleaf);
 
+    lfence();
+
     if (index == CPUID_LOOKUP_IDX_NA)
     {
         // CPUID leaf/subleaf was not found in the lookup tables

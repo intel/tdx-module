@@ -264,7 +264,6 @@ tdx_static_assert(sizeof(ia32_xcr0_t) == 8, ia32xcr0_t);
 
 #define XCR0_USER_BIT_MASK                  0x000602FF
 #define XCR0_SUPERVISOR_BIT_MASK            0x0001FD00
-#define XCR0_MAX_VALID_BIT                  18
 #define XCR0_LBR_BIT                        15
 #define XCR0_PT_BIT                         8
 
@@ -863,7 +862,7 @@ tdx_static_assert(sizeof(loadiwkey_ctl_t) == 4, loadiwkey_ctl_t);
 #define CPUID_PERFMON_EDX_MASK_LOW           0x0
 #define CPUID_PERFMON_EDX_EXPECTED_LOW       0x0
 #define CPUID_PERFMON_ECX_EDX_MASK_HIGH      0x1FFFFFFFFFULL
-#define CPUID_PERFMON_ECX_EDX_EXPECTED_HIGH  ((MAX_FIXED_CTR << 32ULL) | ((1 << MAX_FIXED_CTR) - 1))
+#define CPUID_PERFMON_ECX_EDX_EXPECTED_HIGH  ((MAX_FIXED_CTRS << 32ULL) | ((1 << MAX_FIXED_CTRS) - 1))
 
 #define CPUID_MAXPA_EAX_MASK_LOW             0xFF00
 #define CPUID_MAXPA_EAX_MASK_HIGH            0x0

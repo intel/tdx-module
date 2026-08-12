@@ -20,32 +20,10 @@
 //                                                                               
 // SPDX-License-Identifier: MIT
 /**
- * @file metadata_sys.h
- * @brief Sys-context (Global system fields) metadata handler
+ * @file helpers.h
+ * @brief Helper functions for meta-data page table walks
  */
 
-
-#ifndef SRC_COMMON_METADATA_HANDLERS_METADATA_SYS_H_
-#define SRC_COMMON_METADATA_HANDLERS_METADATA_SYS_H_
-
-#include "metadata_generic.h"
-#include GLOBAL_SYS_FIELDS_LOOKUP_HEADER
-#include TDR_TDCS_FIELDS_LOOKUP_HEADER
-#include TD_VMCS_FIELDS_LOOKUP_HEADER
-#include TDVPS_FIELDS_LOOKUP_HEADER
-#include "helpers/error_reporting.h"
-
-api_error_code_e md_sys_read_element(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-        md_access_qualifier_t access_qual, uint64_t* out_rd_value, md_context_ptrs_t md_ctx);
-
-api_error_code_e md_sys_read_field(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-        md_access_qualifier_t access_qual, uint64_t value[MAX_ELEMENTS_IN_FIELD], md_context_ptrs_t md_ctx);
-
-api_error_code_e md_sys_write_element(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-        md_access_qualifier_t access_qual, uint64_t wr_value, uint64_t wr_request_mask,
-        uint64_t* old_value);
-
-api_error_code_e md_sys_write_field(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-        md_access_qualifier_t access_qual, uint64_t value[MAX_ELEMENTS_IN_FIELD], uint64_t wr_mask);
-
-#endif /* SRC_COMMON_METADATA_HANDLERS_METADATA_SYS_H_ */
+#ifndef SRC_MT_WALK_HELPERS_HELPERS_H_
+#define SRC_MT_WALK_HELPERS_HELPERS_H_
+#endif // SRC_MT_WALK_HELPERS_HELPERS_H_

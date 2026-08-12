@@ -43,7 +43,7 @@
 #endif // (((TDMR_PAMT_INIT_COUNT * 16) % 64) != 0)
 
 // We can initialize bigger ranges for dynamic PAMT
-#define TDMR_4K_DYNAMIC_PAMT_INIT_COUNT _4KB
+#define TDMR_4K_DYNAMIC_PAMT_INIT_COUNT _1KB
 
 
 api_error_type tdh_sys_tdmr_init(uint64_t tdmr_pa)
@@ -139,4 +139,3 @@ api_error_type tdh_sys_tdmr_init(uint64_t tdmr_pa)
 
     return retval;
 }
-

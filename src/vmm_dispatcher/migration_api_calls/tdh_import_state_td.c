@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 /**
  * @file tdh_import_state_td.c
@@ -149,6 +149,13 @@ api_error_type tdh_import_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
     if (migs_i_and_cmd.command == MIGS_INDEX_COMMAND_NEW)
     {
         // This is a new invocation, not a resumption
+
+        // If the MIGSC is initialized and MIGSC[0].INTERRUPTED.VALID is TRUE, terminate with a TDX_INVALID_RESUMPTION error
+        if (migsc_p->interrupted_state.valid)
+        {
+            return_val = TDX_INVALID_RESUMPTION;
+            goto EXIT;
+        }
 
         // Mark this flow as non-interrupted
         migsc_p->interrupted_state.valid = false;
@@ -376,31 +383,30 @@ api_error_type tdh_import_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
         page_list_i++; // Update to the index of the next page in the list
 
         // If we haven't gone through all the pages, check for a pending interrupt
-        if (page_list_i <= page_list_info.last_entry)
+        if (page_list_i <= page_list_info.last_entry && is_interrupt_pending_host_side())
         {
-            return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock,true);
-            if (TDX_SUCCESS != return_val)
+            TDX_ERROR("Pending interrupt identified\n");
+            return_val = TDX_INTERRUPTED_RESUMABLE;
+
+            // There is a pending interrupt.  Save the state.
+            migsc_p->interrupted_state.valid = true;
+            migsc_p->interrupted_state.func.raw = local_data_ptr->vmm_regs.rax;
+            migsc_p->interrupted_state.page_list_info.raw = page_list_info.raw;
+
+            migsc_p->interrupted_state.field_id.raw = next_field_id.raw;
+
+            migsc_p->interrupted_state.num_processed = page_list_i;
+
+            migsc_p->interrupted_state.aes_gcm_context_version = CRYPTO_LIB_COMPAT_VERSION;
+            if (tdcs_p->executions_ctl2_fields.field_support_at_init & BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT))
             {
-                // There is a pending interrupt.  Save the state.
-                migsc_p->interrupted_state.valid = true;
-                migsc_p->interrupted_state.func.raw = local_data_ptr->vmm_regs.rax;
-                migsc_p->interrupted_state.page_list_info.raw = page_list_info.raw;
-
-                migsc_p->interrupted_state.field_id.raw = next_field_id.raw;
-
-                migsc_p->interrupted_state.num_processed = page_list_i;
-
-                migsc_p->interrupted_state.aes_gcm_context_version = CRYPTO_LIB_COMPAT_VERSION;
-                if (tdcs_p->executions_ctl2_fields.field_support_at_init & BIT(FIELD_SUPPORT_AT_INIT_MIG_INTERRUPTED_COUNT))
-                {
-                    (void)_lock_xadd_16b(&get_global_data()->mig_interrupted_count, 1);
-                    (void)_lock_xadd_16b(&tdcs_p->migration_fields.mig_interrupted_count, 1);
-                }
-
-                local_data_ptr->vmm_regs.rcx = original_rcx;
-                local_data_ptr->vmm_regs.rdx = original_rdx;
-                goto EXIT;
+                (void)_lock_xadd_16b(&get_global_data()->mig_interrupted_count, 1);
+                (void)_lock_xadd_16b(&tdcs_p->migration_fields.mig_interrupted_count, 1);
             }
+
+            local_data_ptr->vmm_regs.rcx = original_rcx;
+            local_data_ptr->vmm_regs.rdx = original_rdx;
+            goto EXIT;
         }
     } while ((uint64_t)page_list_i <= page_list_info.last_entry);
 

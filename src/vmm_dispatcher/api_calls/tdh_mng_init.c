@@ -49,7 +49,7 @@ static void apply_cpuid_xfam_masks(volatile cpuid_config_return_values_t* cpuid_
     uint64_t xfam_mask;   // 1-bit mask
 
     xfam_mask = 1ULL;
-    for (uint32_t xfam_bit = 0; xfam_bit <= XCR0_MAX_VALID_BIT; xfam_bit++)
+    for (uint32_t xfam_bit = 0; xfam_bit <= XCR0_MAX_BIT; xfam_bit++)
     {
         if ((xfam & xfam_mask) == 0)
         {
@@ -480,7 +480,7 @@ static api_error_type read_and_set_cpuid_configurations(uint64_t target_tdr_pa,
                 tdcs_ptr->executions_ctl_fields.cpuid_flags.xfd_supported = cpuid_0d_01_eax.xfd_support;
                 final_tdcs_values.eax = cpuid_0d_01_eax.raw;
             }
-            else if (cpuid_leaf_subleaf.subleaf <= XCR0_MAX_VALID_BIT)
+            else if (cpuid_leaf_subleaf.subleaf <= XCR0_MAX_BIT)
             {
                 // Each sub-leaf n, where 2 <= n <= 18, is configured by XFAM[n]
                 if ((xfam.raw & BIT(cpuid_leaf_subleaf.subleaf)) == 0)
@@ -656,6 +656,7 @@ EXIT:
     return return_val;
 }
 
+
 api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa, uint64_t event_filters_info_params)
 {
     // Global data
@@ -718,6 +719,8 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
         TDX_ERROR("State check or TDCS lock failure - error = %llx\n", return_val);
         goto EXIT;
     }
+
+    tdcs_ptr->executions_ctl2_fields.event_filters_num = 0;
 
     // Check that TD PARAMS page is TD_PARAMS_ALIGN_IN_BYTES
     // Verify the TD PARAMS physical address is canonical and shared
@@ -876,6 +879,7 @@ api_error_type tdh_mng_init(uint64_t target_tdr_pa, uint64_t target_td_params_pa
 
     // Zero the RTMR hash values
     basic_memset_to_zero(tdcs_ptr->measurement_fields.rtmr, (SIZE_OF_SHA384_HASH_IN_QWORDS<<3)*NUM_RTMRS);
+
 
 
     tdcs_ptr->management_fields.op_state = OP_STATE_INITIALIZED;

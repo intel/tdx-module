@@ -1,23 +1,23 @@
-// Copyright (C) 2023 Intel Corporation                                          
-//                                                                               
-// Permission is hereby granted, free of charge, to any person obtaining a copy  
-// of this software and associated documentation files (the "Software"),         
-// to deal in the Software without restriction, including without limitation     
-// the rights to use, copy, modify, merge, publish, distribute, sublicense,      
-// and/or sell copies of the Software, and to permit persons to whom             
-// the Software is furnished to do so, subject to the following conditions:      
-//                                                                               
-// The above copyright notice and this permission notice shall be included       
-// in all copies or substantial portions of the Software.                        
-//                                                                               
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS       
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,   
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL      
-// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES             
-// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,      
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE            
-// OR OTHER DEALINGS IN THE SOFTWARE.                                            
-//                                                                               
+// Copyright (C) 2023 Intel Corporation
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom
+// the Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+// OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+// OR OTHER DEALINGS IN THE SOFTWARE.
+//
 // SPDX-License-Identifier: MIT
 /**
  * @file tdh_export_state_td.c
@@ -68,7 +68,6 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
     md_field_id_t      next_field_id;
 
     api_error_type     return_val = TDX_OPERAND_INVALID;
-    api_error_type        tmp_return_val = TDX_OPERAND_INVALID;
 
     md_list_t          md_list;
 
@@ -149,6 +148,13 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
     if (migs_i_and_cmd.command == MIGS_INDEX_COMMAND_NEW)
     {
         // This is a new invocation, not a resumption
+
+        // If RESUME input flag is 0 and MIGSC[0].INTERRUPTED.VALID is TRUE, terminate with a TDX_INVALID_RESUMPTION error
+        if (migsc_p->interrupted_state.valid)
+        {
+            return_val = TDX_INVALID_RESUMPTION;
+            goto EXIT;
+        }
 
         // Check and map the page list
         if ((page_list_info.last_entry < (MIN_TD_STATE_EXPORT_PAGES - 1)) ||
@@ -356,9 +362,10 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
             }
 
             // Check for a pending interrupt
-            tmp_return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock,true);
-            if (TDX_SUCCESS != tmp_return_val)
+            if (is_interrupt_pending_host_side())
             {
+                TDX_ERROR("Pending interrupt identified\n");
+
                 // There is a pending interrupt.  Save the state for the next invocation.
                 migsc_p->interrupted_state.valid = true;
                 migsc_p->interrupted_state.func.raw = local_data_ptr->vmm_regs.rax;
@@ -375,7 +382,7 @@ api_error_type tdh_export_state_td(uint64_t target_tdr_pa, uint64_t hpa_and_size
                     (void)_lock_xadd_16b(&tdcs_p->migration_fields.mig_interrupted_count, 1);
                 }
 
-                return_val = tmp_return_val;
+                return_val = TDX_INTERRUPTED_RESUMABLE;
             }
             else
             {

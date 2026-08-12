@@ -231,7 +231,7 @@ _STATIC_INLINE_ bool_t is_sept_pending_wo_d_mask(const ia32e_sept_t* ept_entry)
 _STATIC_INLINE_ bool_t is_sept_blocked(const ia32e_sept_t* ept_entry)
 {
     // Bit D is X
-    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_TDP_MASK) == SEPT_STATE_BLOCKED_MASK);
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_BLOCKED_MASK);
 }
 
 _STATIC_INLINE_ bool_t is_sept_exp_dirty(const ia32e_sept_t* ept_entry)
@@ -252,12 +252,13 @@ _STATIC_INLINE_ bool_t is_sept_removed(const ia32e_sept_t* ept_entry)
 _STATIC_INLINE_ bool_t is_sept_blockedw(const ia32e_sept_t* ept_entry)
 {
     // Bit D is X
-    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_TDP_MASK) == SEPT_STATE_BLOCKEDW_MASK);
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_BLOCKEDW_MASK);
 }
 
 _STATIC_INLINE_ bool_t is_sept_exported_blockedw(const ia32e_sept_t* ept_entry)
 {
-    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_TDP_MASK) == SEPT_STATE_EXP_BLOCKEDW_MASK);
+    // Bit D is X
+    return ((ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK) == SEPT_STATE_EXP_BLOCKEDW_MASK);
 }
 
 
@@ -317,7 +318,6 @@ _STATIC_INLINE_ bool_t sept_state_is_paused_export_allowed(ia32e_sept_t ept_entr
     tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].paused_export_allowed;
 }
-
 
 _STATIC_INLINE_ bool_t sept_state_is_re_import_allowed(ia32e_sept_t ept_entry)
 {
@@ -388,6 +388,13 @@ _STATIC_INLINE_ bool_t sept_state_is_mapped_or_pending(ia32e_sept_t ept_entry)
     uint64_t idx = get_sept_state_lut_index(ept_entry);
     tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
     return sept_special_flags_lookup[idx].mapped_or_pending;
+}
+
+_STATIC_INLINE_ bool_t sept_state_is_free_or_removed(ia32e_sept_t ept_entry)
+{
+    uint64_t idx = get_sept_state_lut_index(ept_entry);
+    tdx_debug_assert(idx < MAX_SEPT_STATE_ENC * SEPT_SPECIAL_FLAGS_LUT_MUL);
+    return sept_special_flags_lookup[idx].free_or_removed;
 }
 
 _STATIC_INLINE_ bool_t sept_state_is_any_pending(ia32e_sept_t ept_entry)
@@ -817,7 +824,7 @@ void sept_set_leaf_unlocked_entry_given_hpa_and_hkid(ia32e_sept_t * ept_entry, u
  * @param page_pa_with_hkid Physical address to map in entry
  * @param lock Whether acquire entry lock or not
  */
-void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t page_pa_with_hkid, bool_t lock, bool_t set_d_bit);
+void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t page_pa_with_hkid, bool_t lock, bool_t set_ad_bits);
 
 /**
  * @brief Set an L2 secure EPT leaf entry.

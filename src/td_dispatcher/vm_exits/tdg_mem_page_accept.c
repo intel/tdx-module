@@ -46,8 +46,7 @@ typedef enum tdaccept_failure_type_e
     TDACCEPT_AQCUIRE_LOCK_FAILURE = 4
 } tdaccept_failure_type_t;
 
-static tdaccept_failure_type_t check_tdaccept_failure(bool_t walk_failed, bool_t is_leaf,
-                                                      ia32e_sept_t *sept_ptr, ia32e_sept_t* sept_entry_copy,
+static tdaccept_failure_type_t check_tdaccept_failure(bool_t walk_failed, ia32e_sept_t *sept_ptr, ia32e_sept_t* sept_entry_copy,
                                                       bool_t *sept_ptr_locked_flag, api_error_type* error)
 {
     // SEPT walk fails only when reached level is smaller than requested level
@@ -96,9 +95,11 @@ static tdaccept_failure_type_t check_tdaccept_failure(bool_t walk_failed, bool_t
     // Read the SEPT entry again (and update the copy) after it was locked
     sept_entry_copy->raw = sept_ptr->raw;
 
+    bool_t is_leaf = is_secure_ept_leaf_entry(sept_entry_copy, false);
+
     /* Case 3:
         SEPT walk terminated at a non-leaf entry (e.g. ACCEPT requested 2M but page mapped as 4K) */
-    IF_RARE (!is_sept_free(sept_entry_copy) && !is_leaf)
+    IF_RARE (!sept_state_is_free_or_removed(*sept_entry_copy) && !is_leaf)
     {
         // Non-free non-leaf entry == requested ACCEPT size
         // (i.e. requested 2M entry is mapped to a EPT page instead of being a leaf)
@@ -184,10 +185,8 @@ api_error_type tdg_mem_page_accept(uint64_t page_to_accept_gpa, bool_t* interrup
     return_val = walk_private_gpa(tdcs_p, page_gpa, tdr_p->key_management_fields.hkid,
                                   &sept_entry_ptr, &ept_level, &sept_entry_copy, false);
 
-    bool_t is_leaf = is_secure_ept_leaf_entry(&sept_entry_copy, false);
-
     api_error_type error = TDX_OPERAND_BUSY;
-    tdaccept_failure_type_t fail_type = check_tdaccept_failure((return_val != TDX_SUCCESS), is_leaf, sept_entry_ptr,
+    tdaccept_failure_type_t fail_type = check_tdaccept_failure((return_val != TDX_SUCCESS), sept_entry_ptr,
                                                                 &sept_entry_copy, &sept_entry_locked_flag, &error);
 
     IF_RARE (fail_type != TDACCEPT_SUCCESS)

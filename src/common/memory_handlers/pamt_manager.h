@@ -97,8 +97,8 @@ typedef struct pamt_entry_s
     struct
     {
         sharex_hp_lock_t entry_lock; // 2 byte (16 bit)
-        page_type_t pt : 5;
-        uint64_t reserved : 3;
+        page_type_t pt : 8;
+        //uint64_t reserved : 3; // WA for ticket https://hsdes.intel.com/appstore/article-one/#/13013681268
         uint64_t owner : 40; // don't access this field directly, use accessors below
     }; // primary
 

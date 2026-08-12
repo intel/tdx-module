@@ -108,9 +108,10 @@ tdx_static_assert(sizeof(servtd_binding_handle_t) == 8, servtd_binding_handle_t)
 
 typedef enum servtd_binding_state_e
 {
-    SERVTD_NOT_BOUND = 0,
-    SERVTD_PRE_BOUND = 1,
-    SERVTD_BOUND     = 2
+    SERVTD_NOT_BOUND    = 0,
+    SERVTD_PRE_BOUND    = 1,
+    SERVTD_BOUND        = 2,
+    SERVTD_REBIND_BOUND = 3
 } servtd_binding_state_t;
 
 

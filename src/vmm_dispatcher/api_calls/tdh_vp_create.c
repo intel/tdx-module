@@ -40,7 +40,7 @@ api_error_type tdh_vp_create(uint64_t target_tdvpr_pa, uint64_t target_tdr_pa)
 {
     // TDVPS related variables
     pa_t                  tdvpr_pa;                  // TDVPR physical address
-    tdvps_t             * tdvps_ptr;                 // Pointer to the TDVPS (multi-page linear address)
+    tdvps_t             * tdvps_ptr = NULL;                 // Pointer to the TDVPS (multi-page linear address)
     pamt_walk_result_t    tdvpr_pamt_walk_result;
     bool_t                tdvpr_locked_flag = false; // Indicate TDVPR is locked
 

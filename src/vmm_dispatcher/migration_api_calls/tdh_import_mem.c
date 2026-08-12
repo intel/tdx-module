@@ -78,15 +78,20 @@ static api_error_type handle_new_command(gpa_list_info_t gpa_list_info, tdcs_t* 
         return api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_RCX);
     }
 
-    // Initialize the MIGSC if needed
-    if (!tdcs_p->f_migsc_links[migs_i].initialized)
+    if (tdcs_p->f_migsc_links[migs_i].initialized)
     {
+        // If the MIGSC is initialized and MIGSC[n].INTERRUPTED.VALID is TRUE, terminate with a TDX_INVALID_RESUMPTION error
+        if (migsc_p->interrupted_state.valid)
+        {
+            return TDX_INVALID_RESUMPTION;
+        }
+    }
+    else
+    {
+        // Initialize the MIGSC if needed
         tdcs_p->f_migsc_links[migs_i].initialized = true;
         migsc_init(migsc_p, &tdcs_p->migration_fields.mig_dec_working_key);
     }
-
-    // Mark this flow as non-interrupted
-    migsc_p->interrupted_state.valid = false;
 
     // Check the MBMD
     if ((mbmd->header.mig_version != (uint16_t)tdcs_p->migration_fields.mig_working_version) ||
@@ -237,7 +242,7 @@ static api_error_type compare_macs_and_update_error_statuses(uint8_t* mac, uint8
     return TDX_SUCCESS;
 }
 
-static api_error_type handle_expected_mig_buf(gpa_list_entry_t* gpa_list_entry, page_list_entry_t mig_buff_list_entry,
+static api_error_type handle_expected_mig_buf(volatile gpa_list_entry_t* gpa_list_entry, page_list_entry_t mig_buff_list_entry,
                                               gpa_list_error_type_t* gpa_list_error_type, gpa_list_entry_status_t* err_status,
                                               void** mig_buff_p, bool_t* mig_buff_mapped)
 {
@@ -333,7 +338,7 @@ static api_error_type handle_import(page_list_entry_t* new_page_list_p, volatile
     return return_val;
 }
 
-static api_error_type handle_rare_errors(gpa_list_entry_status_t err_status, gpa_list_entry_t* gpa_list_entry,
+static api_error_type handle_rare_errors(gpa_list_entry_status_t err_status, volatile gpa_list_entry_t* gpa_list_entry,
                                          gpa_list_error_type_t gpa_list_error_type, uint32_t* problem_ops_count,
                                          gpa_list_entry_t* gpa_list_p, uint64_t entry_num,
                                          page_list_entry_t* new_page_list_p, tdcs_t* tdcs_p,
@@ -399,7 +404,7 @@ static api_error_type finish_entry_processing(uint64_t* entry_num, gpa_list_info
     if (*entry_num < gpa_list_info.last_entry)
     {
         // If we are not on the last entry, then check pending interrupts
-        return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock,true);
+        return_val = check_host_interrupt_and_hp_bit(&tdcs_p->executions_ctl_fields.secure_ept_lock, true);
         if (TDX_SUCCESS != return_val)
         {
             // increment the entry_num to the index of NEXT entry before
@@ -453,7 +458,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
 
     // GPA list
     gpa_list_entry_t* gpa_list_p = NULL;
-    gpa_list_entry_t        gpa_list_entry;
+    volatile gpa_list_entry_t        gpa_list_entry;
     uint64_t                entry_num = gpa_list_info.first_entry;
     uint32_t                problem_ops_count = 0;
 
@@ -766,7 +771,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                 goto FINALIZE_ENTRY;
             }
 
-            if (!gpa_list_entry_is_valid(gpa_list_entry))
+            if (!gpa_list_entry_is_valid(gpa_list_entry, false))
             {
                 return_val = api_error_with_operand_id(TDX_OPERAND_INVALID, OPERAND_ID_GPA_LIST_ENTRY);
                 gpa_list_error_type = GPA_LIST_ERROR_TYPE_LIST_ABORT;
@@ -779,7 +784,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
             goto FINALIZE_ENTRY;
         }
 
-        if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &page_gpa, tdcs_p->executions_ctl_fields.virt_maxpa))
+        if (!check_and_get_gpa_from_entry(gpa_list_entry, tdcs_p->executions_ctl_fields.gpaw, &page_gpa, tdcs_p->executions_ctl_fields.virt_maxpa, false))
         {
             TDX_ERROR("Invalid GPA entry in the list - 0x%llx\n", gpa_list_entry.raw);
 
@@ -797,7 +802,8 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
         /* Walk the Secure-EPT to locate the parent entry for the new TD page
          *On failure, abort the import session only if in the in-order phase.  In the out-of-order phase,
          *the page might have been promoted so SEPT walk may fail. */
-        return_val = walk_private_gpa(tdcs_p, page_gpa, tdr_p->key_management_fields.hkid, &sept_entry_ptr, &sept_entry_level, &sept_entry_copy, true);
+        bool_t set_is_dirty = (gpa_list_entry.operation == GPA_ENTRY_OP_MIGRATE);
+        return_val = walk_private_gpa(tdcs_p, page_gpa, tdr_p->key_management_fields.hkid, &sept_entry_ptr, &sept_entry_level, &sept_entry_copy, set_is_dirty);
 
         if (return_val != TDX_SUCCESS)
         {
@@ -939,7 +945,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                         is_termination_required = true;
                         break;
                     }
-                    
+
                     // Sanity check on the attributes
                     if (!is_gpa_attr_legal(l2_attr_list_entry.attr_arr[vm_id]
                     ))
@@ -1186,7 +1192,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                         is_termination_required = true;
                         break;
                     }
-                    
+
                     // Sanity check on the attributes
                     if (!is_gpa_attr_legal(l2_attr_list_entry.attr_arr[vm_id]
                     ))
@@ -1247,7 +1253,7 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                             sept_clear_aliased(&sept_entry_copy, vm_id);
                         }
                     }
-                    
+
                     free_la((void*)l2_septe_p[vm_id]);
                     l2_septe_p[vm_id] = NULL;
                 }
@@ -1341,12 +1347,12 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                     }
 
                     l2_septe_p[vm_id]->raw = SEPT_STATE_L2_FREE_MASK;
-                    
+
                     free_la((void*)l2_septe_p[vm_id]);
                     l2_septe_p[vm_id] = NULL;
                 }
             }
-            
+
             // Update the SEPT entry in memory to the REMOVED state and record the migration epoch
             set_remove_and_release_locks_for_import(&sept_entry_copy, tdcs_p);
             atomically_update_sept_state_keep_tdhp(sept_entry_ptr, sept_entry_copy.raw);
@@ -1361,13 +1367,15 @@ api_error_type tdh_import_mem(gpa_list_info_t gpa_list_info, uint64_t target_tdr
                PT_NDA. */
             td_page_pamt_entry_p->pt = PT_NDA;
 
+			uint64_t hint = pamt_dec_nl_page_count_and_get_hint(td_page_pamt_nl_entry_p);
+
             // CANCEL never uses the new page, if provided.
             // If not provided, set the page list entry with the removed page information.
             if ((new_page_list_p != NULL) && (new_page_list_entry.invalid == 1))
             {
                 new_page_list_entry.raw = remove_hkid_from_pa((pa_t)td_page_pa).raw;
                 new_page_list_entry.removed = 1;
-                new_page_list_entry.raw |= pamt_dec_nl_page_count_and_get_hint(td_page_pamt_nl_entry_p);
+                new_page_list_entry.raw |= hint;
                 new_page_list_entry.invalid = 0;
                 new_page_list_p[entry_num] = new_page_list_entry;
             }

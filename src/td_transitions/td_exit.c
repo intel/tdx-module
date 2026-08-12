@@ -141,7 +141,7 @@ static void load_vmm_state_before_td_exit(tdx_module_local_t* local_data_ptr)
     {
         init_msr_opt(IA32_FIXED_CTR_CTRL_MSR_ADDR, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_fixed_ctr_ctrl);
         {
-            for (uint8_t i = 0; i < MAX_FIXED_CTR; i++)
+            for (uint8_t i = 0; i < MAX_FIXED_CTRS; i++)
             {
                 if ((global_data->fc_bitmap & BIT(i)) != 0)
                 {
@@ -149,7 +149,7 @@ static void load_vmm_state_before_td_exit(tdx_module_local_t* local_data_ptr)
                 }
             }
 
-            for (uint32_t i = 0; i < NUM_PMC; i++)
+            for (uint32_t i = 0; i < MAX_GP_CTRS; i++)
             {
                 {
                     init_msr_opt(IA32_PMC_GP0_CTR_MSR_ADDR + i, local_data_ptr->vp_ctx.tdvps->guest_msr_state.ia32_pmc_gp_ctrx[i]);
@@ -305,7 +305,7 @@ static void save_guest_td_state_before_td_exit(tdcs_t* tdcs_ptr, tdx_module_loca
         tdvps_ptr->guest_msr_state.ia32_fixed_ctr_ctrl = ia32_rdmsr(IA32_FIXED_CTR_CTRL_MSR_ADDR);
 
         {
-            for (uint8_t i = 0; i < MAX_FIXED_CTR; i++)
+            for (uint8_t i = 0; i < MAX_FIXED_CTRS; i++)
             {
                 if ((global_data->fc_bitmap & BIT(i)) != 0)
                 {
@@ -314,7 +314,7 @@ static void save_guest_td_state_before_td_exit(tdcs_t* tdcs_ptr, tdx_module_loca
                 }
             }
 
-            for (uint32_t i = 0; i < NUM_PMC; i++)
+            for (uint32_t i = 0; i < MAX_GP_CTRS; i++)
             {
                 {
                     tdvps_ptr->guest_msr_state.ia32_pmc_gp_ctrx[i] = ia32_rdmsr(IA32_PMC_GP0_CTR_MSR_ADDR + i);

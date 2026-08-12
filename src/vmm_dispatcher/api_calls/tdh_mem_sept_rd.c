@@ -156,7 +156,7 @@ api_error_type tdh_mem_sept_rd(page_info_api_input_t gpa_page_info, uint64_t tar
 
         for (uint16_t vm_id = 1; vm_id <= tdcs_ptr->management_fields.num_l2_vms; vm_id++)
         {
-            if (!is_sept_free(&sept_entry_copy) && sept_state_is_aliased(sept_entry_copy, vm_id))
+            if (!sept_state_is_free_or_removed(sept_entry_copy) && sept_state_is_aliased(sept_entry_copy, vm_id))
             {
                 ia32e_sept_t* l2_sept_entry_ptr = NULL;
 

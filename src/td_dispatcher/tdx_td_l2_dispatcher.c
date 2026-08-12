@@ -387,6 +387,7 @@ EXIT:
 
     set_vmx_preemption_timer(tdvps_p, vm_id);
 
+
     //Return to TD
     tdx_return_to_td(true, false, &tdx_local_data_ptr->vp_ctx.tdvps->guest_state.gpr_state);
 

@@ -106,6 +106,13 @@ static api_error_type tdh_mem_rd_wr(uint64_t gpa, uint64_t target_tdr_pa,
         goto EXIT;
     }
 
+    if (write && tdcs_ptr->executions_ctl_fields.attributes.migratable)
+    {
+        return_val = TDX_DEBUG_MEM_NOT_WRITABLE;
+        TDX_ERROR("Write to a migratable TD is not allowed!\n");
+        goto EXIT;
+    }
+
     // Verify GPA is private and aligned on 8 bytes
     if (!is_addr_aligned_pwr_of_2(page_gpa.raw, 8))
     {

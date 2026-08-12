@@ -35,6 +35,7 @@
 #include "x86_defs/msr_defs.h"
 #include "helpers/cpuid_fms.h"
 #include "helpers/helpers.h"
+#include "data_structures/preserving_defs.h"
 
 static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* entry,
                                   uint64_t* element_array, uint64_t* array_size)
@@ -380,15 +381,15 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
         case MD_SYS_TDX_MODULE_HANDOFF_CLASS_CODE:
             if (entry->field_id.field_code == MD_SYS_MODULE_HV_FIELD_CODE)
             {
-                *element_array = TDX_MODULE_HV;
+                *element_array = MODULE_HV;
             }
             else if (entry->field_id.field_code == MD_SYS_MIN_UPDATE_HV_FIELD_CODE)
             {
-                *element_array = TDX_MIN_UPDATE_HV;
+                *element_array = MIN_UPDATE_HV;
             }
             else if (entry->field_id.field_code == MD_SYS_NO_DOWNGRADE_FIELD_CODE)
             {
-                *element_array = TDX_NO_DOWNGRADE;
+                *element_array = NO_DOWNGRADE;
             }
             else if (entry->field_id.field_code == MD_SYS_NUM_HANDOFF_PAGES_FIELD_CODE)
             {
@@ -455,14 +456,14 @@ static bool_t md_sys_get_elements(md_field_id_t field_id, const md_lookup_t* ent
 
 
 api_error_code_e md_sys_read_element(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-                                     md_access_qualifier_t access_qual, uint64_t* out_rd_value)
+                                     md_access_qualifier_t access_qual, uint64_t* out_rd_value, md_context_ptrs_t md_ctx)
 {
     uint64_t read_mask, write_mask;
     uint64_t read_value;
     uint64_t element_array[64];
     uint64_t array_size = 0;
 
-    md_get_rd_wr_mask(entry, access_type, access_qual, &read_mask, &write_mask);
+    md_get_rd_wr_mask(entry, access_type, access_qual, &read_mask, &write_mask, md_ctx);
 
     if (read_mask == 0)
     {
@@ -507,14 +508,14 @@ api_error_code_e md_sys_read_element(md_field_id_t field_id, const md_lookup_t* 
 }
 
 api_error_code_e md_sys_read_field(md_field_id_t field_id, const md_lookup_t* entry, md_access_t access_type,
-                                   md_access_qualifier_t access_qual, uint64_t value[MAX_ELEMENTS_IN_FIELD])
+                                   md_access_qualifier_t access_qual, uint64_t value[MAX_ELEMENTS_IN_FIELD], md_context_ptrs_t md_ctx)
 {
     uint64_t read_mask, write_mask;
     uint64_t read_value;
     uint64_t element_array[64];
     uint64_t array_size = 0;
 
-    md_get_rd_wr_mask(entry, access_type, access_qual, &read_mask, &write_mask);
+    md_get_rd_wr_mask(entry, access_type, access_qual, &read_mask, &write_mask, md_ctx);
 
     if (read_mask == 0)
     {

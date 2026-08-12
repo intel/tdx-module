@@ -258,11 +258,11 @@ _STATIC_INLINE_ bool_t is_ept_violation_convertible(ia32e_ept_t* pte, ept_level_
 }
 
 ept_walk_result_t gpa_translate(ia32e_eptp_t eptp, pa_t gpa, bool_t private_gpa,
-                                uint16_t private_hkid, access_rights_t access_rights,
-                                pa_t* hpa, ia32e_ept_t* cached_ept_entry, access_rights_t* accumulated_rwx)
+    uint16_t private_hkid, access_rights_t access_rights,
+    pa_t* hpa, ia32e_ept_t* cached_ept_entry, access_rights_t* accumulated_rwx)
 {
-    ia32e_paging_table_t *pt;
-    ia32e_ept_t *pte;
+    ia32e_paging_table_t* pt;
+    ia32e_ept_t* pte;
     pa_t pt_pa;
     ept_level_t current_lvl;
 
@@ -273,13 +273,16 @@ ept_walk_result_t gpa_translate(ia32e_eptp_t eptp, pa_t gpa, bool_t private_gpa,
 
     accumulated_rwx->raw = (uint8_t)7;
 
+    mapping_type_t mapping_type = TDX_RANGE_RO;
+
+
     for (;current_lvl >= LVL_PT; current_lvl--)
     {
         if (private_gpa)
         {
             pt_pa = set_hkid_to_pa(pt_pa, private_hkid);
         }
-        pt = map_pa((void*)(pt_pa.full_pa), TDX_RANGE_RO);
+        pt = map_pa((void*)(pt_pa.full_pa), mapping_type);
         pte = &(pt->ept[get_ept_entry_idx(gpa, current_lvl)]);
 
         // Update the output data - note the we read only from the cached entry
@@ -504,7 +507,7 @@ void sept_set_leaf_unlocked_entry_given_hpa_and_hkid(ia32e_sept_t * ept_entry, u
     sept_set_leaf_no_lock_internal_given_hpa_and_hkid(ept_entry, attributes, page_pa, hkid, state_encoding, false, keep_ad, keep_tdhp);
 }
 
-void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t page_pa_with_hkid, bool_t lock, bool_t set_d_bit)
+void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t page_pa_with_hkid, bool_t lock, bool_t set_ad_bits)
 {
     ia32e_sept_t curr_entry = {.raw = SEPT_PERMISSIONS_RWX | SEPT_STATE_NL_MAPPED_MASK};
 
@@ -515,7 +518,7 @@ void sept_set_mapped_non_leaf_given_hpa_with_hkid(ia32e_sept_t * ept_entry, pa_t
     curr_entry.tdel = lock;
 
     // One aligned assignment to make it atomic
-    UNUSED(set_d_bit);
+    UNUSED(set_ad_bits);
     {
         atomically_update_sept_state_keep_tdhp(ept_entry, curr_entry.raw);
     }
@@ -622,7 +625,7 @@ void set_arch_septe_details_in_vmm_regs(ia32e_sept_t sept_entry, ept_level_t lev
 
     /* Build the architectural representation of the Secure EPT entry.
        See the table in the spec for details*/
-    if (is_sept_free(&sept_entry))
+    if (sept_state_is_free_or_removed(sept_entry))
     {
         detailed_arch_sept_entry.raw = 0;
         detailed_arch_sept_entry.supp_ve = 1;
@@ -744,12 +747,8 @@ void sept_l2_update_state(ia32e_sept_t* ept_entry, sept_state_mask_t state)
 
 void sept_unblock(ia32e_sept_t* ept_entry)
 {
-    uint64_t state_encoding_mask;
-    {
-        state_encoding_mask = SEPT_STATE_ENCODING_MASK;
-    }
-
-    switch (ept_entry->raw & state_encoding_mask)
+    // All the applicable state encodings do not use the D bit, even for write-blocking export
+    switch (ept_entry->raw & SEPT_STATE_ENCODING_WO_D_MASK)
     {
     case SEPT_STATE_NL_BLOCKED_MASK:
         sept_update_state(ept_entry, SEPT_STATE_NL_MAPPED_MASK, false, false);
@@ -771,34 +770,42 @@ void sept_unblock(ia32e_sept_t* ept_entry)
 
 void l2_sept_update_gpa_attr(ia32e_sept_t* const l2_sept_entry_ptr, const gpa_attr_single_vm_t gpa_attr_single_vm)
 {
-    l2_sept_entry_ptr->l2_encoding.r = gpa_attr_single_vm.r;
-    l2_sept_entry_ptr->l2_encoding.w = gpa_attr_single_vm.w;
-    l2_sept_entry_ptr->l2_encoding.x = gpa_attr_single_vm.xs;
-    l2_sept_entry_ptr->l2_encoding.xu = gpa_attr_single_vm.xu;
-    l2_sept_entry_ptr->l2_encoding.vgp = gpa_attr_single_vm.vgp;
-    l2_sept_entry_ptr->l2_encoding.pwa = gpa_attr_single_vm.pwa;
-    l2_sept_entry_ptr->l2_encoding.sss = gpa_attr_single_vm.sss;
-    l2_sept_entry_ptr->l2_encoding.sve = gpa_attr_single_vm.sve;
-    l2_sept_entry_ptr->l2_encoding.mt0_tdrd = 0;
+    // Make a local copy to avoid race conditions during multi-field updates
+    ia32e_sept_t l2_sept_entry_copy = *l2_sept_entry_ptr;
+    
+    // Update the copy with new attributes
+    l2_sept_entry_copy.l2_encoding.r = gpa_attr_single_vm.r;
+    l2_sept_entry_copy.l2_encoding.w = gpa_attr_single_vm.w;
+    l2_sept_entry_copy.l2_encoding.x = gpa_attr_single_vm.xs;
+    l2_sept_entry_copy.l2_encoding.xu = gpa_attr_single_vm.xu;
+    l2_sept_entry_copy.l2_encoding.vgp = gpa_attr_single_vm.vgp;
+    l2_sept_entry_copy.l2_encoding.pwa = gpa_attr_single_vm.pwa;
+    l2_sept_entry_copy.l2_encoding.sss = gpa_attr_single_vm.sss;
+    l2_sept_entry_copy.l2_encoding.sve = gpa_attr_single_vm.sve;
+    l2_sept_entry_copy.l2_encoding.mt0_tdrd = 0;
 
-    if (is_l2_sept_blocked(l2_sept_entry_ptr))
+    if (is_l2_sept_blocked(&l2_sept_entry_copy))
     {
-        l2_sept_entry_ptr->l2_encoding.mt0_tdrd = l2_sept_entry_ptr->l2_encoding.r;
-        l2_sept_entry_ptr->l2_encoding.r = 0;
-        l2_sept_entry_ptr->l2_encoding.tdwr = l2_sept_entry_ptr->l2_encoding.w;
-        l2_sept_entry_ptr->l2_encoding.w = 0;
-        l2_sept_entry_ptr->l2_encoding.mt1_tdxs = l2_sept_entry_ptr->l2_encoding.x;
-        l2_sept_entry_ptr->l2_encoding.x = 0;
-        l2_sept_entry_ptr->l2_encoding.mt2_tdxu = l2_sept_entry_ptr->l2_encoding.xu;
-        l2_sept_entry_ptr->l2_encoding.xu = 0;
-        l2_sept_entry_ptr->l2_encoding.tdpwa = l2_sept_entry_ptr->l2_encoding.pwa;
-        l2_sept_entry_ptr->l2_encoding.pwa = 0;
+        l2_sept_entry_copy.l2_encoding.mt0_tdrd = l2_sept_entry_copy.l2_encoding.r;
+        l2_sept_entry_copy.l2_encoding.r = 0;
+        l2_sept_entry_copy.l2_encoding.tdwr = l2_sept_entry_copy.l2_encoding.w;
+        l2_sept_entry_copy.l2_encoding.w = 0;
+        l2_sept_entry_copy.l2_encoding.mt1_tdxs = l2_sept_entry_copy.l2_encoding.x;
+        l2_sept_entry_copy.l2_encoding.x = 0;
+        l2_sept_entry_copy.l2_encoding.mt2_tdxu = l2_sept_entry_copy.l2_encoding.xu;
+        l2_sept_entry_copy.l2_encoding.xu = 0;
+        l2_sept_entry_copy.l2_encoding.tdpwa = l2_sept_entry_copy.l2_encoding.pwa;
+        l2_sept_entry_copy.l2_encoding.pwa = 0;
     }
+    
+    // Atomically update the original entry
+    atomic_mem_write_64b(&l2_sept_entry_ptr->raw, l2_sept_entry_copy.raw);
 }
 
 void cmpxchg_keep_masked(ia32e_sept_t* ept_entry, uint64_t expected_val, uint64_t* new_val, uint64_t mask)
 {
     uint64_t old_value;
+    uint64_t tmp_expected_val;
 
     // The following loop is limited if the masked bits can only change concurrently in one
     // direction, e.g., A or D bits can only be set by the CPU but never cleared, thus for AD bits
@@ -817,8 +824,9 @@ void cmpxchg_keep_masked(ia32e_sept_t* ept_entry, uint64_t expected_val, uint64_
         }
 
         // If values differ only in the masked bits, try again with those bits taken from the value in memory
+        tmp_expected_val = expected_val;
         expected_val = old_value;
-    } while ((old_value & ~mask) == (expected_val & ~mask));
+    } while ((old_value & ~mask) == (tmp_expected_val & ~mask));
 
     // Fatal error, the SEPT entry was not as expected. shouold never happen.
     fatal_error(FATAL_ERROR_ID_345, FATAL_INFO_FORMAT_BASIC_INFO, NULL);

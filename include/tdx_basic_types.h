@@ -68,7 +68,7 @@ typedef uint8_t                  bool_t;
 #   define false ((bool_t)0)
 #endif // false
 
-#else
+#else // __cplusplus
 typedef bool                  bool_t;
 #endif //__cplusplus
 

@@ -35,7 +35,6 @@
 #include "accessors/ia32_accessors.h"
 #include "crypto/sha384.h"
 
-
 api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
 {
     // TDR related variables
@@ -127,6 +126,7 @@ api_error_type tdh_mr_finalize(uint64_t target_tdr_pa)
 
     // restore VMM's XCR0 state
     ia32_xsetbv(0, get_local_data()->vmm_xcr0_state);
+
 
     tdcs_ptr->management_fields.op_state = OP_STATE_RUNNABLE;
 

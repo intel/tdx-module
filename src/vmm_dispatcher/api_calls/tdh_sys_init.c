@@ -32,6 +32,7 @@
 
 #include "data_structures/tdx_global_data.h"
 #include "data_structures/loader_data.h"
+#include "data_structures/preserving_defs.h"
 #include "helpers/tdx_locks.h"
 #include "helpers/helpers.h"
 #include "x86_defs/x86_defs.h"
@@ -538,7 +539,7 @@ _STATIC_INLINE_ api_error_type check_cpuid_configurations(tdx_module_global_t* g
             // So, set all bitmap bits per EDX[4:0] and OR with the bitmap in ECX.
             global_data_ptr->fc_bitmap = (uint32_t)((BIT(cpuid_0a_edx.num_fcs) - 1) | cpuid_0a_ecx.raw);
 
-            if ((BIT(MAX_FIXED_CTR) - 1) < global_data_ptr->fc_bitmap)
+            if ((BIT(MAX_FIXED_CTRS) - 1) < global_data_ptr->fc_bitmap)
             {
                 tdx_local_data_ptr->vmm_regs.rcx = cpuid_config.leaf_subleaf.raw;
                 tdx_local_data_ptr->vmm_regs.rdx = CPUID_PERFMON_EDX_MASK_LOW;
@@ -1314,6 +1315,7 @@ _STATIC_INLINE_ void tdx_init_global_data(tdx_module_global_t* tdx_global_data_p
 
     tdx_global_data_ptr->td_build_count = 0;
     tdx_global_data_ptr->mig_interrupted_count = 0;
+
 }
 
 _STATIC_INLINE_ api_error_type tdx_init_stack_canary(void)
@@ -1377,10 +1379,10 @@ _STATIC_INLINE_ api_error_type check_module_build_time_defs(tdx_module_global_t*
     tdx_global_data_ptr->no_downgrade      = sysinfo_table->no_downgrade;
     tdx_global_data_ptr->num_handoff_pages = sysinfo_table->num_handoff_pages;
 
-    if ((tdx_global_data_ptr->module_hv != TDX_MODULE_HV) ||
-        (tdx_global_data_ptr->min_update_hv < TDX_MIN_UPDATE_HV) ||
-        ((tdx_global_data_ptr->no_downgrade == 0) && (TDX_NO_DOWNGRADE == 1)) ||
-        ((tdx_global_data_ptr->num_handoff_pages + 1) < TDX_MIN_HANDOFF_PAGES))
+    if ((tdx_global_data_ptr->module_hv != MODULE_HV) ||
+        (tdx_global_data_ptr->min_update_hv < MIN_UPDATE_HV) ||
+        ((tdx_global_data_ptr->no_downgrade == 0) && (NO_DOWNGRADE == 1)) ||
+        ((tdx_global_data_ptr->num_handoff_pages + 1) < TD_PRESERVING_HANDOFF_PAGE_COUNT))
     {
         TDX_ERROR("Incompatible TD preserving defs\n");
         return TDX_SYS_INCOMPATIBLE_SIGSTRUCT;

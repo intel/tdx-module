@@ -266,7 +266,7 @@ static md_field_id_t md_get_next_cpuid_value_entry(md_field_id_t field_id, bool_
     do
     {
         index = index + 1;
-    } while (!cpuid_lookup[index].valid_entry);
+    } while ((index < MAX_NUM_CPUID_LOOKUP) && (!cpuid_lookup[index].valid_entry));
 
     IF_RARE (index >= MAX_NUM_CPUID_LOOKUP)
     {
@@ -489,7 +489,7 @@ static void md_get_next_accessible_item(lookup_iterator_t* lookup_context, bool_
 
         const md_lookup_t* entry = &lookup_context->lookup_table[lookup_context->table_idx];
 
-        md_get_rd_wr_mask(entry, access_type, access_qual, &rd_mask, &wr_mask);
+        md_get_rd_wr_mask(entry, access_type, access_qual, &rd_mask, &wr_mask,md_ctx);
 
         accessible_item = ((!is_write_access_type(access_type) && rd_mask) ||
                            (is_write_access_type(access_type) && wr_mask));
@@ -565,12 +565,20 @@ static bool_t md_is_id_start_of_field(md_field_id_t field_id, const md_lookup_t*
 }
 
 void md_get_rd_wr_mask(const md_lookup_t* entry, md_access_t access_type, md_access_qualifier_t access_qual,
-        uint64_t* out_rd_mask, uint64_t* out_wr_mask)
+        uint64_t* out_rd_mask, uint64_t* out_wr_mask, md_context_ptrs_t md_ctx)
 {
     switch (access_type)
     {
         case MD_HOST_WR:
-            *out_wr_mask = access_qual.host_qualifier.debug ? entry->dbg_wr_mask : entry->prod_wr_mask;
+
+            if (md_ctx.tdcs_ptr->executions_ctl_fields.attributes.migratable)
+            {
+                *out_wr_mask = entry->prod_wr_mask;
+            }
+            else
+            {
+                *out_wr_mask = access_qual.host_qualifier.debug ? entry->dbg_wr_mask : entry->prod_wr_mask;
+            }
             *out_rd_mask = access_qual.host_qualifier.debug ? entry->dbg_rd_mask : entry->prod_rd_mask;
             break;
         case MD_HOST_RD:
@@ -658,7 +666,7 @@ api_error_code_e md_read_element(md_context_code_e ctx_code, md_field_id_t field
     switch (ctx_code)
     {
         case MD_CTX_SYS:
-            retval = md_sys_read_element(field_id, entry, access_type, access_qual, value);
+            retval = md_sys_read_element(field_id, entry, access_type, access_qual, value, md_ctx);
             break;
         case MD_CTX_TD:
             retval = md_td_read_element(field_id, entry, access_type, access_qual, md_ctx, value);
@@ -756,7 +764,7 @@ static api_error_code_e md_read_field_with_entry(md_context_code_e ctx_code, md_
     switch (ctx_code)
     {
         case MD_CTX_SYS:
-            retval = md_sys_read_field(field_id, entry, access_type, access_qual, value);
+            retval = md_sys_read_field(field_id, entry, access_type, access_qual, value, md_ctx);
             break;
         case MD_CTX_TD:
             retval = md_td_read_field(field_id, entry, access_type, access_qual, md_ctx, value);

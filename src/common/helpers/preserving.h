@@ -20,26 +20,26 @@
 //
 // SPDX-License-Identifier: MIT
 
+#ifndef __PRESERVING_H__
+#define __PRESERVING_H__
+
+#include "data_structures/preserving_defs.h"
+
 /**
- * @file metadata_sorter.h
- * @brief sorts the relevant metadata
+ * @brief Called by TDH.SYS.SHUTDOWN to populate handoff data with values of some
+ *        variables for the next TDX module
+ *
+ * @param curr_hv - current module's handoff data version
  */
+void prepare_handoff_data(const uint16_t curr_hv);
 
-#ifndef METADATA_SORTER_H_
-#define METADATA_SORTER_H_
+/**
+ * @brief Called by TDH.SYS.UPDATE to initialize some variables from the handoff
+ *        data prepared by the previous TDX module
+ *
+ * @param prev_hv - previous module's handoff data version
+ *
+ */
+void retrieve_handoff_data(const uint16_t prev_hv);
 
-#define CPUID_CONFIGURATIONS_HEADER "auto_gen_1_5/cpuid_configurations.h"
-#define CPUID_CONFIGURATIONS_DEFINES_HEADER "auto_gen_1_5/cpuid_configurations_defines.h"
-#define GLOBAL_SYS_FIELDS_LOOKUP_HEADER "auto_gen_1_5/global_sys_fields_lookup.h"
-#define MSR_CONFIG_LOOKUP_HEADER "auto_gen_1_5/msr_config_lookup.h"
-#define OP_STATE_LOOKUP_HEADER "auto_gen_1_5/op_state_lookup.h"
-#define SEPT_STATE_LOOKUP_HEADER "auto_gen_1_5/sept_state_lookup.h"
-#define TD_L2_VMCS_FIELDS_LOOKUP_HEADER "auto_gen_1_5/td_l2_vmcs_fields_lookup.h"
-#define TD_VMCS_FIELDS_LOOKUP_HEADER "auto_gen_1_5/td_vmcs_fields_lookup.h"
-#define TDR_TDCS_FIELDS_LOOKUP_HEADER "auto_gen_1_5/tdr_tdcs_fields_lookup.h"
-#define TDVPS_FIELDS_LOOKUP_HEADER "auto_gen_1_5/tdvps_fields_lookup.h"
-#define TDX_ERROR_CODES_DEFS_HEADER "auto_gen_1_5/tdx_error_codes_defs.h"
-#define GLOBAL_CONSTANTS_HEADER "auto_gen_1_5/global_constants.h"
-#define HANDOFF_CONSTANTS_HEADER "auto_gen_1_5/handoff_constants.h"
-
-#endif // METADATA_SORTER_H_
+#endif // __PRESERVING_H__

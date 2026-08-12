@@ -40,6 +40,7 @@
 #include "td_transitions/td_exit.h"
 #include "helpers/virt_msr_helpers.h"
 #include "helpers/ipi_helpers.h"
+#include "helpers/mem_scan.h"
 
 static void read_l2_enter_guest_state(tdvps_t* tdvps_ptr, l2_enter_guest_state_t *reg_list_p)
 {

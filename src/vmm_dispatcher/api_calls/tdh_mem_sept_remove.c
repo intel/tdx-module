@@ -223,7 +223,7 @@ api_error_type tdh_mem_sept_remove(page_info_api_input_t gpa_page_info, uint64_t
 
     for (uint32_t i = 0; i < 512; i++)
     {
-        if (!is_sept_free(&removed_page_sept_page_ptr->sept[i]))
+        if (!sept_state_is_free_or_removed(removed_page_sept_page_ptr->sept[i]))
         {
             TDX_ERROR("SEPT entry [%d] is not FREE\n", i);
             return_val = api_error_with_operand_id(TDX_EPT_PAGE_NOT_FREE, OPERAND_ID_RCX);

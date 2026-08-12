@@ -36,7 +36,7 @@ Please note that the TDX module isn't part of the docker image and the user must
 
 ## Docker Container Build Instructions:
 
-1. Clone/download the desired TDX module version ([Releases](https://github.com/intel/confidential-computing.tdx.tdx-module/releases)).  
+1. Clone/download the desired TDX module version ([Releases](https://github.com/intel/confidential-computing.tdx.tdx-module.sources-all/releases)).  
 2. Build the Docker image from the [Dockerfile](Dockerfile) (located inside the relevant repo) at the root:  
 ```docker build . -t tdx-module-docker```
 
@@ -48,42 +48,29 @@ NOTE: In order to run on Windows, replace the mount line with: -v "%CD%":$HOME/t
 # How to Build
 ## Environment dependencies
 
--	Binary padding script
+- Binary padding script
 
--   Compiled on Linux* OS
+- Compiled on Linux* OS
 
--	[ICP 1.0.1](https://github.com/intel/cryptography-primitives/releases/tag/v1.0.1):
+- [ICP 1.0.1](https://github.com/intel/cryptography-primitives/releases/tag/v1.0.1):
 
-1) IPP can be automatically built by project's makefile.
+ICP will be automatically built by project's makefile.
 
-    - IPP sources need to be placed under ./libs/ipp/cryptography-primitives-1.0.1 folder.
+- ICP sources need to be placed under ./libs/ipp/cryptography-primitives-1.0.1 folder.
 
-    - Tools that are required to build ICP crypto lib described in the following [link](https://github.com/intel/cryptography-primitives/blob/v1.0.1/BUILD.md)
-
-2) It could also be built separately with the following flags:
-
-```bash
-	cd <PROJ_DIR>/libs/ipp/cryptography-primitives-1.0.1/
-
-	CC=clang CXX=clang++ cmake CMakeLists.txt -B_build -DARCH=intel64 -DMERGED_BLD:BOOL=off -DNO_CRYPTO_MB:BOOL=TRUE -DPLATFORM_LIST="l9" -DIPPCP_CUSTOM_BUILD="IPPCP_AES_ON;IPPCP_CLMUL_ON;IPPCP_VAES_ON;IPPCP_VCLMUL_ON";
-	
-	cd _build
-	
-	make -j8 ippcp_s_l9
-```
-
+- Tools that are required to build ICP crypto lib described in the following [link](https://github.com/intel/cryptography-primitives/blob/v1.0.1/BUILD.md)
 
 ## Make targets
-Binary's generation includes the date it was compiled at, build number and module's update version.  
+Binary's generation includes the date it was compiled at, build number and module's update version.
 
 Build date, build number and update version could be extracted from the production binary, please use TDH.SYS.RD SEAMCALL (leaf #34) with MD_SYS_TDX_MODULE_VERSION_CLASS_CODE(8) as a class_code and MD_SYS_BUILD_DATE_FIELD_CODE(1)/MD_SYS_BUILD_NUM_FIELD_CODE(2)/MD_SYS_UPDATE_VERSION_FIELD_CODE(5) as field codes. The date format should be YYYYMMDD.  
 
-Current TDX version was built with: TDX_MODULE_BUILD_DATE=20250902 TDX_MODULE_BUILD_NUM=954 TDX_MODULE_UPDATE_VER=25  
+Current TDX version was built with: TDX_MODULE_BUILD_DATE=20251126 TDX_MODULE_BUILD_NUM=989  TDX_MODULE_UPDATE_VER=28
 
 1) In order to reproduce the exact binary, it is required to specify the original date, build number and update version:
 
 	```bash
-	make RELEASE=1 TDX_MODULE_BUILD_DATE=20250902 TDX_MODULE_BUILD_NUM=954 TDX_MODULE_UPDATE_VER=25
+	make RELEASE=1 TDX_MODULE_BUILD_DATE=20251126 TDX_MODULE_BUILD_NUM=989 TDX_MODULE_UPDATE_VER=28
 	```
 
 	In case binary reproduction is not required, "make RELEASE=1" will suffice.
@@ -94,7 +81,7 @@ Current TDX version was built with: TDX_MODULE_BUILD_DATE=20250902 TDX_MODULE_BU
 	make clean
 	```
 
-3) Clean everything including the IPP:
+3) Clean everything including the ICP:
 
 	```bash
 	make cleanall
@@ -102,4 +89,4 @@ Current TDX version was built with: TDX_MODULE_BUILD_DATE=20250902 TDX_MODULE_BU
 
 
 ## Expected module hash (MRSEAM)
-0xFCA4FF221293807E3D247416299CA39A236872DF4EB414567CA96072D3FDE7DEAD740F807EEFE2F7D938499C03CC8ABA
+0x346BC77A1846CAC214DD2E8EDEB9EE4349449D6C3F9FF2C52149A634C27B7FD1BD314C2EF6B973EEEBD55742952531A1

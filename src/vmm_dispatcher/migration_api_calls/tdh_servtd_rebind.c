@@ -19,27 +19,15 @@
 // OR OTHER DEALINGS IN THE SOFTWARE.
 //
 // SPDX-License-Identifier: MIT
-
 /**
- * @file metadata_sorter.h
- * @brief sorts the relevant metadata
+ * @file tdh_servtd_bind.c
+ * @brief TDHSERVTDBIND API handler
  */
+#include "tdx_vmm_api_handlers.h"
+#include "tdx_basic_defs.h"
+#include TDX_ERROR_CODES_DEFS_HEADER
+#include "x86_defs/x86_defs.h"
+#include "helpers/helpers.h"
+#include "helpers/service_td.h"
+#include "helpers/tdx_locks.h"
 
-#ifndef METADATA_SORTER_H_
-#define METADATA_SORTER_H_
-
-#define CPUID_CONFIGURATIONS_HEADER "auto_gen_1_5/cpuid_configurations.h"
-#define CPUID_CONFIGURATIONS_DEFINES_HEADER "auto_gen_1_5/cpuid_configurations_defines.h"
-#define GLOBAL_SYS_FIELDS_LOOKUP_HEADER "auto_gen_1_5/global_sys_fields_lookup.h"
-#define MSR_CONFIG_LOOKUP_HEADER "auto_gen_1_5/msr_config_lookup.h"
-#define OP_STATE_LOOKUP_HEADER "auto_gen_1_5/op_state_lookup.h"
-#define SEPT_STATE_LOOKUP_HEADER "auto_gen_1_5/sept_state_lookup.h"
-#define TD_L2_VMCS_FIELDS_LOOKUP_HEADER "auto_gen_1_5/td_l2_vmcs_fields_lookup.h"
-#define TD_VMCS_FIELDS_LOOKUP_HEADER "auto_gen_1_5/td_vmcs_fields_lookup.h"
-#define TDR_TDCS_FIELDS_LOOKUP_HEADER "auto_gen_1_5/tdr_tdcs_fields_lookup.h"
-#define TDVPS_FIELDS_LOOKUP_HEADER "auto_gen_1_5/tdvps_fields_lookup.h"
-#define TDX_ERROR_CODES_DEFS_HEADER "auto_gen_1_5/tdx_error_codes_defs.h"
-#define GLOBAL_CONSTANTS_HEADER "auto_gen_1_5/global_constants.h"
-#define HANDOFF_CONSTANTS_HEADER "auto_gen_1_5/handoff_constants.h"
-
-#endif // METADATA_SORTER_H_

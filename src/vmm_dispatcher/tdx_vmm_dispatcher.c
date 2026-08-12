@@ -145,6 +145,7 @@ void tdx_vmm_dispatcher(void)
             case TDH_VP_RD_LEAF:
             case TDH_VP_INIT_LEAF:
             case TDH_SYS_INIT_LEAF:
+            case TDH_SYS_CONFIG_LEAF:
             case TDH_SYS_UPDATE_LEAF:
                 break;
             default:
@@ -410,8 +411,10 @@ void tdx_vmm_dispatcher(void)
 
         local_data->vmm_regs.rax = tdh_sys_config(local_data->vmm_regs.rcx,
                                                   local_data->vmm_regs.rdx,
-                                                  sysconfig_options
-                                                  );
+                                                  sysconfig_options,
+                                                  (uint8_t)leaf_opcode.version,
+                                                  local_data->vmm_regs.r9,
+                                                  local_data->vmm_regs.r10);
         break;
     }
     case TDH_SYS_KEY_CONFIG_LEAF:
@@ -520,7 +523,7 @@ void tdx_vmm_dispatcher(void)
         break;
     }
     case TDH_SERVTD_BIND_LEAF:
-        {
+    {
             servtd_attributes_t servtd_attr = {.raw = local_data->vmm_regs.r10};
             local_data->vmm_regs.rax = tdh_servtd_bind(local_data->vmm_regs.rcx,
                                                  local_data->vmm_regs.rdx,
@@ -528,7 +531,7 @@ void tdx_vmm_dispatcher(void)
                                                  local_data->vmm_regs.r9,
                                                  servtd_attr);
             break;
-        }
+    }
     case TDH_SERVTD_PREBIND_LEAF:
     {
         servtd_attributes_t servtd_attr = {.raw = local_data->vmm_regs.r10};

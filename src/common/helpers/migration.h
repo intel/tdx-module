@@ -37,6 +37,7 @@
 #include "helpers/error_reporting.h"
 #include "crypto/aes_gcm.h"
 #include "data_structures/tdx_tdvps.h"
+#include "service_td.h"
 
 /*********************************************
 * MIGRATION BUNDLE HEADER
@@ -100,10 +101,6 @@ tdx_static_assert(sizeof(mbmd_header_t) == SIZE_FIELDS_INCLUDED_IN_MBMD_HEADER_M
 *********************************************/
 
 #define MBMD_ALIGN 128
-#define MIN_MIGRATION_EXPORT_VERSION 0
-#define MAX_MIGRATION_EXPORT_VERSION 0
-#define MIN_MIGRATION_IMPORT_VERSION 0
-#define MAX_MIGRATION_IMPORT_VERSION 0
 
 // Values of MIG_TYPE
 typedef enum mbmd_mig_type_e
@@ -339,10 +336,7 @@ typedef union migsc_link_u
 } migsc_link_t;
 tdx_static_assert(sizeof(migsc_link_t) == 8, migsc_link_t);
 
-// Maximum number of service TDs per TD
-#define MAX_SERV_TDS          1
 #define MIGSC_LINK_LOCK_BIT   0
-
 
 typedef union page_list_entry_u
 {
@@ -392,15 +386,17 @@ _STATIC_INLINE_ bool_t gpa_list_entry_is_aliased(gpa_list_entry_t gpa_list_entry
     return ((gpa_list_entry.l2_map & BIT(vm_id - 1)) != 0);
 }
 
-_STATIC_INLINE_ void gpa_list_entry_set_alias(gpa_list_entry_t* gpa_list_entry, uint16_t vm_id)
+_STATIC_INLINE_ void gpa_list_entry_set_alias(volatile gpa_list_entry_t* gpa_list_entry, uint16_t vm_id)
 {
     tdx_debug_assert((vm_id >= 1) && (vm_id <= MAX_L2_VMS));
     gpa_list_entry->l2_map |= BIT(vm_id - 1);
 }
 
-_STATIC_INLINE_ bool_t gpa_list_entry_is_valid(gpa_list_entry_t gpa_list_entry)
+_STATIC_INLINE_ bool_t gpa_list_entry_is_valid(
+    gpa_list_entry_t gpa_list_entry,
+    bool_t ignore_state)
 {
-    if (gpa_list_entry.reserved_0 || gpa_list_entry.reserved_1 || gpa_list_entry.reserved_2 ||
+    if ((!ignore_state && gpa_list_entry.state) || gpa_list_entry.reserved_0 || gpa_list_entry.reserved_1 || gpa_list_entry.reserved_2 ||
         (gpa_list_entry.level != 0))
     {
         return false;
@@ -428,10 +424,11 @@ api_error_type check_and_map_gpa_list(gpa_list_info_t gpa_list_info, gpa_list_en
  * @param gpaw - GPAW from the TDCS
  * @param output_gpa - Output GPA from the list entry
  * @param virt_maxpa - virtual max_pa from the tdcs
+ * @param ignore_state - indicates whether the state field of gpa_entry should be checked
  *
  * @return Validness check result
  */
-bool_t check_and_get_gpa_from_entry(gpa_list_entry_t gpa_entry, bool_t gpaw, pa_t* output_gpa, uint8_t virt_maxpa);
+bool_t check_and_get_gpa_from_entry(gpa_list_entry_t gpa_entry, bool_t gpaw, pa_t* output_gpa, uint8_t virt_maxpa, bool_t ignore_state);
 
 /**
  * copy MBMD
@@ -445,7 +442,7 @@ void decrement_mig_interrupted_counters(uint16_t* mig_interrupted_count, migsc_t
  * @brief Verifies compatibility of AES-GCM crypto context when resuming a migration export operation
  *
  * This function checks if the AES-GCM context version in the migration stream context matches
- * the current crypto library compatibility version. It manages compatibility issues during 
+ * the current crypto library compatibility version. It manages compatibility issues during
  * TD migration when an export operation needs to be resumed after being interrupted.
  *
  * The function:
@@ -456,7 +453,7 @@ void decrement_mig_interrupted_counters(uint16_t* mig_interrupted_count, migsc_t
  *
  * @param mig_interrupted_count         Pointer to the TDCS mig_interrupted_count
  * @param migsc_p                       Pointer to the migration stream context
- * @param decrement_interrupted_count   Check compatibility with previous modules (preserving update) 
+ * @param decrement_interrupted_count   Check compatibility with previous modules (preserving update)
  *
  * @return TDX_SUCCESS if compatible or successfully reset
  * @return TDX_INCOMPATIBLE_MBMD_MAC_CONTEXT if incompatible and update_compatibility is enabled
@@ -467,7 +464,7 @@ api_error_type check_migsc_aes_gcm_context_compatibility_on_export_resume(migsc_
  * @brief Verifies compatibility of AES-GCM crypto context when resuming a migration import operation
  *
  * This function checks if the AES-GCM context version in the migration stream context matches
- * the current crypto library compatibility version. It manages compatibility issues during 
+ * the current crypto library compatibility version. It manages compatibility issues during
  * TD migration when an import operation needs to be resumed after being interrupted.
  *
  * The function:
@@ -486,4 +483,4 @@ api_error_type check_migsc_aes_gcm_context_compatibility_on_export_resume(migsc_
  */
 api_error_type check_migsc_aes_gcm_context_compatibility_on_import_resume(migsc_t* migsc_p);
 
-#endif /* SRC_COMMON_HELPERS_MIGRATION_H_ */
+#endif // SRC_COMMON_HELPERS_MIGRATION_H_
